@@ -1186,6 +1186,10 @@ private[spark] class DAGScheduler(
 
         // Abort execution
         return
+      case e: OutOfMemoryError =>
+        abortStage(stage, "Memory is not enough for task serialization: " + e.toString, Some(e))
+        runningStages -= stage
+        return
       case e: Throwable =>
         abortStage(stage, s"Task serialization failed: $e\n${Utils.exceptionString(e)}", Some(e))
         runningStages -= stage
