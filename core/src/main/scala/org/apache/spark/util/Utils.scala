@@ -2635,6 +2635,12 @@ private[spark] object Utils extends Logging {
     // logs. In order to work around it, user would have to make the spark.redaction.regex property
     // more specific.
     kvs.map {
+      case (key: String, _) if key == "spark.tdw.metastore" ||
+        key == "spark.hadoop.hadoop.job.ugi" ||
+        key.startsWith("spark.redis.") ||
+        key == "spark.tdw.authentication" ||
+        key == "sun.java.command" =>
+        (key, REDACTION_REPLACEMENT_TEXT)
       case (key: String, value: String) =>
         redactionPattern.findFirstIn(key)
           .orElse(redactionPattern.findFirstIn(value))

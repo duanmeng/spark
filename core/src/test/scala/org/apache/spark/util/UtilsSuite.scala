@@ -1051,7 +1051,11 @@ class UtilsSuite extends SparkFunSuite with ResetSystemProperties with Logging {
     val secretKeys = Seq(
       "spark.executorEnv.HADOOP_CREDSTORE_PASSWORD",
       "spark.my.password",
-      "spark.my.sECreT")
+      "spark.my.sECreT",
+      "spark.tdw.metastore",
+      "spark.hadoop.hadoop.job.ugi",
+      "spark.redis.xxx",
+      "spark.tdw.authentication")
     secretKeys.foreach { key => sparkConf.set(key, "sensitive_value") }
     // Set a non-secret key
     sparkConf.set("spark.regular.property", "regular_value")
@@ -1128,6 +1132,8 @@ class UtilsSuite extends SparkFunSuite with ResetSystemProperties with Logging {
       Seq(("anything", Utils.REDACTION_REPLACEMENT_TEXT)))
     assert(Utils.redact(secretKeys, Seq((999, "spark.my.password=12345"))) ===
       Seq((999, Utils.REDACTION_REPLACEMENT_TEXT)))
+    assert(Utils.redact(secretKeys, Seq(("sun.java.command", "xxxxxxx"))) ===
+      Seq(("sun.java.command", Utils.REDACTION_REPLACEMENT_TEXT)))
     // Do not redact when value type is not string
     assert(Utils.redact(secretKeys, Seq(("my.password", 12345))) ===
       Seq(("my.password", 12345)))
