@@ -17,7 +17,7 @@
 
 package org.apache.spark.util
 
-import java.io.{ObjectInputStream, ObjectOutputStream}
+import java.io.{ByteArrayInputStream, ObjectInputStream, ObjectOutputStream, StringWriter}
 
 import org.apache.hadoop.mapred.JobConf
 
@@ -29,7 +29,13 @@ class SerializableJobConf(@transient var value: JobConf) extends Serializable {
   }
 
   private def readObject(in: ObjectInputStream): Unit = Utils.tryOrIOException {
+    val conf = new JobConf(false)
+    conf.readFields(in)
+    val out = new StringWriter()
+    conf.writeXml(out)
+
     value = new JobConf(false)
-    value.readFields(in)
+    value.addResource(new ByteArrayInputStream(out.toString().getBytes("UTF-8")), "sparkJobConf")
+    value.get("fs.defaultFS")
   }
 }

@@ -16,7 +16,7 @@
  */
 package org.apache.spark.util
 
-import java.io.{ObjectInputStream, ObjectOutputStream}
+import java.io.{ByteArrayInputStream, ObjectInputStream, ObjectOutputStream, StringWriter}
 
 import org.apache.hadoop.conf.Configuration
 
@@ -28,7 +28,13 @@ class SerializableConfiguration(@transient var value: Configuration) extends Ser
   }
 
   private def readObject(in: ObjectInputStream): Unit = Utils.tryOrIOException {
+    val conf = new Configuration(false)
+    conf.readFields(in)
+    val out = new StringWriter()
+    conf.writeXml(out)
+
     value = new Configuration(false)
-    value.readFields(in)
+    value.addResource(new ByteArrayInputStream(out.toString().getBytes("UTF-8")), "sparkConf")
+    value.get("fs.defaultFS")
   }
 }
