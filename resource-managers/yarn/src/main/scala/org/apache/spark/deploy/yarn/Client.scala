@@ -885,6 +885,7 @@ private[spark] class Client(
 
     val tmpDir = new Path(Environment.PWD.$$(), YarnConfiguration.DEFAULT_CONTAINER_TEMP_DIR)
     javaOpts += "-Djava.io.tmpdir=" + tmpDir
+    javaOpts += "-Dtdw.ugi.groupname=" + sparkConf.get(QUEUE_NAME)
 
     // TODO: Remove once cpuset version is pushed out.
     // The context is, default gc for server class machines ends up using all cores to do gc -
