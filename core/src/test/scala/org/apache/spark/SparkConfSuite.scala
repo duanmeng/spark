@@ -154,7 +154,7 @@ class SparkConfSuite extends SparkFunSuite with LocalSparkContext with ResetSyst
     val conf = new SparkConf(false).setMaster("local").setAppName("My app")
     sc = new SparkContext("local[2]", "My other app", conf)
     assert(sc.master === "local[2]")
-    assert(sc.appName === "My other app")
+    assert(sc.appName === "My app")
   }
 
   test("nested property names") {

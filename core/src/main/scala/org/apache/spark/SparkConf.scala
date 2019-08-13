@@ -117,7 +117,8 @@ class SparkConf(loadDefaults: Boolean) extends Cloneable with Logging with Seria
 
   /** Set a name for your application. Shown in the Spark web UI. */
   def setAppName(name: String): SparkConf = {
-    set("spark.app.name", name)
+    // hide user defined name for lz/tesla
+    setIfMissing("spark.app.name", name)
   }
 
   /** Set JAR files to distribute to the cluster. */
