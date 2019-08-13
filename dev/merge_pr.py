@@ -20,13 +20,15 @@
 
 # Script for creating well-formed pull request,  merging and pushing them to
 # https://git.code.oa.com/spark/spark
+#
 #   usage: ./merge_pr.py {pr_num}
 #
-# Before running script, please fill in the following configurations:
+# Before running script, please set the following environment variables:
+#
 # PRIVATE_TOKEN: get it from https://git.code.oa.com/profile/account
 # PUSH_REMOTE_NAME: Remote name which points to https://git.code.oa.com/spark/spark
 # TARGET_PROJECT_ID: project id of the pr's target repo
-# the default value 167434 is the project id of https://git.code.oa.com/spark/spark
+# the default value 165505 is the project id of https://git.code.oa.com/spark/spark
 
 import sys
 import re
@@ -35,6 +37,7 @@ import subprocess
 # TODO: Support python3
 import urllib2
 import json
+import ssl
 
 if sys.version < '3':
     input = raw_input
@@ -46,7 +49,7 @@ PRIVATE_TOKEN = os.environ.get("PRIVATE_TOKEN", "")
 PUSH_REMOTE_NAME = os.environ.get("PUSH_REMOTE_NAME", "")
 
 # 165505: the project id of https://git.code.oa.com/spark/spark
-TARGET_PROJECT_ID = os.environ.get("TARGET_PROJECT_ID", "167434")
+TARGET_PROJECT_ID = os.environ.get("TARGET_PROJECT_ID", "165505")
 
 TARGET_REPO_REST_URL = "https://git.code.oa.com/api/v3/projects/"
 
@@ -55,6 +58,9 @@ g_old_branch = ""
 g_pr_local_source_branch = ""
 g_pr_local_target_branch = ""
 g_pr_source_repo_name = ""
+
+# Avoid SSL certification exception
+ssl._create_default_https_context = ssl._create_unverified_context
 
 def cleanup():
     if g_old_branch != "":
@@ -200,7 +206,7 @@ def standardize_commit_msg(merge_request):
     modified_title = re.sub(r'\s+', ' ', title.strip()) + tapd_msg.rstrip()
 
     if modified_title != title:
-        print("I've re-written the title as follows to match the standard format:")
+        print("Title is re-written as follows to match the standard format:")
         print("Original: " + title)
         print("Modified: " + modified_title)
         accept_modified_title = input("Would you like to use the modified title? (y/n): ")
@@ -239,7 +245,7 @@ def create_source_branch(merge_request):
 
         g_pr_local_source_branch = "source_branch_" + source_branch + "_pr_num_" + pr_num
         run_cmd("git fetch %s --quiet" % g_pr_source_repo_name)
-        print("Creating the source branch...")
+        print("Creating source branch...")
         run_cmd("git branch " + g_pr_local_source_branch + " " + g_pr_source_repo_name + "/" + source_branch + " --quiet")
     except Exception as e:
         print(e)
@@ -259,7 +265,7 @@ def create_target_branch(merge_request):
         print("ERROR: Can not fetch " + PUSH_REMOTE_NAME)
         err_exit()
 
-    print("Creating the target branch...")
+    print("Creating target branch...")
     try:
         run_cmd("git branch " + g_pr_local_target_branch + " " + PUSH_REMOTE_NAME + "/" + target_branch + " --quiet")
     except:
@@ -330,7 +336,7 @@ def merge_pr(merge_request):
         print("ERROR: Could not checkout branch " + g_pr_local_target_branch)
         err_exit()
 
-    print("Mering the source branch...")
+    print("Merging the source branch...")
     try:
         run_cmd("git merge " + g_pr_local_source_branch + " --ff-only --squash --quiet")
     except:
