@@ -881,6 +881,7 @@ private[spark] class Client(
     var prefixEnv: Option[String] = None
 
     // Add Xmx for AM memory
+    javaOpts += "-Xms" + amMemory + "m"
     javaOpts += "-Xmx" + amMemory + "m"
 
     val tmpDir = new Path(Environment.PWD.$$(), YarnConfiguration.DEFAULT_CONTAINER_TEMP_DIR)
