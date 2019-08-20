@@ -335,7 +335,7 @@ private[spark] object EventLoggingListener extends Logging {
   val IN_PROGRESS = ".inprogress"
   val DEFAULT_LOG_DIR = "/tmp/spark-events"
 
-  private val LOG_FILE_PERMISSIONS = new FsPermission(Integer.parseInt("770", 8).toShort)
+  private val LOG_FILE_PERMISSIONS = new FsPermission(Integer.parseInt("755", 8).toShort)
 
   // A cache for compression codecs to avoid creating the same codec many times
   private val codecMap = Map.empty[String, CompressionCodec]
