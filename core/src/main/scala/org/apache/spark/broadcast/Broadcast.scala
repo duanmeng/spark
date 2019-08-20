@@ -102,7 +102,7 @@ abstract class Broadcast[T: ClassTag](val id: Long) extends Serializable with Lo
    * once a broadcast variable has been destroyed, it cannot be used again.
    * @param blocking Whether to block until destroy has completed
    */
-  private[spark] def destroy(blocking: Boolean) {
+  def destroy(blocking: Boolean) {
     assertValid()
     _isValid = false
     _destroySite = Utils.getCallSite().shortForm
