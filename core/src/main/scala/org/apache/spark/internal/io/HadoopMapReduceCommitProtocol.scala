@@ -17,6 +17,7 @@
 
 package org.apache.spark.internal.io
 
+import java.text.NumberFormat
 import java.util.{Date, UUID}
 
 import scala.collection.mutable
@@ -218,6 +219,44 @@ class HadoopMapReduceCommitProtocol(
     committer.setupTask(taskContext)
     addedAbsPathFiles = mutable.Map[String, String]()
     partitionPaths = mutable.Set[String]()
+  }
+
+  override def renameTaskPathIfNeed(taskContext: TaskAttemptContext, recordsWritten: Long): Unit = {
+    logInfo("Rename path...")
+    if (committer != null && committer.isInstanceOf[FileOutputCommitter]) {
+      val fileOutputCommitter = committer.asInstanceOf[FileOutputCommitter]
+      val taskAttemptPath = fileOutputCommitter.getTaskAttemptPath(taskContext)
+      val splitID = taskContext.getTaskAttemptID.getTaskID.getId
+      val conf = taskContext.getConfiguration
+      logInfo("taskAttemptPath: " + taskAttemptPath.toString)
+      val fs = taskAttemptPath.getFileSystem(conf)
+      val numFmt = NumberFormat.getInstance()
+      numFmt.setMinimumIntegerDigits(5)
+      numFmt.setGroupingUsed(false)
+      val oldFilePath = new Path(taskAttemptPath, s"part-${numFmt.format(splitID)}")
+      if (recordsWritten == 0) {
+        // delete the empty file
+        fs.delete(oldFilePath, true)
+      } else {
+        // rename output files to support "show rowcount" for rcfile/orcfile table
+        val outputFormat = taskContext.getOutputFormatClass.getName.toLowerCase()
+        val newFilePath: Option[Path] = if (outputFormat.contains("rcfile")) {
+          Some(new Path(taskAttemptPath, s"part-${numFmt.format(splitID)}_$recordsWritten.rcf"))
+        } else if (outputFormat.contains("orc")) {
+          Some(new Path(taskAttemptPath, s"part-${numFmt.format(splitID)}_$recordsWritten.orcf"))
+        } else {
+          // do nothing for other file formats
+          None
+        }
+        newFilePath.foreach { path =>
+          if (!fs.rename(oldFilePath, path)) {
+            logWarning(s"Failed to rename path '$oldFilePath' to '$path'")
+          } else {
+            logInfo(s"Successed to rename path '$oldFilePath' to '$path'")
+          }
+        }
+      }
+    }
   }
 
   override def commitTask(taskContext: TaskAttemptContext): TaskCommitMessage = {

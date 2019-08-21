@@ -92,6 +92,9 @@ abstract class FileCommitProtocol {
    */
   def newTaskTempFile(taskContext: TaskAttemptContext, dir: Option[String], ext: String): String
 
+  def renameTaskPathIfNeed(taskContext: TaskAttemptContext, recordsWritten: Long): Unit = {
+  }
+
   /**
    * Similar to newTaskTempFile(), but allows files to committed to an absolute output location.
    * Depending on the implementation, there may be weaker guarantees around adding files this way.

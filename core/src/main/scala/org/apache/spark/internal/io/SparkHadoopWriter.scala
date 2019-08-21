@@ -137,6 +137,7 @@ object SparkHadoopWriter extends Logging {
         }
 
         config.closeWriter(taskContext)
+        committer.renameTaskPathIfNeed(taskContext, recordsWritten)
         committer.commitTask(taskContext)
       }(catchBlock = {
         // If there is an error, release resource and then abort the task.
