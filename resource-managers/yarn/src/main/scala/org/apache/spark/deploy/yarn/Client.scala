@@ -48,7 +48,6 @@ import org.apache.hadoop.yarn.security.AMRMTokenIdentifier
 import org.apache.hadoop.yarn.util.Records
 
 import org.apache.spark.{SecurityManager, SparkConf, SparkException}
-import org.apache.spark.api.python.PythonUtils
 import org.apache.spark.deploy.{SparkApplication, SparkHadoopUtil}
 import org.apache.spark.deploy.security.HadoopDelegationTokenManager
 import org.apache.spark.deploy.yarn.ResourceRequestHelper._
@@ -1202,13 +1201,15 @@ private[spark] class Client(
       .map(_.split(",").toSeq)
       .getOrElse {
         val pyLibPath = Seq(sys.env("SPARK_HOME"), "python", "lib").mkString(File.separator)
+        val files = new File(pyLibPath).listFiles()
+        require(files != null, "PYSPARK_ARCHIVES_PATH or python/lib not found")
         val pyArchivesFile = new File(pyLibPath, "pyspark.zip")
         require(pyArchivesFile.exists(),
           s"$pyArchivesFile not found; cannot run pyspark application in YARN mode.")
-        val py4jFile = new File(pyLibPath, PythonUtils.PY4J_ZIP_NAME)
+        val py4jFile = new File(pyLibPath, "py4j-0.10.4-src.zip")
         require(py4jFile.exists(),
           s"$py4jFile not found; cannot run pyspark application in YARN mode.")
-        Seq(pyArchivesFile.getAbsolutePath(), py4jFile.getAbsolutePath())
+        files.map(x => x.getAbsolutePath)
       }
   }
 
