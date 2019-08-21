@@ -860,6 +860,7 @@ private[spark] class Client(
     : ContainerLaunchContext = {
     logInfo("Setting up container launch context for our AM")
     val appId = newAppResponse.getApplicationId
+    sparkConf.set("spark.sql.warehouse.dir", s"${stagingDirPath.toString}/spark-warehouse")
     val pySparkArchives =
       if (sparkConf.get(IS_PYTHON_APP)) {
         findPySparkArchives()
