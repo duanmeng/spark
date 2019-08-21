@@ -33,9 +33,12 @@ private[spark] object PythonUtils {
   def sparkPythonPath: String = {
     val pythonPath = new ArrayBuffer[String]
     for (sparkHome <- sys.env.get("SPARK_HOME")) {
-      pythonPath += Seq(sparkHome, "python", "lib", "pyspark.zip").mkString(File.separator)
-      pythonPath +=
-        Seq(sparkHome, "python", "lib", PY4J_ZIP_NAME).mkString(File.separator)
+      val pyLibPath = Seq(sparkHome, "python", "lib").mkString(File.separator)
+      val files = new File(pyLibPath).listFiles()
+      if(files != null) {
+        files.filter(x => x.getName.endsWith(".zip"))
+          .foreach(file => pythonPath += file.getAbsolutePath)
+      }
     }
     pythonPath ++= SparkContext.jarOfObject(this)
     pythonPath.mkString(File.pathSeparator)
