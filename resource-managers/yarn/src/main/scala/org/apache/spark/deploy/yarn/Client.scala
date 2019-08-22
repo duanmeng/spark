@@ -739,11 +739,12 @@ private[spark] class Client(
       // Also upload metrics.properties to distributed cache if exists in classpath.
       // If user specify this file using --files then executors will use the one
       // from --files instead.
-      for { prop <- Seq("log4j.properties", "metrics.properties")
-            url <- Option(Utils.getContextOrSparkClassLoader.getResource(prop))
-            if url.getProtocol == "file" } {
-        val file = new File(url.getPath())
-        confStream.putNextEntry(new ZipEntry(file.getName()))
+      for {prop <- Seq("log4j-cluster.properties", "metrics.properties")
+           url <- Option(Utils.getContextOrSparkClassLoader.getResource(prop))
+           if url.getProtocol == "file"} {
+        val name = if (prop == "log4j-cluster.properties") "log4j.properties" else prop
+        val file = new File(url.getPath)
+        confStream.putNextEntry(new ZipEntry(name))
         Files.copy(file, confStream)
         confStream.closeEntry()
       }
