@@ -441,7 +441,8 @@ private[history] class FsHistoryProvider(conf: SparkConf, clock: Clock)
             // reading a garbage file is safe, but we would log an error which can be scary to
             // the end-user.
             !entry.getPath().getName().startsWith(".") &&
-            !isBlacklisted(entry.getPath)
+            !isBlacklisted(entry.getPath) &&
+            entry.getLen < 10*1024*1024*1024L // 10G
         }
         .filter { entry =>
           try {
