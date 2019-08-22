@@ -525,6 +525,90 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
   }
 
   /**
+   * Group the values for each key in the RDD into a single sequence. and within each partition,
+   * return the keys in sorted order. This replicates the semantics of the Hadoop MapReduce shuffle
+   * and avoids pulling all the records in a group into memory at once.
+   *
+   * Note: When iterating over the resulting records, the iterator for a group is rendered invalid
+   * after moving on to the next group.
+   */
+  def sortMergeGroupByKey(): RDD[(K, Iterable[V])] = self.withScope {
+    sortMergeGroupByKey(defaultPartitioner(self))
+  }
+
+  /**
+   * Group the values for each key in the RDD into a single sequence. and within each partition,
+   * return the keys in sorted order. This replicates the semantics of the Hadoop MapReduce shuffle
+   * and avoids pulling all the records in a group into memory at once.
+   *
+   * Note: When iterating over the resulting records, the iterator for a group is rendered invalid
+   * after moving on to the next group.
+   */
+  def sortMergeGroupByKey(numPartitions: Int): RDD[(K, Iterable[V])] = self.withScope {
+    sortMergeGroupByKey(new HashPartitioner(numPartitions))
+  }
+
+  /**
+   * Group the values for each key in the RDD into a single sequence. and within each partition,
+   * return the keys in sorted order. This replicates the semantics of the Hadoop MapReduce shuffle
+   * and avoids pulling all the records in a group into memory at once.
+   *
+   * Note: When iterating over the resulting records, the iterator for a group is rendered invalid
+   * after moving on to the next group.
+   */
+  def sortMergeGroupByKey(partitioner: Partitioner)(implicit ord: Ordering[K])
+  : RDD[(K, Iterable[V])] = self.withScope {
+    val shuffled: RDD[(K, V)] = new ShuffledRDD[K, V, V](self, partitioner).setKeyOrdering(ord)
+    shuffled.mapPartitions { sorted =>
+      new Iterator[(K, Iterable[V])] {
+        var cur: (K, V) = null
+        var _hasNext: Boolean = false
+
+        def hasNext: Boolean = {
+          if (_hasNext) {
+            true
+          } else if (sorted.hasNext) {
+            cur = sorted.next()
+            _hasNext = true
+            true
+          } else {
+            false
+          }
+        }
+
+        def next(): (K, Iterable[V]) = {
+          val itr = new Iterable[V] {
+            override def iterator = new Iterator[V] {
+              def hasNext: Boolean = {
+                if (_hasNext) {
+                  true
+                } else if (sorted.hasNext) {
+                  _hasNext = true
+                  val elem = sorted.next()
+                  var keyIsSame: Boolean = false
+                  if (elem._1 == cur._1) {
+                    keyIsSame = true
+                  }
+                  cur = elem
+                  keyIsSame
+                } else {
+                  false
+                }
+              }
+
+              def next(): V = {
+                _hasNext = false
+                cur._2
+              }
+            }
+          }
+          (cur._1, itr)
+        }
+      }
+    }
+  }
+
+  /**
    * Return a copy of the RDD partitioned using the specified partitioner.
    */
   def partitionBy(partitioner: Partitioner): RDD[(K, V)] = self.withScope {
