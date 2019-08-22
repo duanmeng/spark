@@ -1228,9 +1228,9 @@ private object Client extends Logging {
   val SPARK_STAGING: String = ".sparkStaging"
 
 
-  // Staging directory is private! -> rwx--------
+  // Staging directory is protected! -> rwxr-xr-x
   val STAGING_DIR_PERMISSION: FsPermission =
-    FsPermission.createImmutable(Integer.parseInt("700", 8).toShort)
+    FsPermission.createImmutable(Integer.parseInt("755", 8).toShort)
 
   // App files are world-wide readable and owner writable -> rw-r--r--
   val APP_FILE_PERMISSION: FsPermission =
