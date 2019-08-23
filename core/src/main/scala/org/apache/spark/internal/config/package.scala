@@ -606,7 +606,7 @@ package object config {
   private[spark] val DRIVER_HOST_ADDRESS = ConfigBuilder("spark.driver.host")
     .doc("Address of driver endpoints.")
     .stringConf
-    .createWithDefault(Utils.localCanonicalHostName())
+    .createWithDefault(Utils.localHostName())
 
   private[spark] val DRIVER_PORT = ConfigBuilder("spark.driver.port")
     .doc("Port of driver endpoints.")
