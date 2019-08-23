@@ -1056,6 +1056,8 @@ class SparkContext(config: SparkConf) extends Logging {
       minPartitions: Int = defaultMinPartitions): RDD[(K, V)] = withScope {
     assertNotStopped()
 
+    updateInputPathsForUI(path)
+
     // This is a hack to enforce loading hdfs-site.xml.
     // See SPARK-11227 for details.
     FileSystem.getLocal(hadoopConfiguration)
@@ -1175,6 +1177,8 @@ class SparkContext(config: SparkConf) extends Logging {
       conf: Configuration = hadoopConfiguration): RDD[(K, V)] = withScope {
     assertNotStopped()
 
+    updateInputPathsForUI(path)
+
     // This is a hack to enforce loading hdfs-site.xml.
     // See SPARK-11227 for details.
     FileSystem.getLocal(hadoopConfiguration)
@@ -1222,6 +1226,27 @@ class SparkContext(config: SparkConf) extends Logging {
     val jconf = new JobConf(conf)
     SparkHadoopUtil.get.addCredentials(jconf)
     new NewHadoopRDD(this, fClass, kClass, vClass, jconf)
+  }
+
+  private def updateInputPathsForUI(path: String) = {
+    // Just for yugong
+    val maxCountOfInputPaths = conf.getInt("spark.hdfs.inputPaths.maxCount", 100)
+    val strInputPaths = conf.get("spark.hdfs.inputPaths", "")
+    val oldInputPaths = if (strInputPaths.nonEmpty) strInputPaths.split(",").toSeq else Seq.empty
+    val shouldUpdate = !oldInputPaths.contains(path)
+    val newInputPaths: Seq[String] = if (shouldUpdate) {
+      if (oldInputPaths.size == maxCountOfInputPaths) {
+        oldInputPaths :+ "..."
+      } else if (oldInputPaths.size > maxCountOfInputPaths) {
+        oldInputPaths
+      } else {
+        oldInputPaths :+ path
+      }
+    } else {
+      oldInputPaths
+    }
+    conf.set("spark.hdfs.inputPaths", newInputPaths.mkString(","))
+    postEnvironmentUpdate()
   }
 
   /**
@@ -2411,7 +2436,7 @@ class SparkContext(config: SparkConf) extends Logging {
   }
 
   /** Post the environment update event once the task scheduler is ready */
-  private def postEnvironmentUpdate() {
+  private[spark] def postEnvironmentUpdate() {
     if (taskScheduler != null) {
       val schedulingMode = getSchedulingMode.toString
       val addedJarPaths = addedJars.keys.toSeq

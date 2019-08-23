@@ -1074,6 +1074,7 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
       valueClass: Class[_],
       outputFormatClass: Class[_ <: NewOutputFormat[_, _]],
       conf: Configuration = self.context.hadoopConfiguration): Unit = self.withScope {
+    updateOutputPathsForUI(path)
     // Rename this as hadoopConf internally to avoid shadowing (see SPARK-2038).
     val hadoopConf = conf
     val job = NewAPIHadoopJob.getInstance(hadoopConf)
@@ -1115,6 +1116,7 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
       outputFormatClass: Class[_ <: OutputFormat[_, _]],
       conf: JobConf = new JobConf(self.context.hadoopConfiguration),
       codec: Option[Class[_ <: CompressionCodec]] = None): Unit = self.withScope {
+    updateOutputPathsForUI(path)
     // Rename this as hadoopConf internally to avoid shadowing (see SPARK-2038).
     val hadoopConf = conf
     hadoopConf.setOutputKeyClass(keyClass)
@@ -1181,6 +1183,35 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
     SparkHadoopWriter.write(
       rdd = self,
       config = config)
+  }
+
+  private def updateOutputPathsForUI(path: String) = {
+    // Just for yugong
+    val maxCountOfOutputPaths = self.context.conf.getInt("spark.hdfs.outputPaths.maxCount", 100)
+    val strOutputPaths = self.context.conf.get("spark.hdfs.outputPaths", "")
+    var appendOutputPath = self.context.conf.get("spark.hdfs.outputPaths.append", "")
+    if (appendOutputPath.isEmpty) {
+      appendOutputPath = path
+    }
+    val oldOutputPaths = if (strOutputPaths.nonEmpty) {
+      strOutputPaths.split(",").toSeq
+    } else {
+      Seq.empty
+    }
+    val shouldUpdate = !oldOutputPaths.contains(path)
+    val newInputPaths: Seq[String] = if (shouldUpdate) {
+      if (oldOutputPaths.size == maxCountOfOutputPaths) {
+        oldOutputPaths :+ "..."
+      } else if (oldOutputPaths.size > maxCountOfOutputPaths) {
+        oldOutputPaths
+      } else {
+        oldOutputPaths :+ appendOutputPath
+      }
+    } else {
+      oldOutputPaths
+    }
+    self.context.conf.set("spark.hdfs.outputPaths", newInputPaths.mkString(","))
+    self.context.postEnvironmentUpdate()
   }
 
   /**
