@@ -26,6 +26,8 @@ import scala.collection.mutable.Queue
 import scala.reflect.ClassTag
 import scala.util.control.NonFatal
 
+import com.tencent.tdw.tesla.monitor.MonitorClient
+import com.tencent.tdw.tesla.monitor.streaming.TeslaMonitorListener
 import org.apache.commons.lang3.SerializationUtils
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
@@ -604,6 +606,11 @@ class StreamingContext private[streaming] (
         assert(env.metricsSystem != null)
         env.metricsSystem.registerSource(streamingSource)
         uiTab.foreach(_.attach())
+        // Registering TeslaMonitorListener for putting mointorInfo into redis
+        if (conf.getBoolean("spark.streaming.teslaMonitor", false)) {
+          logInfo("add TeslaMonitorListener to StreamingListenerBus")
+          addStreamingListener(new TeslaMonitorListener(new MonitorClient()))
+        }
         logInfo("StreamingContext started")
       case ACTIVE =>
         logWarning("StreamingContext has already been started")
