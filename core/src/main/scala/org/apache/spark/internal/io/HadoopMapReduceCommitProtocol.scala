@@ -25,6 +25,9 @@ import scala.util.Try
 
 import org.apache.hadoop.conf.Configurable
 import org.apache.hadoop.fs.Path
+import org.apache.hadoop.mapred.{FileOutputCommitter => OldFileOutputCommitter}
+import org.apache.hadoop.mapred.{TaskAttemptContext => OldTaskAttemptContext}
+import org.apache.hadoop.mapred.JobConf
 import org.apache.hadoop.mapreduce._
 import org.apache.hadoop.mapreduce.lib.output.FileOutputCommitter
 import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
@@ -223,38 +226,55 @@ class HadoopMapReduceCommitProtocol(
 
   override def renameTaskPathIfNeed(taskContext: TaskAttemptContext, recordsWritten: Long): Unit = {
     logInfo("Rename path...")
-    if (committer != null && committer.isInstanceOf[FileOutputCommitter]) {
-      val fileOutputCommitter = committer.asInstanceOf[FileOutputCommitter]
-      val taskAttemptPath = fileOutputCommitter.getTaskAttemptPath(taskContext)
-      val splitID = taskContext.getTaskAttemptID.getTaskID.getId
-      val conf = taskContext.getConfiguration
-      logInfo("taskAttemptPath: " + taskAttemptPath.toString)
-      val fs = taskAttemptPath.getFileSystem(conf)
-      val numFmt = NumberFormat.getInstance()
-      numFmt.setMinimumIntegerDigits(5)
-      numFmt.setGroupingUsed(false)
-      val oldFilePath = new Path(taskAttemptPath, s"part-${numFmt.format(splitID)}")
-      if (recordsWritten == 0) {
-        // delete the empty file
-        fs.delete(oldFilePath, true)
-      } else {
-        // rename output files to support "show rowcount" for rcfile/orcfile table
-        val outputFormat = taskContext.getOutputFormatClass.getName.toLowerCase()
-        val newFilePath: Option[Path] = if (outputFormat.contains("rcfile")) {
-          Some(new Path(taskAttemptPath, s"part-${numFmt.format(splitID)}_$recordsWritten.rcf"))
-        } else if (outputFormat.contains("orc")) {
-          Some(new Path(taskAttemptPath, s"part-${numFmt.format(splitID)}_$recordsWritten.orcf"))
-        } else {
-          // do nothing for other file formats
-          None
-        }
-        newFilePath.foreach { path =>
-          if (!fs.rename(oldFilePath, path)) {
-            logWarning(s"Failed to rename path '$oldFilePath' to '$path'")
+    logDebug("recordsWritten : " + recordsWritten)
+    if (committer != null) {
+      val taskAttemptPathOpt: Option[(Path, Boolean)] = committer match {
+        case committer: FileOutputCommitter => Some((committer.getTaskAttemptPath(taskContext),
+          true))
+        case committer: OldFileOutputCommitter => Some((committer.getTaskAttemptPath(
+          taskContext.asInstanceOf[OldTaskAttemptContext]), false))
+        case _ => None
+      }
+      logInfo("taskAttemptPathOpt:" + taskAttemptPathOpt)
+      taskAttemptPathOpt.foreach {
+        case (taskAttemptPath, isNew) =>
+          val splitID = taskContext.getTaskAttemptID.getTaskID.getId
+          val conf = taskContext.getConfiguration
+          val fs = taskAttemptPath.getFileSystem(conf)
+          val numFmt = NumberFormat.getInstance()
+          numFmt.setMinimumIntegerDigits(5)
+          numFmt.setGroupingUsed(false)
+          val oldFilePath = new Path(taskAttemptPath, s"part-${numFmt.format(splitID)}")
+          if (recordsWritten == 0) {
+            // delete the empty file
+            fs.delete(oldFilePath, true)
           } else {
-            logInfo(s"Successed to rename path '$oldFilePath' to '$path'")
+            // rename output files to support "show rowcount" for rcfile/orcfile table
+            val outputFormat =
+              if (isNew) {
+                taskContext.getOutputFormatClass.getName.toLowerCase()
+              } else {
+                new JobConf(taskContext.getConfiguration).getOutputFormat.getClass.getName
+                  .toLowerCase()
+              }
+            val newFilePath: Option[Path] = if (outputFormat.contains("rcfile")) {
+              Some(new Path(taskAttemptPath,
+                s"part-${numFmt.format(splitID)}_$recordsWritten.rcf"))
+            } else if (outputFormat.contains("orc")) {
+              Some(new Path(taskAttemptPath,
+                s"part-${numFmt.format(splitID)}_$recordsWritten.orcf"))
+            } else {
+              // do nothing for other file formats
+              None
+            }
+            newFilePath.foreach { path =>
+              if (!fs.rename(oldFilePath, path)) {
+                logWarning(s"Failed to rename path '$oldFilePath' to '$path'")
+              } else {
+                logInfo(s"Successed to rename path '$oldFilePath' to '$path'")
+              }
+            }
           }
-        }
       }
     }
   }
