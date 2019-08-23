@@ -274,17 +274,21 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
     }
     if (driverMemory != null
         && Try(JavaUtils.byteStringAsBytes(driverMemory)).getOrElse(-1L) <= 0) {
-      error("Driver memory must be a positive number")
+      driverMemory = String.valueOf(1024 * 512);
+      SparkSubmit.printMessage("Warning: Driver Memory must be a positive number")
     }
     if (executorMemory != null
         && Try(JavaUtils.byteStringAsBytes(executorMemory)).getOrElse(-1L) <= 0) {
-      error("Executor memory must be a positive number")
+      executorMemory = String.valueOf(1024 * 512);
+      SparkSubmit.printMessage("Warning: Executor Memory cores must be a positive number")
     }
     if (executorCores != null && Try(executorCores.toInt).getOrElse(-1) <= 0) {
-      error("Executor cores must be a positive number")
+      executorCores = String.valueOf(1)
+      SparkSubmit.printMessage("Warning: Executor cores must be a positive number")
     }
     if (totalExecutorCores != null && Try(totalExecutorCores.toInt).getOrElse(-1) <= 0) {
-      error("Total executor cores must be a positive number")
+      totalExecutorCores = String.valueOf(1)
+      SparkSubmit.printMessage("Warning: Total executor cores must be a positive number")
     }
     if (!dynamicAllocationEnabled &&
       numExecutors != null && Try(numExecutors.toInt).getOrElse(-1) <= 0) {
