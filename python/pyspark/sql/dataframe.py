@@ -358,10 +358,11 @@ class DataFrame(object):
          age  | 5
          name | Bob
         """
-        if isinstance(truncate, bool) and truncate:
-            print(self._jdf.showString(n, 20, vertical))
-        else:
-            print(self._jdf.showString(n, int(truncate), vertical))
+        with SCCallSiteSync(self._sc):
+            if isinstance(truncate, bool) and truncate:
+                print(self._jdf.showString(n, 20, vertical))
+            else:
+                print(self._jdf.showString(n, int(truncate), vertical))
 
     def __repr__(self):
         if not self._support_repr_html and self.sql_ctx._conf.isReplEagerEvalEnabled():
@@ -504,7 +505,8 @@ class DataFrame(object):
         >>> df.count()
         2
         """
-        return int(self._jdf.count())
+        with SCCallSiteSync(self._sc):
+            return int(self._jdf.count())
 
     @ignore_unicode_prefix
     @since(1.3)
@@ -542,8 +544,9 @@ class DataFrame(object):
         >>> df.limit(0).collect()
         []
         """
-        jdf = self._jdf.limit(num)
-        return DataFrame(jdf, self.sql_ctx)
+        with SCCallSiteSync(self._sc):
+            jdf = self._jdf.limit(num)
+            return DataFrame(jdf, self.sql_ctx)
 
     @ignore_unicode_prefix
     @since(1.3)
@@ -553,7 +556,8 @@ class DataFrame(object):
         >>> df.take(2)
         [Row(age=2, name=u'Alice'), Row(age=5, name=u'Bob')]
         """
-        return self.limit(num).collect()
+        with SCCallSiteSync(self._sc):
+            return self.limit(num).collect()
 
     @since(1.3)
     def foreach(self, f):
@@ -565,7 +569,8 @@ class DataFrame(object):
         ...     print(person.name)
         >>> df.foreach(f)
         """
-        self.rdd.foreach(f)
+        with SCCallSiteSync(self._sc):
+            self.rdd.foreach(f)
 
     @since(1.3)
     def foreachPartition(self, f):
@@ -578,7 +583,8 @@ class DataFrame(object):
         ...         print(person.name)
         >>> df.foreachPartition(f)
         """
-        self.rdd.foreachPartition(f)
+        with SCCallSiteSync(self._sc):
+            self.rdd.foreachPartition(f)
 
     @since(1.3)
     def cache(self):
@@ -658,7 +664,8 @@ class DataFrame(object):
         >>> df.coalesce(1).rdd.getNumPartitions()
         1
         """
-        return DataFrame(self._jdf.coalesce(numPartitions), self.sql_ctx)
+        with SCCallSiteSync(self._sc):
+            return DataFrame(self._jdf.coalesce(numPartitions), self.sql_ctx)
 
     @since(1.3)
     def repartition(self, numPartitions, *cols):
@@ -710,17 +717,18 @@ class DataFrame(object):
         |  2|Alice|
         +---+-----+
         """
-        if isinstance(numPartitions, int):
-            if len(cols) == 0:
-                return DataFrame(self._jdf.repartition(numPartitions), self.sql_ctx)
+        with SCCallSiteSync(self._sc):
+            if isinstance(numPartitions, int):
+                if len(cols) == 0:
+                    return DataFrame(self._jdf.repartition(numPartitions), self.sql_ctx)
+                else:
+                    return DataFrame(
+                        self._jdf.repartition(numPartitions, self._jcols(*cols)), self.sql_ctx)
+            elif isinstance(numPartitions, (basestring, Column)):
+                cols = (numPartitions, ) + cols
+                return DataFrame(self._jdf.repartition(self._jcols(*cols)), self.sql_ctx)
             else:
-                return DataFrame(
-                    self._jdf.repartition(numPartitions, self._jcols(*cols)), self.sql_ctx)
-        elif isinstance(numPartitions, (basestring, Column)):
-            cols = (numPartitions, ) + cols
-            return DataFrame(self._jdf.repartition(self._jcols(*cols)), self.sql_ctx)
-        else:
-            raise TypeError("numPartitions should be an int or Column")
+                raise TypeError("numPartitions should be an int or Column")
 
     @since("2.4.0")
     def repartitionByRange(self, numPartitions, *cols):
@@ -780,7 +788,8 @@ class DataFrame(object):
         >>> df.distinct().count()
         2
         """
-        return DataFrame(self._jdf.distinct(), self.sql_ctx)
+        with SCCallSiteSync(self._sc):
+            return DataFrame(self._jdf.distinct(), self.sql_ctx)
 
     @since(1.3)
     def sample(self, withReplacement=None, fraction=None, seed=None):
@@ -841,11 +850,11 @@ class DataFrame(object):
                 seed = fraction
             fraction = withReplacement
             withReplacement = None
-
-        seed = long(seed) if seed is not None else None
-        args = [arg for arg in [withReplacement, fraction, seed] if arg is not None]
-        jdf = self._jdf.sample(*args)
-        return DataFrame(jdf, self.sql_ctx)
+        with SCCallSiteSync(self._sc):
+            seed = long(seed) if seed is not None else None
+            args = [arg for arg in [withReplacement, fraction, seed] if arg is not None]
+            jdf = self._jdf.sample(*args)
+            return DataFrame(jdf, self.sql_ctx)
 
     @since(1.5)
     def sampleBy(self, col, fractions, seed=None):
@@ -876,19 +885,20 @@ class DataFrame(object):
         .. versionchanged:: 3.0
            Added sampling by a column of :class:`Column`
         """
-        if isinstance(col, basestring):
-            col = Column(col)
-        elif not isinstance(col, Column):
-            raise ValueError("col must be a string or a column, but got %r" % type(col))
-        if not isinstance(fractions, dict):
-            raise ValueError("fractions must be a dict but got %r" % type(fractions))
-        for k, v in fractions.items():
-            if not isinstance(k, (float, int, long, basestring)):
-                raise ValueError("key must be float, int, long, or string, but got %r" % type(k))
-            fractions[k] = float(v)
-        col = col._jc
-        seed = seed if seed is not None else random.randint(0, sys.maxsize)
-        return DataFrame(self._jdf.stat().sampleBy(col, self._jmap(fractions), seed), self.sql_ctx)
+        with SCCallSiteSync(self._sc):
+            if isinstance(col, basestring):
+                col = Column(col)
+            elif not isinstance(col, Column):
+                raise ValueError("col must be a string or a column, but got %r" % type(col))
+            if not isinstance(fractions, dict):
+                raise ValueError("fractions must be a dict but got %r" % type(fractions))
+            for k, v in fractions.items():
+                if not isinstance(k, (float, int, long, basestring)):
+                    raise ValueError("key must be float, int, long, or string, but got %r" % type(k))
+                fractions[k] = float(v)
+            col = col._jc
+            seed = seed if seed is not None else random.randint(0, sys.maxsize)
+            return DataFrame(self._jdf.stat().sampleBy(col, self._jmap(fractions), seed), self.sql_ctx)
 
     @since(1.4)
     def randomSplit(self, weights, seed=None):
@@ -905,12 +915,13 @@ class DataFrame(object):
         >>> splits[1].count()
         2
         """
-        for w in weights:
-            if w < 0.0:
-                raise ValueError("Weights must be positive. Found weight value: %s" % w)
-        seed = seed if seed is not None else random.randint(0, sys.maxsize)
-        rdd_array = self._jdf.randomSplit(_to_list(self.sql_ctx._sc, weights), long(seed))
-        return [DataFrame(rdd, self.sql_ctx) for rdd in rdd_array]
+        with SCCallSiteSync(self._sc):
+            for w in weights:
+                if w < 0.0:
+                    raise ValueError("Weights must be positive. Found weight value: %s" % w)
+            seed = seed if seed is not None else random.randint(0, sys.maxsize)
+            rdd_array = self._jdf.randomSplit(_to_list(self.sql_ctx._sc, weights), long(seed))
+            return [DataFrame(rdd, self.sql_ctx) for rdd in rdd_array]
 
     @property
     @since(1.3)
@@ -988,8 +999,9 @@ class DataFrame(object):
          Row(age=5, name=u'Bob', height=80), Row(age=5, name=u'Bob', height=85)]
         """
 
-        jdf = self._jdf.crossJoin(other._jdf)
-        return DataFrame(jdf, self.sql_ctx)
+        with SCCallSiteSync(self._sc):
+            jdf = self._jdf.crossJoin(other._jdf)
+            return DataFrame(jdf, self.sql_ctx)
 
     @ignore_unicode_prefix
     @since(1.3)
@@ -1025,27 +1037,29 @@ class DataFrame(object):
         [Row(name=u'Bob', age=5)]
         """
 
-        if on is not None and not isinstance(on, list):
-            on = [on]
+        with SCCallSiteSync(self._sc):
+            if on is not None and not isinstance(on, list):
+                on = [on]
 
-        if on is not None:
-            if isinstance(on[0], basestring):
-                on = self._jseq(on)
+            if on is not None:
+                if isinstance(on[0], basestring):
+                    on = self._jseq(on)
+                else:
+                    assert isinstance(on[0], Column), "on should be Column or list of Column"
+                    on = reduce(lambda x, y: x.__and__(y), on)
+                    on = on._jc
+
+            if on is None and how is None:
+                jdf = self._jdf.join(other._jdf)
             else:
-                assert isinstance(on[0], Column), "on should be Column or list of Column"
-                on = reduce(lambda x, y: x.__and__(y), on)
-                on = on._jc
+                if how is None:
+                    how = "inner"
+                if on is None:
+                    on = self._jseq([])
+                assert isinstance(how, basestring), "how should be basestring"
+                jdf = self._jdf.join(other._jdf, on, how)
+            return DataFrame(jdf, self.sql_ctx)
 
-        if on is None and how is None:
-            jdf = self._jdf.join(other._jdf)
-        else:
-            if how is None:
-                how = "inner"
-            if on is None:
-                on = self._jseq([])
-            assert isinstance(how, basestring), "how should be basestring"
-            jdf = self._jdf.join(other._jdf, on, how)
-        return DataFrame(jdf, self.sql_ctx)
 
     @since(1.6)
     def sortWithinPartitions(self, *cols, **kwargs):
@@ -1064,8 +1078,9 @@ class DataFrame(object):
         |  5|  Bob|
         +---+-----+
         """
-        jdf = self._jdf.sortWithinPartitions(self._sort_cols(cols, kwargs))
-        return DataFrame(jdf, self.sql_ctx)
+        with SCCallSiteSync(self._sc):
+            jdf = self._jdf.sortWithinPartitions(self._sort_cols(cols, kwargs))
+            return DataFrame(jdf, self.sql_ctx)
 
     @ignore_unicode_prefix
     @since(1.3)
@@ -1091,8 +1106,9 @@ class DataFrame(object):
         >>> df.orderBy(["age", "name"], ascending=[0, 1]).collect()
         [Row(age=5, name=u'Bob'), Row(age=2, name=u'Alice')]
         """
-        jdf = self._jdf.sort(self._sort_cols(cols, kwargs))
-        return DataFrame(jdf, self.sql_ctx)
+        with SCCallSiteSync(self._sc):
+            jdf = self._jdf.sort(self._sort_cols(cols, kwargs))
+            return DataFrame(jdf, self.sql_ctx)
 
     orderBy = sort
 
@@ -1244,10 +1260,11 @@ class DataFrame(object):
         >>> df.head(1)
         [Row(age=2, name=u'Alice')]
         """
-        if n is None:
-            rs = self.head(1)
-            return rs[0] if rs else None
-        return self.take(n)
+        with SCCallSiteSync(self._sc):
+            if n is None:
+                rs = self.head(1)
+                return rs[0] if rs else None
+            return self.take(n)
 
     @ignore_unicode_prefix
     @since(1.3)
@@ -1257,7 +1274,8 @@ class DataFrame(object):
         >>> df.first()
         Row(age=2, name=u'Alice')
         """
-        return self.head()
+        with SCCallSiteSync(self._sc):
+            return self.head()
 
     @ignore_unicode_prefix
     @since(1.3)
