@@ -847,6 +847,12 @@ object ApplicationMaster extends Logging {
       sys.props(k) = v
     }
 
+    // Based on story-59651909, add new properties to trace container's log path
+    sys.props.get("spark.yarn.app.container.log.dir").foreach { v =>
+      sys.props("spark.stdout.log.path") = v + "/stdout"
+      sys.props("spark.stderr.log.path") = v + "/stderr"
+    }
+
     val yarnConf = new YarnConfiguration(SparkHadoopUtil.newConfiguration(sparkConf))
     master = new ApplicationMaster(amArgs, sparkConf, yarnConf)
 

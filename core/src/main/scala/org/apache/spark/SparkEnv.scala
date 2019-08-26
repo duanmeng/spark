@@ -70,6 +70,9 @@ class SparkEnv (
     val outputCommitCoordinator: OutputCommitCoordinator,
     val conf: SparkConf) extends Logging {
 
+  val stdLogMonitor = new StdLogMonitor(conf)
+  stdLogMonitor.start()
+
   private[spark] var isStopped = false
   private val pythonWorkers = mutable.HashMap[(String, Map[String, String]), PythonWorkerFactory]()
 
@@ -107,6 +110,7 @@ class SparkEnv (
           }
         case None => // We just need to delete tmp dir created by driver, so do nothing on executor
       }
+      stdLogMonitor.stop()
     }
   }
 
