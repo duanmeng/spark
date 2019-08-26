@@ -153,30 +153,45 @@ private[spark] class SparkSubmit extends Logging {
    */
   @tailrec
   private def submit(args: SparkSubmitArguments, uninitLog: Boolean): Unit = {
+    val (_, _, sparkConf, _) = prepareSubmitEnvironment(args)
+
+    // UserGroupInformation.getCurrentUser has multiple implementation in hadoop-tdw,
+    // to support hadoop-tdw & hadoop-apache, call the method according reflection.
+    def getCurrentUser: UserGroupInformation = {
+      try {
+        val method = classOf[UserGroupInformation].getDeclaredMethod("getCurrentUser",
+          classOf[HadoopConfiguration])
+        method.invoke(null,
+          SparkHadoopUtil.get.newConfiguration(sparkConf)).asInstanceOf[UserGroupInformation]
+      } catch {
+        case e: NoSuchMethodException =>
+          val method = classOf[UserGroupInformation].getDeclaredMethod("getCurrentUser")
+          method.invoke(null).asInstanceOf[UserGroupInformation]
+      }
+    }
 
     def doRunMain(): Unit = {
-      if (args.proxyUser != null) {
-        val proxyUser = UserGroupInformation.createProxyUser(args.proxyUser,
-          UserGroupInformation.getCurrentUser())
-        try {
-          proxyUser.doAs(new PrivilegedExceptionAction[Unit]() {
-            override def run(): Unit = {
-              runMain(args, uninitLog)
-            }
-          })
-        } catch {
-          case e: Exception =>
-            // Hadoop's AuthorizationException suppresses the exception's stack trace, which
-            // makes the message printed to the output by the JVM not very helpful. Instead,
-            // detect exceptions with empty stack traces here, and treat them differently.
-            if (e.getStackTrace().length == 0) {
-              error(s"ERROR: ${e.getClass().getName()}: ${e.getMessage()}")
-            } else {
-              throw e
-            }
-        }
+      val ugi = if (args.proxyUser != null) {
+        UserGroupInformation.createProxyUser(args.proxyUser, getCurrentUser)
       } else {
-        runMain(args, uninitLog)
+        getCurrentUser
+      }
+      try {
+        ugi.doAs(new PrivilegedExceptionAction[Unit]() {
+          override def run(): Unit = {
+            runMain(args, uninitLog)
+          }
+        })
+      } catch {
+        case e: Exception =>
+          // Hadoop's AuthorizationException suppresses the exception's stack trace, which
+          // makes the message printed to the output by the JVM not very helpful. Instead,
+          // detect exceptions with empty stack traces here, and treat them differently.
+          if (e.getStackTrace().length == 0) {
+            error(s"ERROR: ${e.getClass().getName()}: ${e.getMessage()}")
+          } else {
+            throw e
+          }
       }
     }
 
