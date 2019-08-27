@@ -133,21 +133,37 @@ class LZ4CompressionCodec(conf: SparkConf) extends CompressionCodec {
   override def compressedOutputStream(s: OutputStream): OutputStream = {
     val blockSize = conf.get(IO_COMPRESSION_LZ4_BLOCKSIZE).toInt
     val syncFlush = false
-    new LZ4BlockOutputStream(
-      s,
-      blockSize,
-      lz4Factory.fastCompressor(),
-      xxHashFactory.newStreamingHash32(defaultSeed).asChecksum,
-      syncFlush)
+    try {
+      new LZ4BlockOutputStream(
+        s,
+        blockSize,
+        lz4Factory.fastCompressor(),
+        xxHashFactory.newStreamingHash32(defaultSeed).asChecksum,
+        syncFlush)
+    } catch {
+      case e : Throwable =>
+        // scalastyle:off println
+        println("may contain jpountz.lz4 :" + e.getMessage)
+        // scalastyle:on println
+        new LZ4BlockOutputStream(s)
+    }
   }
 
   override def compressedInputStream(s: InputStream): InputStream = {
     val disableConcatenationOfByteStream = false
-    new LZ4BlockInputStream(
-      s,
-      lz4Factory.fastDecompressor(),
-      xxHashFactory.newStreamingHash32(defaultSeed).asChecksum,
-      disableConcatenationOfByteStream)
+    try {
+      new LZ4BlockInputStream(
+        s,
+        lz4Factory.fastDecompressor(),
+        xxHashFactory.newStreamingHash32(defaultSeed).asChecksum,
+        disableConcatenationOfByteStream)
+    } catch {
+      case e : Throwable =>
+        // scalastyle:off println
+        println("may contain jpountz.lz4 :" + e.getMessage)
+        // scalastyle:on println
+        new LZ4BlockInputStream(s)
+    }
   }
 }
 
