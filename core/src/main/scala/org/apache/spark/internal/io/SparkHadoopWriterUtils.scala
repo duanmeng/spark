@@ -70,18 +70,21 @@ object SparkHadoopWriterUtils {
   // TODO: these don't seem like the right abstractions.
   // We should abstract the duplicate code in a less awkward way.
 
-  def initHadoopOutputMetrics(context: TaskContext): (OutputMetrics, () => Long) = {
+  def initHadoopOutputMetrics(
+      context: TaskContext): Option[(OutputMetrics, () => Long)] = {
     val bytesWrittenCallback = SparkHadoopUtil.get.getFSBytesWrittenOnThreadCallback()
-    (context.taskMetrics().outputMetrics, bytesWrittenCallback)
+    bytesWrittenCallback.map { b => (context.taskMetrics().outputMetrics, b) }
   }
 
   def maybeUpdateOutputMetrics(
-      outputMetrics: OutputMetrics,
-      callback: () => Long,
+      outputMetricsAndBytesWrittenCallback: Option[(OutputMetrics, () => Long)],
       recordsWritten: Long): Unit = {
     if (recordsWritten % RECORDS_BETWEEN_BYTES_WRITTEN_METRIC_UPDATES == 0) {
-      outputMetrics.setBytesWritten(callback())
-      outputMetrics.setRecordsWritten(recordsWritten)
+      outputMetricsAndBytesWrittenCallback.foreach {
+        case (om, callback) =>
+          om.setBytesWritten(callback())
+          om.setRecordsWritten(recordsWritten)
+      }
     }
   }
 

@@ -57,8 +57,7 @@ class HadoopFSDelegationTokenProviderSuite extends SparkFunSuite with Matchers {
     basicFederationResult should be (basicFederationExpected)
 
     // when viewfs is enabled, namespaces are handled by it, so we don't need to take care of them
-    val viewFsConf = new Configuration()
-    viewFsConf.addResource(basicFederationConf)
+    val viewFsConf = new Configuration(basicFederationConf)
     viewFsConf.set("fs.defaultFS", "viewfs://clusterX/")
     viewFsConf.set("fs.viewfs.mounttable.clusterX.link./home", "hdfs://localhost:8020/")
     val viewFsExpected = Set(new Path("viewfs://clusterX/").getFileSystem(viewFsConf))
@@ -66,8 +65,7 @@ class HadoopFSDelegationTokenProviderSuite extends SparkFunSuite with Matchers {
       .hadoopFSsToAccess(sparkConf, viewFsConf) should be (viewFsExpected)
 
     // invalid config should not throw NullPointerException
-    val invalidFederationConf = new Configuration()
-    invalidFederationConf.addResource(basicFederationConf)
+    val invalidFederationConf = new Configuration(basicFederationConf)
     invalidFederationConf.unset("dfs.namenode.rpc-address.ns2")
     val invalidFederationExpected = Set(
       new Path("hdfs://localhost:8020").getFileSystem(invalidFederationConf))

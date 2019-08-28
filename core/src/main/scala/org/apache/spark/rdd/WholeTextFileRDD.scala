@@ -17,6 +17,8 @@
 
 package org.apache.spark.rdd
 
+import scala.util.Try
+
 import org.apache.hadoop.conf.{Configurable, Configuration}
 import org.apache.hadoop.io.{Text, Writable}
 import org.apache.hadoop.mapreduce.InputSplit
@@ -38,11 +40,16 @@ private[spark] class WholeTextFileRDD(
     minPartitions: Int)
   extends NewHadoopRDD[Text, Text](sc, inputFormatClass, keyClass, valueClass, conf) {
 
+  val LIST_STATUS_NUM_THREADS = Try {
+    classOf[FileInputFormat[_, _]].getField("LIST_STATUS_NUM_THREADS").get(null)
+      .asInstanceOf[String]
+  }.getOrElse("mapreduce.input.fileinputformat.list-status.num-threads")
+
   override def getPartitions: Array[Partition] = {
     val conf = getConf
     // setMinPartitions below will call FileInputFormat.listStatus(), which can be quite slow when
     // traversing a large number of directories and files. Parallelize it.
-    conf.setIfUnset(FileInputFormat.LIST_STATUS_NUM_THREADS,
+    conf.setIfUnset(LIST_STATUS_NUM_THREADS,
       Runtime.getRuntime.availableProcessors().toString)
     val inputFormat = inputFormatClass.getConstructor().newInstance()
     inputFormat match {

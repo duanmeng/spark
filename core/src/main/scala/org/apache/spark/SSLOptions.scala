@@ -185,11 +185,11 @@ private[spark] object SSLOptions extends Logging {
         .orElse(defaults.flatMap(_.keyStore))
 
     val keyStorePassword = conf.getWithSubstitution(s"$ns.keyStorePassword")
-        .orElse(Option(hadoopConf.getPassword(s"$ns.keyStorePassword")).map(new String(_)))
+        .orElse(Option(hadoopConf.get(s"$ns.keyStorePassword")).map(new String(_)))
         .orElse(defaults.flatMap(_.keyStorePassword))
 
     val keyPassword = conf.getWithSubstitution(s"$ns.keyPassword")
-        .orElse(Option(hadoopConf.getPassword(s"$ns.keyPassword")).map(new String(_)))
+        .orElse(Option(hadoopConf.get(s"$ns.keyPassword")).map(new String(_)))
         .orElse(defaults.flatMap(_.keyPassword))
 
     val keyStoreType = conf.getWithSubstitution(s"$ns.keyStoreType")
@@ -202,7 +202,7 @@ private[spark] object SSLOptions extends Logging {
         .orElse(defaults.flatMap(_.trustStore))
 
     val trustStorePassword = conf.getWithSubstitution(s"$ns.trustStorePassword")
-        .orElse(Option(hadoopConf.getPassword(s"$ns.trustStorePassword")).map(new String(_)))
+        .orElse(Option(hadoopConf.get(s"$ns.trustStorePassword")).map(new String(_)))
         .orElse(defaults.flatMap(_.trustStorePassword))
 
     val trustStoreType = conf.getWithSubstitution(s"$ns.trustStoreType")

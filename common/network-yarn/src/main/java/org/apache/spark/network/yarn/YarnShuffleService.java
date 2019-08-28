@@ -344,7 +344,7 @@ public class YarnShuffleService extends AuxiliaryService {
    * Set the recovery path for shuffle service recovery when NM is restarted. This will be call
    * by NM if NM recovery is enabled.
    */
-  @Override
+  //@Override
   public void setRecoveryPath(Path recoveryPath) {
     _recoveryPath = recoveryPath;
   }

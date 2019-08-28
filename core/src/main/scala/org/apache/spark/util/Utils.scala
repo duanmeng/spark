@@ -2335,6 +2335,17 @@ private[spark] object Utils extends Logging {
     }
   }
 
+  def invoke(
+      clazz: Class[_],
+      obj: AnyRef,
+      methodName: String,
+      args: (Class[_], AnyRef)*): AnyRef = {
+    val (types, values) = args.unzip
+    val method = clazz.getDeclaredMethod(methodName, types: _*)
+    method.setAccessible(true)
+    method.invoke(obj, values.toSeq: _*)
+  }
+
   /**
    * Return the prefix of a command that appends the given library paths to the
    * system-specific library path environment variable. On Unix, for instance,

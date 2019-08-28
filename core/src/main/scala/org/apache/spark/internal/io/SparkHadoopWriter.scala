@@ -32,6 +32,7 @@ import org.apache.hadoop.mapreduce.task.{TaskAttemptContextImpl => NewTaskAttemp
 
 import org.apache.spark.{SerializableWritable, SparkConf, SparkException, TaskContext}
 import org.apache.spark.deploy.SparkHadoopUtil
+import org.apache.spark.executor.OutputMetrics
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.io.FileCommitProtocol.TaskCommitMessage
 import org.apache.spark.rdd.{HadoopRDD, RDD}
@@ -122,7 +123,8 @@ object SparkHadoopWriter extends Logging {
 
     // We must initialize the callback for calculating bytes written after the statistic table
     // is initialized in FileSystem which is happened in initWriter.
-    val (outputMetrics, callback) = initHadoopOutputMetrics(context)
+    val outputMetricsAndBytesWrittenCallback: Option[(OutputMetrics, () => Long)] =
+    initHadoopOutputMetrics(context)
 
     // Write all rows in RDD partition.
     try {
@@ -132,7 +134,7 @@ object SparkHadoopWriter extends Logging {
           config.write(pair)
 
           // Update bytes written metric every few records
-          maybeUpdateOutputMetrics(outputMetrics, callback, recordsWritten)
+          maybeUpdateOutputMetrics(outputMetricsAndBytesWrittenCallback, recordsWritten)
           recordsWritten += 1
         }
 
@@ -148,9 +150,11 @@ object SparkHadoopWriter extends Logging {
           logError(s"Task ${taskContext.getTaskAttemptID} aborted.")
         }
       })
-
-      outputMetrics.setBytesWritten(callback())
-      outputMetrics.setRecordsWritten(recordsWritten)
+      outputMetricsAndBytesWrittenCallback.foreach {
+        case (om, callback) =>
+          om.setBytesWritten(callback())
+          om.setRecordsWritten(recordsWritten)
+      }
 
       ret
     } catch {

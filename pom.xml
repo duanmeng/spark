@@ -81,6 +81,20 @@
     </mailingList>
   </mailingLists>
 
+  <distributionManagement>
+    <repository>
+      <id>rdm-releases-repo</id>
+      <name>Proj Release Repository</name>
+      <url>http://maven.oa.com/nexus/content/repositories/releases</url>
+    </repository>
+
+    <snapshotRepository>
+      <id>rdm-snapshots-repo</id>
+      <name>Proj Snapshot Repository</name>
+      <url>http://maven.oa.com/nexus/content/repositories/thirdparty-snapshots</url>
+    </snapshotRepository>
+  </distributionManagement>
+
   <modules>
     <module>common/sketch</module>
     <module>common/kvstore</module>
@@ -2910,6 +2924,17 @@
     <profile>
       <id>hadoop-2.7</id>
       <!-- Default hadoop profile. Uses global properties. -->
+    </profile>
+
+    <profile>
+      <id>hadoop-2.2-tdw</id>
+      <properties>
+        <hadoop.version>2.2.0-tdw-0.2.270</hadoop.version>
+        <protobuf.version>2.5.0</protobuf.version>
+        <zookeeper.version>3.4.5</zookeeper.version>
+        <curator.version>2.4.0</curator.version>
+        <jets3t.version>0.7.1</jets3t.version>
+      </properties>
     </profile>
 
     <profile>

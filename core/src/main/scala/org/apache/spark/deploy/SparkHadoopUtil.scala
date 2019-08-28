@@ -18,6 +18,7 @@
 package org.apache.spark.deploy
 
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, DataInputStream, DataOutputStream, File, IOException}
+import java.lang.reflect.Method
 import java.security.PrivilegedExceptionAction
 import java.text.DateFormat
 import java.util.{Arrays, Date, Locale}
@@ -30,7 +31,8 @@ import scala.util.control.NonFatal
 
 import com.google.common.primitives.Longs
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs._
+import org.apache.hadoop.fs.{FileStatus, FileSystem, FSDataOutputStream, Path, PathFilter}
+import org.apache.hadoop.fs.FileSystem.Statistics
 import org.apache.hadoop.mapred.JobConf
 import org.apache.hadoop.security.{Credentials, UserGroupInformation}
 import org.apache.hadoop.security.token.{Token, TokenIdentifier}
@@ -153,27 +155,37 @@ private[spark] class SparkHadoopUtil extends Logging {
    * getFSBytesReadOnThreadCallback is called from thread r at time t, the returned callback will
    * return the bytes read on r since t.
    */
-  private[spark] def getFSBytesReadOnThreadCallback(): () => Long = {
-    val f = () => FileSystem.getAllStatistics.asScala.map(_.getThreadStatistics.getBytesRead).sum
-    val baseline = (Thread.currentThread().getId, f())
+  private[spark] def getFSBytesReadOnThreadCallback(): Option[() => Long] = {
+    try {
+      val threadStats = getFileSystemThreadStatistics()
+      val getBytesReadMethod = getFileSystemThreadStatisticsMethod("getBytesRead")
+      val f = () => threadStats.map(getBytesReadMethod.invoke(_).asInstanceOf[Long]).sum
+      val baseline = (Thread.currentThread().getId, f())
 
-    /**
-     * This function may be called in both spawned child threads and parent task thread (in
-     * PythonRDD), and Hadoop FileSystem uses thread local variables to track the statistics.
-     * So we need a map to track the bytes read from the child threads and parent thread,
-     * summing them together to get the bytes read of this task.
-     */
-    new Function0[Long] {
-      private val bytesReadMap = new mutable.HashMap[Long, Long]()
+      /**
+       * This function may be called in both spawned child threads and parent task thread (in
+       * PythonRDD), and Hadoop FileSystem uses thread local variables to track the statistics.
+       * So we need a map to track the bytes read from the child threads and parent thread,
+       * summing them together to get the bytes read of this task.
+       */
+      val func = new Function0[Long] {
+        private val bytesReadMap = new mutable.HashMap[Long, Long]()
 
-      override def apply(): Long = {
-        bytesReadMap.synchronized {
-          bytesReadMap.put(Thread.currentThread().getId, f())
-          bytesReadMap.map { case (k, v) =>
-            v - (if (k == baseline._1) baseline._2 else 0)
-          }.sum
+        override def apply(): Long = {
+          bytesReadMap.synchronized {
+            bytesReadMap.put(Thread.currentThread().getId, f())
+            bytesReadMap.map { case (k, v) =>
+              v - (if (k == baseline._1) baseline._2 else 0)
+            }.sum
+          }
         }
       }
+
+      Some(func)
+    } catch {
+      case e @ (_: NoSuchMethodException | _: ClassNotFoundException) =>
+        logDebug("Couldn't find method for retrieving thread-level FileSystem input data", e)
+        None
     }
   }
 
@@ -184,11 +196,29 @@ private[spark] class SparkHadoopUtil extends Logging {
    *
    * @return None if the required method can't be found.
    */
-  private[spark] def getFSBytesWrittenOnThreadCallback(): () => Long = {
-    val threadStats = FileSystem.getAllStatistics.asScala.map(_.getThreadStatistics)
-    val f = () => threadStats.map(_.getBytesWritten).sum
-    val baselineBytesWritten = f()
-    () => f() - baselineBytesWritten
+  private[spark] def getFSBytesWrittenOnThreadCallback(): Option[() => Long] = {
+    try {
+      val threadStats = getFileSystemThreadStatistics()
+      val getBytesWrittenMethod = getFileSystemThreadStatisticsMethod("getBytesWritten")
+      val f = () => threadStats.map(getBytesWrittenMethod.invoke(_).asInstanceOf[Long]).sum
+      val baselineBytesWritten = f()
+      Some(() => f() - baselineBytesWritten)
+    } catch {
+      case e @ (_: NoSuchMethodException | _: ClassNotFoundException) =>
+        logDebug("Couldn't find method for retrieving thread-level FileSystem output data", e)
+        None
+    }
+  }
+
+  private def getFileSystemThreadStatistics(): Seq[AnyRef] = {
+    FileSystem.getAllStatistics.asScala.map(
+      Utils.invoke(classOf[Statistics], _, "getThreadStatistics"))
+  }
+
+  private def getFileSystemThreadStatisticsMethod(methodName: String): Method = {
+    val statisticsDataClass =
+      Utils.classForName("org.apache.hadoop.fs.FileSystem$Statistics$StatisticsData")
+    statisticsDataClass.getDeclaredMethod(methodName)
   }
 
   /**

@@ -124,7 +124,7 @@ class YarnAllocatorSuite extends SparkFunSuite with Matchers with BeforeAndAfter
       host: String,
       containerNumber: Int = containerNum,
       resource: Resource = containerResource): Container = {
-    val  containerId: ContainerId = ContainerId.newContainerId(appAttemptId, containerNum)
+    val  containerId: ContainerId = null
     containerNum += 1
     val nodeId = NodeId.newInstance(host, 1000)
     Container.newInstance(containerId, nodeId, "", resource, RM_REQUEST_PRIORITY, null)
@@ -483,11 +483,11 @@ class YarnAllocatorSuite extends SparkFunSuite with Matchers with BeforeAndAfter
     val nonBlacklistedStatuses = Seq(
       ContainerExitStatus.SUCCESS,
       ContainerExitStatus.PREEMPTED,
-      ContainerExitStatus.KILLED_EXCEEDED_VMEM,
-      ContainerExitStatus.KILLED_EXCEEDED_PMEM,
-      ContainerExitStatus.KILLED_BY_RESOURCEMANAGER,
-      ContainerExitStatus.KILLED_BY_APPMASTER,
-      ContainerExitStatus.KILLED_AFTER_APP_COMPLETION,
+//      ContainerExitStatus.KILLED_EXCEEDED_VMEM,
+//      ContainerExitStatus.KILLED_EXCEEDED_PMEM,
+//      ContainerExitStatus.KILLED_BY_RESOURCEMANAGER,
+//      ContainerExitStatus.KILLED_BY_APPMASTER,
+//      ContainerExitStatus.KILLED_AFTER_APP_COMPLETION,
       ContainerExitStatus.ABORTED,
       ContainerExitStatus.DISKS_FAILED)
 

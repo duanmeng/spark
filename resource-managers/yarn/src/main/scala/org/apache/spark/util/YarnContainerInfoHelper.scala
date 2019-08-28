@@ -82,11 +82,8 @@ private[spark] object YarnContainerInfoHelper extends Logging {
   }
 
   def getClusterId(yarnConf: YarnConfiguration): Option[String] = {
-    try {
-      Some(YarnConfiguration.getClusterId(yarnConf))
-    } catch {
-      case _: HadoopIllegalArgumentException => None
-    }
+    // Reimplemetation to compatible with hadoop-2.2-tdw
+    Option(yarnConf.get("yarn.resourcemanager.cluster-id"))
   }
 
   def getYarnHttpScheme(yarnConf: YarnConfiguration): String = {

@@ -125,7 +125,7 @@ class HDFSMetadataLog[T <: AnyRef : ClassTag](sparkSession: SparkSession, path: 
       serialize(metadata, output)
       output.close()
     } catch {
-      case e: FileAlreadyExistsException =>
+      case e: IOException if isFileAlreadyExistsException(e) =>
         output.cancel()
         // If next batch file already exists, then another concurrently running query has
         // written it.
@@ -136,6 +136,14 @@ class HDFSMetadataLog[T <: AnyRef : ClassTag](sparkSession: SparkSession, path: 
         throw e
     }
   }
+
+  private def isFileAlreadyExistsException(e: IOException): Boolean = {
+    e.isInstanceOf[FileAlreadyExistsException] ||
+      // Old Hadoop versions don't throw FileAlreadyExistsException. Although it's fixed in
+      // HADOOP-9361 in Hadoop 2.5, we still need to support old Hadoop versions.
+      (e.getMessage != null && e.getMessage.startsWith("File already exists: "))
+  }
+
 
   override def get(batchId: Long): Option[T] = {
     val batchMetadataFile = batchIdToPath(batchId)
