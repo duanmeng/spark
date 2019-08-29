@@ -21,6 +21,8 @@ import java.io.File
 import java.security.NoSuchAlgorithmException
 import javax.net.ssl.SSLContext
 
+import scala.util.Try
+
 import org.apache.hadoop.conf.Configuration
 import org.eclipse.jetty.util.ssl.SslContextFactory
 
@@ -174,6 +176,17 @@ private[spark] object SSLOptions extends Logging {
       hadoopConf: Configuration,
       ns: String,
       defaults: Option[SSLOptions] = None): SSLOptions = {
+    // To support hadoop-tdw & hadoop-apache, call the getPassword if exist,
+    // or just get password as clear text
+    def getPassword(hadoopConf: Configuration, key: String): Option[String] = {
+      Try {
+        Option(classOf[Configuration].getMethod("getPassword", classOf[String])
+          .invoke(hadoopConf, key).asInstanceOf[String])
+      } getOrElse {
+        Option(hadoopConf.get(key))
+      }
+    }
+
     val enabled = conf.getBoolean(s"$ns.enabled", defaultValue = defaults.exists(_.enabled))
 
     val port = conf.getWithSubstitution(s"$ns.port").map(_.toInt)
@@ -185,11 +198,11 @@ private[spark] object SSLOptions extends Logging {
         .orElse(defaults.flatMap(_.keyStore))
 
     val keyStorePassword = conf.getWithSubstitution(s"$ns.keyStorePassword")
-        .orElse(Option(hadoopConf.get(s"$ns.keyStorePassword")).map(new String(_)))
+        .orElse(getPassword(hadoopConf, s"$ns.keyStorePassword").map(new String(_)))
         .orElse(defaults.flatMap(_.keyStorePassword))
 
     val keyPassword = conf.getWithSubstitution(s"$ns.keyPassword")
-        .orElse(Option(hadoopConf.get(s"$ns.keyPassword")).map(new String(_)))
+        .orElse(getPassword(hadoopConf, s"$ns.keyPassword").map(new String(_)))
         .orElse(defaults.flatMap(_.keyPassword))
 
     val keyStoreType = conf.getWithSubstitution(s"$ns.keyStoreType")
@@ -202,7 +215,7 @@ private[spark] object SSLOptions extends Logging {
         .orElse(defaults.flatMap(_.trustStore))
 
     val trustStorePassword = conf.getWithSubstitution(s"$ns.trustStorePassword")
-        .orElse(Option(hadoopConf.get(s"$ns.trustStorePassword")).map(new String(_)))
+        .orElse(getPassword(hadoopConf, s"$ns.trustStorePassword").map(new String(_)))
         .orElse(defaults.flatMap(_.trustStorePassword))
 
     val trustStoreType = conf.getWithSubstitution(s"$ns.trustStoreType")
