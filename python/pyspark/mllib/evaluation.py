@@ -17,6 +17,7 @@
 
 import sys
 
+from pyspark import RDD
 from pyspark import since
 from pyspark.mllib.common import JavaModelWrapper, callMLlibFunc
 from pyspark.sql import SQLContext
@@ -52,7 +53,7 @@ class BinaryClassificationMetrics(JavaModelWrapper):
     .. versionadded:: 1.4.0
     """
 
-    def __init__(self, scoreAndLabels):
+    def __init__(self, scoreAndLabels, numBins=0):
         sc = scoreAndLabels.ctx
         sql_ctx = SQLContext.getOrCreate(sc)
         numCol = len(scoreAndLabels.first())
@@ -63,7 +64,7 @@ class BinaryClassificationMetrics(JavaModelWrapper):
             schema.add("weight", DoubleType(), False)
         df = sql_ctx.createDataFrame(scoreAndLabels, schema=schema)
         java_class = sc._jvm.org.apache.spark.mllib.evaluation.BinaryClassificationMetrics
-        java_model = java_class(df._jdf)
+        java_model = java_class(df._jdf, numBins)
         super(BinaryClassificationMetrics, self).__init__(java_model)
 
     @property
@@ -82,6 +83,11 @@ class BinaryClassificationMetrics(JavaModelWrapper):
         Computes the area under the precision-recall curve.
         """
         return self.call("areaUnderPR")
+
+    def roc(self):
+        r = self._java_model.roc()
+        jr = self._sc._jvm.SerDe.fromTuple2RDD(r).toJavaRDD()
+        return RDD(self._sc._jvm.SerDe.javaToPython(jr), self._sc)
 
     @since('1.4.0')
     def unpersist(self):

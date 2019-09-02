@@ -78,6 +78,14 @@ class BinaryClassificationMetrics @Since("3.0.0") (
     })
 
   /**
+   * An auxiliary constructor taking a DataFrame.
+   * @param scoreAndLabels a DataFrame with two double columns: score and label
+   * @param numBins down-sampled to this many "bins"
+   */
+  private[mllib] def this(scoreAndLabels: DataFrame, numBins: Int) =
+    this(scoreAndLabels.rdd.map(r => (r.getDouble(0), r.getDouble(1))), numBins)
+
+  /**
    * Unpersist intermediate RDDs used in the computation.
    */
   @Since("1.0.0")
