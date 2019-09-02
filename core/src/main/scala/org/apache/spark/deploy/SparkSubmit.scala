@@ -158,15 +158,13 @@ private[spark] class SparkSubmit extends Logging {
     // UserGroupInformation.getCurrentUser has multiple implementation in hadoop-tdw,
     // to support hadoop-tdw & hadoop-apache, call the method according reflection.
     def getCurrentUser: UserGroupInformation = {
-      try {
-        val method = classOf[UserGroupInformation].getDeclaredMethod("getCurrentUser",
+      Try {
+        classOf[UserGroupInformation].getMethod("getCurrentUser",
           classOf[HadoopConfiguration])
-        method.invoke(null,
-          SparkHadoopUtil.get.newConfiguration(sparkConf)).asInstanceOf[UserGroupInformation]
-      } catch {
-        case e: NoSuchMethodException =>
-          val method = classOf[UserGroupInformation].getDeclaredMethod("getCurrentUser")
-          method.invoke(null).asInstanceOf[UserGroupInformation]
+          .invoke(null,
+            SparkHadoopUtil.get.newConfiguration(sparkConf)).asInstanceOf[UserGroupInformation]
+      } getOrElse {
+        UserGroupInformation.getCurrentUser
       }
     }
 
