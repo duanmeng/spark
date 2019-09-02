@@ -455,10 +455,17 @@ object SparkEnv extends Logging {
     // For developers solving issues from users
     logInfo(s"spark.hadoop.hadoop.job.ugi: ${conf.get("spark.hadoop.hadoop.job.ugi", "")}")
 
-    val sparkProperties = (conf.getAll ++ schedulerMode).sorted
+    val newConf = conf.getAll.filter{ case (k, _) =>
+      k != "spark.tdw.metastore" && k != "spark.hadoop.hadoop.job.ugi" &&
+        !k.startsWith("spark.redis.") && k != "spark.tdw.authentication"
+    }
+
+    val sparkProperties = (newConf ++ schedulerMode).sorted
 
     // System properties that are not java classpaths
-    val systemProperties = Utils.getSystemProperties.toSeq
+    val systemProperties = Utils.getSystemProperties.filter {
+      case (k, _) => k != "sun.java.command"
+    }.toSeq
     val otherProperties = systemProperties.filter { case (k, _) =>
       k != "java.class.path" && !k.startsWith("spark.")
     }.sorted
