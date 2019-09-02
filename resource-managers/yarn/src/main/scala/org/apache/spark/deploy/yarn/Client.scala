@@ -675,7 +675,11 @@ private[spark] class Client(
     // The python files list needs to be treated especially. All files that are not an
     // archive need to be placed in a subdirectory that will be added to PYTHONPATH.
     sparkConf.get(PY_FILES).foreach { f =>
-      val targetDir = if (f.endsWith(".py")) Some(LOCALIZED_PYTHON_DIR) else None
+      val targetDir = if (f.endsWith(".py") || f.endsWith(".so")) {
+        Some(LOCALIZED_PYTHON_DIR)
+      } else {
+        None
+      }
       distribute(f, targetDir = targetDir)
     }
 
@@ -862,7 +866,8 @@ private[spark] class Client(
     //
     // NOTE: the code currently does not handle .py files defined with a "local:" scheme.
     val pythonPath = new ListBuffer[String]()
-    val (pyFiles, pyArchives) = sparkConf.get(PY_FILES).partition(_.endsWith(".py"))
+    val (pyFiles, pyArchives) = sparkConf.get(PY_FILES).partition(f =>
+      f.endsWith(".py") || f.endsWith(".so"))
     if (pyFiles.nonEmpty) {
       pythonPath += buildPath(YarnSparkHadoopUtil.expandEnvironment(Environment.PWD),
         LOCALIZED_PYTHON_DIR)
