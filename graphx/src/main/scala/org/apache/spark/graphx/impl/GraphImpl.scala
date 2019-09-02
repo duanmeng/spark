@@ -362,4 +362,13 @@ object GraphImpl {
     fromExistingRDDs(vertices, edgesCached)
   }
 
+  /**
+   * Create a graph from an VertexRDD and a ReplicatedVertexView with the EdgeRDD
+   */
+  def fromExistingRDDs[VD: ClassTag, ED: ClassTag](
+      vertices: VertexRDD[VD],
+      replicatedVertexView: ReplicatedVertexView[VD, ED]): GraphImpl[VD, ED] = {
+    new GraphImpl(vertices, replicatedVertexView)
+  }
+
 } // end of object GraphImpl
