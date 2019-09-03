@@ -137,6 +137,7 @@
     <slf4j.version>1.7.16</slf4j.version>
     <log4j.version>1.2.17</log4j.version>
     <hadoop.version>2.7.4</hadoop.version>
+    <hadoop.minikdc.version>2.7.4</hadoop.minikdc.version>
     <protobuf.version>2.5.0</protobuf.version>
     <yarn.version>${hadoop.version}</yarn.version>
     <zookeeper.version>3.4.6</zookeeper.version>
@@ -146,7 +147,7 @@
     <hive.classifier></hive.classifier>
     <!-- Version used in Maven Hive dependency -->
     <hive.version>1.2.1.spark2</hive.version>
-    <hive23.version>2.3.5</hive23.version>
+    <hive23.version>2.3.6</hive23.version>
     <!-- Version used for internal directory structure -->
     <hive.version.short>1.2.1</hive.version.short>
     <!-- note that this should be compatible with Kafka brokers version 0.10 and up -->
@@ -185,6 +186,7 @@
     <scalafmt.skip>true</scalafmt.skip>
     <codehaus.jackson.version>1.9.13</codehaus.jackson.version>
     <fasterxml.jackson.version>2.9.9</fasterxml.jackson.version>
+    <fasterxml.jackson.databind.version>2.9.9.3</fasterxml.jackson.databind.version>
     <snappy.version>1.1.7.3</snappy.version>
     <netlib.java.version>1.1.2</netlib.java.version>
     <commons-codec.version>1.10</commons-codec.version>
@@ -194,8 +196,8 @@
     <!-- org.apache.commons/commons-lang3/-->
     <commons-lang3.version>3.8.1</commons-lang3.version>
     <datanucleus-core.version>3.2.10</datanucleus-core.version>
-    <janino.version>3.0.13</janino.version>
-    <jersey.version>2.22.2</jersey.version>
+    <janino.version>3.0.15</janino.version>
+    <jersey.version>2.29</jersey.version>
     <joda.version>2.9.3</joda.version>
     <jodd.version>3.5.2</jodd.version>
     <jsr305.version>3.0.0</jsr305.version>
@@ -436,7 +438,7 @@
         <groupId>org.glassfish.jaxb</groupId>
         <artifactId>jaxb-runtime</artifactId>
         <version>2.3.2</version>
-        <scope>runtime</scope>
+        <scope>compile</scope>
         <exclusions>
           <!-- for now, we only write XML in PMML export, and these can be excluded -->
           <exclusion>
@@ -631,7 +633,7 @@
       <dependency>
         <groupId>com.github.luben</groupId>
         <artifactId>zstd-jni</artifactId>
-        <version>1.4.0-1</version>
+        <version>1.4.2-1</version>
       </dependency>
       <dependency>
         <groupId>com.clearspring.analytics</groupId>
@@ -672,11 +674,6 @@
         <version>4.1.30.Final</version>
       </dependency>
       <dependency>
-        <groupId>io.netty</groupId>
-        <artifactId>netty</artifactId>
-        <version>3.9.9.Final</version>
-      </dependency>
-      <dependency>
         <groupId>org.apache.derby</groupId>
         <artifactId>derby</artifactId>
         <version>${derby.version}</version>
@@ -714,7 +711,7 @@
       <dependency>
         <groupId>com.fasterxml.jackson.core</groupId>
         <artifactId>jackson-databind</artifactId>
-        <version>${fasterxml.jackson.version}</version>
+        <version>${fasterxml.jackson.databind.version}</version>
       </dependency>
       <dependency>
         <groupId>com.fasterxml.jackson.core</groupId>
@@ -743,11 +740,25 @@
         <groupId>org.glassfish.jersey.core</groupId>
         <artifactId>jersey-server</artifactId>
         <version>${jersey.version}</version>
+        <!-- SPARK-28765 Unused JDK11-specific dependency -->
+        <exclusions>
+          <exclusion>
+            <groupId>jakarta.xml.bind</groupId>
+            <artifactId>jakarta.xml.bind-api</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
       <dependency>
         <groupId>org.glassfish.jersey.core</groupId>
         <artifactId>jersey-common</artifactId>
         <version>${jersey.version}</version>
+        <!-- SPARK-28765 Unused JDK11-specific dependency -->
+        <exclusions>
+          <exclusion>
+            <groupId>com.sun.activation</groupId>
+            <artifactId>jakarta.activation</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
       <dependency>
         <groupId>org.glassfish.jersey.core</groupId>
@@ -763,6 +774,17 @@
         <groupId>org.glassfish.jersey.containers</groupId>
         <artifactId>jersey-container-servlet-core</artifactId>
         <version>${jersey.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.glassfish.jersey.inject</groupId>
+        <artifactId>jersey-hk2</artifactId>
+        <version>${jersey.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.glassfish.jersey.test-framework.providers</groupId>
+        <artifactId>jersey-test-framework-provider-simple</artifactId>
+        <version>${jersey.version}</version>
+        <scope>test</scope>
       </dependency>
       <dependency>
         <groupId>org.glassfish.jersey</groupId>
@@ -966,6 +988,10 @@
             <artifactId>netty</artifactId>
           </exclusion>
           <exclusion>
+            <groupId>io.netty</groupId>
+            <artifactId>netty</artifactId>
+          </exclusion>
+          <exclusion>
             <!-- BeanUtils >= 1.9.0 no longer splits out -core; exclude it -->
             <groupId>commons-beanutils</groupId>
             <artifactId>commons-beanutils-core</artifactId>
@@ -1010,6 +1036,18 @@
           <exclusion>
             <groupId>javax.ws.rs</groupId>
             <artifactId>jsr311-api</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.hadoop</groupId>
+        <artifactId>hadoop-minikdc</artifactId>
+        <version>${hadoop.minikdc.version}</version>
+        <scope>test</scope>
+        <exclusions>
+          <exclusion>
+            <groupId>org.apache.directory.api</groupId>
+            <artifactId>api-ldap-schema-data</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -1311,6 +1349,10 @@
           <exclusion>
             <groupId>jline</groupId>
             <artifactId>jline</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>io.netty</groupId>
+            <artifactId>netty</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -2266,7 +2308,7 @@
         <plugin>
           <groupId>net.alchim31.maven</groupId>
           <artifactId>scala-maven-plugin</artifactId>
-          <version>3.4.4</version>
+          <version>4.2.0</version>
           <executions>
             <execution>
               <id>eclipse-add-source</id>
@@ -2789,7 +2831,7 @@
           <dependency>
             <groupId>com.puppycrawl.tools</groupId>
             <artifactId>checkstyle</artifactId>
-            <version>8.14</version>
+            <version>8.23</version>
           </dependency>
         </dependencies>
         <executions>
@@ -2866,6 +2908,18 @@
           </execution>
         </executions>
       </plugin>
+      <!--
+        Couple of dependencies are coming in bundle format (bundle is just a normal jar which
+        contains OSGi metadata in the manifest). If one don't use OSGi, then a bundle will work as
+        any other jar. Since maven doesn't have native bundle support it needs an external plugin
+        handle it. If the plugin is not added then the build can't resolve bundle dependencies.
+      -->
+      <plugin>
+        <groupId>org.apache.felix</groupId>
+        <artifactId>maven-bundle-plugin</artifactId>
+        <version>4.2.0</version>
+        <extensions>true</extensions>
+      </plugin>
     </plugins>
   </build>
 
@@ -2930,6 +2984,7 @@
       <id>hadoop-2.2-tdw</id>
       <properties>
         <hadoop.version>2.2.0-tdw-0.2.270</hadoop.version>
+        <hadoop.minikdc.version>3.1.2</hadoop.minikdc.version>
         <protobuf.version>2.5.0</protobuf.version>
         <zookeeper.version>3.4.5</zookeeper.version>
         <curator.version>2.4.0</curator.version>
