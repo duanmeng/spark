@@ -297,7 +297,10 @@ class KafkaTestUtils(
     if (kdc != null) {
       kdc.stop()
     }
-    UserGroupInformation.reset()
+    // be compatible with hadoop-tdw
+    val resetMethod = classOf[UserGroupInformation].getDeclaredMethod("reset")
+    resetMethod.setAccessible(true)
+    resetMethod.invoke(null)
   }
 
   /** Create a Kafka topic and wait until it is propagated to the whole cluster */

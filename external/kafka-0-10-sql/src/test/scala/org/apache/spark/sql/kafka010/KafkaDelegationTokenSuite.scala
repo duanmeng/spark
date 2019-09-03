@@ -56,7 +56,10 @@ class KafkaDelegationTokenSuite extends StreamTest with SharedSparkSession with 
         testUtils.teardown()
         testUtils = null
       }
-      UserGroupInformation.reset()
+      // be compatible with hadoop-tdw
+      val resetMethod = classOf[UserGroupInformation].getDeclaredMethod("reset")
+      resetMethod.setAccessible(true)
+      resetMethod.invoke(null)
     } finally {
       super.afterAll()
     }
