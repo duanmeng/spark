@@ -36,6 +36,7 @@ import org.apache.spark.sql.catalyst.analysis.{HintErrorLogger, Resolver}
 import org.apache.spark.sql.catalyst.expressions.CodegenObjectFactoryMode
 import org.apache.spark.sql.catalyst.expressions.codegen.CodeGenerator
 import org.apache.spark.sql.catalyst.plans.logical.HintErrorHandler
+import org.apache.spark.sql.internal.SQLConf.StoreAssignmentPolicy
 import org.apache.spark.unsafe.array.ByteArrayMethods
 import org.apache.spark.util.Utils
 
@@ -374,7 +375,7 @@ object SQLConf {
     .booleanConf
     .createWithDefault(false)
 
-  val FILE_COMRESSION_FACTOR = buildConf("spark.sql.sources.fileCompressionFactor")
+  val FILE_COMPRESSION_FACTOR = buildConf("spark.sql.sources.fileCompressionFactor")
     .internal()
     .doc("When estimating the output data size of a table scan, multiply the file size with this " +
       "factor as the estimated data size, in case the data is compressed in the file and lead to" +
@@ -730,10 +731,11 @@ object SQLConf {
     .createWithDefault(100000)
 
   val CROSS_JOINS_ENABLED = buildConf("spark.sql.crossJoin.enabled")
+    .internal()
     .doc("When false, we will throw an error if a query contains a cartesian product without " +
         "explicit CROSS JOIN syntax.")
     .booleanConf
-    .createWithDefault(false)
+    .createWithDefault(true)
 
   val ORDER_BY_ORDINAL = buildConf("spark.sql.orderByOrdinal")
     .doc("When true, the ordinal numbers are treated as the position in the select list. " +
@@ -790,6 +792,13 @@ object SQLConf {
   // See SPARK-6231.
   val DATAFRAME_SELF_JOIN_AUTO_RESOLVE_AMBIGUITY =
     buildConf("spark.sql.selfJoinAutoResolveAmbiguity")
+      .internal()
+      .booleanConf
+      .createWithDefault(true)
+
+  val FAIL_AMBIGUOUS_SELF_JOIN =
+    buildConf("spark.sql.analyzer.failAmbiguousSelfJoin")
+      .doc("When true, fail the Dataset query if it contains ambiguous self-join.")
       .internal()
       .booleanConf
       .createWithDefault(true)
@@ -1133,6 +1142,15 @@ object SQLConf {
       .timeConf(TimeUnit.MILLISECONDS)
       .createWithDefault(TimeUnit.MINUTES.toMillis(10)) // 10 minutes
 
+  val FILE_SOURCE_SCHEMA_FORCE_NULLABLE =
+    buildConf("spark.sql.streaming.fileSource.schema.forceNullable")
+      .internal()
+      .doc("When true, force the schema of streaming file source to be nullable (including all " +
+        "the fields). Otherwise, the schema might not be compatible with actual data, which " +
+        "leads to corruptions.")
+      .booleanConf
+      .createWithDefault(true)
+
   val STREAMING_SCHEMA_INFERENCE =
     buildConf("spark.sql.streaming.schemaInference")
       .internal()
@@ -1198,12 +1216,6 @@ object SQLConf {
       .booleanConf
       .createWithDefault(true)
 
-  val ENABLE_FALL_BACK_TO_HDFS_FOR_STATS = buildConf("spark.sql.statistics.fallBackToHdfs")
-    .doc("If the table statistics are not available from table metadata enable fall back to hdfs." +
-      " This is useful in determining if a table is small enough to use auto broadcast joins.")
-    .booleanConf
-    .createWithDefault(false)
-
   val DEFAULT_SIZE_IN_BYTES = buildConf("spark.sql.defaultSizeInBytes")
     .internal()
     .doc("The default table size used in query planning. By default, it is set to Long.MaxValue " +
@@ -1212,6 +1224,16 @@ object SQLConf {
       "knows for sure its size is small enough.")
     .bytesConf(ByteUnit.BYTE)
     .createWithDefault(Long.MaxValue)
+
+  val ENABLE_FALL_BACK_TO_HDFS_FOR_STATS = buildConf("spark.sql.statistics.fallBackToHdfs")
+    .doc("When true, it will fall back to HDFS if the table statistics are not available from " +
+      "table metadata. This is useful in determining if a table is small enough to use " +
+      "broadcast joins. This flag is effective only for non-partitioned Hive tables. " +
+      "For non-partitioned data source tables, it will be automatically recalculated if table " +
+      "statistics are not available. For partitioned data source and partitioned Hive tables, " +
+      s"It is '${DEFAULT_SIZE_IN_BYTES.key}' if table statistics are not available.")
+    .booleanConf
+    .createWithDefault(false)
 
   val NDV_MAX_ERROR =
     buildConf("spark.sql.statistics.ndv.maxError")
@@ -1525,8 +1547,9 @@ object SQLConf {
     .createWithDefault(false)
 
   val PREFER_INTEGRAL_DIVISION = buildConf("spark.sql.function.preferIntegralDivision")
+    .internal()
     .doc("When true, will perform integral division with the / operator " +
-      "if both sides are integral types.")
+      "if both sides are integral types. This is for PostgreSQL test cases only.")
     .booleanConf
     .createWithDefault(false)
 
@@ -1571,21 +1594,13 @@ object SQLConf {
       .timeConf(TimeUnit.MILLISECONDS)
       .createWithDefault(100)
 
-  val USE_V1_SOURCE_READER_LIST = buildConf("spark.sql.sources.read.useV1SourceList")
+  val USE_V1_SOURCE_LIST = buildConf("spark.sql.sources.useV1SourceList")
     .internal()
-    .doc("A comma-separated list of data source short names or fully qualified data source" +
-      " register class names for which data source V2 read paths are disabled. Reads from these" +
-      " sources will fall back to the V1 sources.")
+    .doc("A comma-separated list of data source short names or fully qualified data source " +
+      "implementation class names for which Data Source V2 code path is disabled. These data " +
+      "sources will fallback to Data Source V1 code path.")
     .stringConf
     .createWithDefault("")
-
-  val USE_V1_SOURCE_WRITER_LIST = buildConf("spark.sql.sources.write.useV1SourceList")
-    .internal()
-    .doc("A comma-separated list of data source short names or fully qualified data source" +
-      " register class names for which data source V2 write paths are disabled. Writes from these" +
-      " sources will fall back to the V1 sources.")
-    .stringConf
-    .createWithDefault("csv,json,orc,text,parquet")
 
   val DISABLED_V2_STREAMING_WRITERS = buildConf("spark.sql.streaming.disabledV2Writers")
     .doc("A comma-separated list of fully qualified data source register class names for which" +
@@ -1625,6 +1640,30 @@ object SQLConf {
       .checkValues(PartitionOverwriteMode.values.map(_.toString))
       .createWithDefault(PartitionOverwriteMode.STATIC.toString)
 
+  object StoreAssignmentPolicy extends Enumeration {
+    val ANSI, LEGACY, STRICT = Value
+  }
+
+  val STORE_ASSIGNMENT_POLICY =
+    buildConf("spark.sql.storeAssignmentPolicy")
+      .doc("When inserting a value into a column with different data type, Spark will perform " +
+        "type coercion. Currently, we support 3 policies for the type coercion rules: ANSI, " +
+        "legacy and strict. With ANSI policy, Spark performs the type coercion as per ANSI SQL. " +
+        "In practice, the behavior is mostly the same as PostgreSQL. " +
+        "It disallows certain unreasonable type conversions such as converting " +
+        "`string` to `int` or `double` to `boolean`. " +
+        "With legacy policy, Spark allows the type coercion as long as it is a valid `Cast`, " +
+        "which is very loose. e.g. converting `string` to `int` or `double` to `boolean` is " +
+        "allowed. It is also the only behavior in Spark 2.x and it is compatible with Hive. " +
+        "With strict policy, Spark doesn't allow any possible precision loss or data truncation " +
+        "in type coercion, e.g. converting `double` to `int` or `decimal` to `double` is " +
+        "not allowed."
+      )
+      .stringConf
+      .transform(_.toUpperCase(Locale.ROOT))
+      .checkValues(StoreAssignmentPolicy.values.map(_.toString))
+      .createOptional
+
   val SORT_BEFORE_REPARTITION =
     buildConf("spark.sql.execution.sortBeforeRepartition")
       .internal()
@@ -1653,6 +1692,16 @@ object SQLConf {
       .doc("Prune nested fields from object serialization operator which are unnecessary in " +
         "satisfying a query. This optimization allows object serializers to avoid " +
         "executing unnecessary nested expressions.")
+      .booleanConf
+      .createWithDefault(false)
+
+  val NESTED_PRUNING_ON_EXPRESSIONS =
+    buildConf("spark.sql.optimizer.expression.nestedPruning.enabled")
+      .internal()
+      .doc("Prune nested fields from expressions in an operator which are unnecessary in " +
+        "satisfying a query. Note that this optimization doesn't prune nested fields from " +
+        "physical data source scanning. For pruning nested fields from scanning, please use " +
+        "`spark.sql.optimizer.nestedSchemaPruning.enabled` config.")
       .booleanConf
       .createWithDefault(false)
 
@@ -1769,6 +1818,23 @@ object SQLConf {
     .internal()
     .booleanConf
     .createWithDefault(false)
+
+  val LEGACY_BUCKETED_TABLE_SCAN_OUTPUT_ORDERING =
+    buildConf("spark.sql.legacy.bucketedTableScan.outputOrdering")
+      .internal()
+      .doc("When true, the bucketed table scan will list files during planning to figure out the " +
+        "output ordering, which is expensive and may make the planning quite slow.")
+    .booleanConf
+    .createWithDefault(false)
+
+  val FAIL_ON_INTEGRAL_TYPE_OVERFLOW =
+    buildConf("spark.sql.failOnIntegralTypeOverflow")
+      .doc("If it is set to true, all operations on integral fields throw an " +
+        "exception if an overflow occurs. If it is false (default), in case of overflow a wrong " +
+        "result is returned.")
+      .internal()
+      .booleanConf
+      .createWithDefault(false)
 
   val LEGACY_HAVING_WITHOUT_GROUP_BY_AS_WHERE =
     buildConf("spark.sql.legacy.parser.havingWithoutGroupByAsWhere")
@@ -2058,7 +2124,7 @@ class SQLConf extends Serializable with Logging {
 
   def escapedStringLiterals: Boolean = getConf(ESCAPED_STRING_LITERALS)
 
-  def fileCompressionFactor: Double = getConf(FILE_COMRESSION_FACTOR)
+  def fileCompressionFactor: Double = getConf(FILE_COMPRESSION_FACTOR)
 
   def stringRedactionPattern: Option[Regex] = getConf(SQL_STRING_REDACTION_PATTERN)
 
@@ -2277,6 +2343,8 @@ class SQLConf extends Serializable with Logging {
 
   def decimalOperationsNullOnOverflow: Boolean = getConf(DECIMAL_OPERATIONS_NULL_ON_OVERFLOW)
 
+  def failOnIntegralTypeOverflow: Boolean = getConf(FAIL_ON_INTEGRAL_TYPE_OVERFLOW)
+
   def literalPickMinimumPrecision: Boolean = getConf(LITERAL_PICK_MINIMUM_PRECISION)
 
   def continuousStreamingEpochBacklogQueueSize: Int =
@@ -2286,10 +2354,6 @@ class SQLConf extends Serializable with Logging {
 
   def continuousStreamingExecutorPollIntervalMs: Long =
     getConf(CONTINUOUS_STREAMING_EXECUTOR_POLL_INTERVAL_MS)
-
-  def useV1SourceReaderList: String = getConf(USE_V1_SOURCE_READER_LIST)
-
-  def useV1SourceWriterList: String = getConf(USE_V1_SOURCE_WRITER_LIST)
 
   def disabledV2StreamingWriters: String = getConf(DISABLED_V2_STREAMING_WRITERS)
 
@@ -2310,10 +2374,15 @@ class SQLConf extends Serializable with Logging {
   def partitionOverwriteMode: PartitionOverwriteMode.Value =
     PartitionOverwriteMode.withName(getConf(PARTITION_OVERWRITE_MODE))
 
+  def storeAssignmentPolicy: Option[StoreAssignmentPolicy.Value] =
+    getConf(STORE_ASSIGNMENT_POLICY).map(StoreAssignmentPolicy.withName)
+
   def nestedSchemaPruningEnabled: Boolean = getConf(NESTED_SCHEMA_PRUNING_ENABLED)
 
   def serializerNestedSchemaPruningEnabled: Boolean =
     getConf(SERIALIZER_NESTED_SCHEMA_PRUNING_ENABLED)
+
+  def nestedPruningOnExpressions: Boolean = getConf(NESTED_PRUNING_ON_EXPRESSIONS)
 
   def csvColumnPruning: Boolean = getConf(SQLConf.CSV_PARSER_COLUMN_PRUNING)
 
