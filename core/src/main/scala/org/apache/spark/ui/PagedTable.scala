@@ -18,7 +18,6 @@
 package org.apache.spark.ui
 
 import java.net.URLDecoder
-import java.nio.charset.StandardCharsets.UTF_8
 
 import scala.collection.JavaConverters._
 import scala.xml.{Node, Unparsed}
@@ -203,7 +202,7 @@ private[spark] trait PagedTable[T] {
           .asScala
           .filterKeys(_ != pageSizeFormField)
           .filterKeys(_ != pageNumberFormField)
-          .mapValues(URLDecoder.decode(_, UTF_8.name()))
+          .mapValues(URLDecoder.decode(_, "UTF-8"))
           .map { case (k, v) =>
             <input type="hidden" name={k} value={v} />
           }

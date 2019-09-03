@@ -19,11 +19,12 @@ package org.apache.spark.sql.execution.streaming
 
 import java.io.File
 
+import org.apache.spark.SparkFunSuite
 import org.apache.spark.sql.catalyst.util.stringToFile
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.test.SharedSparkSession
+import org.apache.spark.sql.test.SharedSQLContext
 
-class OffsetSeqLogSuite extends SharedSparkSession {
+class OffsetSeqLogSuite extends SparkFunSuite with SharedSQLContext {
 
   /** test string offset type */
   case class StringOffset(override val json: String) extends Offset

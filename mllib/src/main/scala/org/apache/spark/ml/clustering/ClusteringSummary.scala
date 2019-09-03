@@ -17,10 +17,11 @@
 
 package org.apache.spark.ml.clustering
 
-import org.apache.spark.annotation.Since
+import org.apache.spark.annotation.{Experimental, Since}
 import org.apache.spark.sql.{DataFrame, Row}
 
 /**
+ * :: Experimental ::
  * Summary of clustering algorithms.
  *
  * @param predictions  `DataFrame` produced by model.transform().
@@ -29,6 +30,7 @@ import org.apache.spark.sql.{DataFrame, Row}
  * @param k  Number of clusters.
  * @param numIter  Number of iterations.
  */
+@Experimental
 class ClusteringSummary private[clustering] (
     @transient val predictions: DataFrame,
     val predictionCol: String,

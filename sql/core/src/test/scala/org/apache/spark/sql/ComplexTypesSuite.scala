@@ -19,9 +19,9 @@ package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.expressions.CreateNamedStruct
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.test.SharedSparkSession
+import org.apache.spark.sql.test.SharedSQLContext
 
-class ComplexTypesSuite extends QueryTest with SharedSparkSession {
+class ComplexTypesSuite extends QueryTest with SharedSQLContext {
 
   override def beforeAll() {
     super.beforeAll()

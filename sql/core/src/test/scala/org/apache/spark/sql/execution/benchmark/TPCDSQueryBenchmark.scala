@@ -75,7 +75,7 @@ object TPCDSQueryBenchmark extends Logging {
           queryRelations.add(alias.identifier)
         case LogicalRelation(_, _, Some(catalogTable), _) =>
           queryRelations.add(catalogTable.identifier.table)
-        case HiveTableRelation(tableMeta, _, _, _) =>
+        case HiveTableRelation(tableMeta, _, _) =>
           queryRelations.add(tableMeta.identifier.table)
         case _ =>
       }

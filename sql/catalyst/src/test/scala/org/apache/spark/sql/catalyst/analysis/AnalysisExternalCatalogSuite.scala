@@ -17,7 +17,6 @@
 
 package org.apache.spark.sql.catalyst.analysis
 
-import java.io.File
 import java.net.URI
 
 import org.mockito.Mockito._
@@ -29,14 +28,13 @@ import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference}
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, Project}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
-import org.apache.spark.util.Utils
 
 class AnalysisExternalCatalogSuite extends AnalysisTest with Matchers {
-  private def getAnalyzer(externCatalog: ExternalCatalog, databasePath: File): Analyzer = {
+  private def getAnalyzer(externCatalog: ExternalCatalog): Analyzer = {
     val conf = new SQLConf()
     val catalog = new SessionCatalog(externCatalog, FunctionRegistry.builtin, conf)
     catalog.createDatabase(
-      CatalogDatabase("default", "", databasePath.toURI, Map.empty),
+      CatalogDatabase("default", "", new URI("loc"), Map.empty),
       ignoreIfExists = false)
     catalog.createTable(
       CatalogTable(
@@ -49,32 +47,28 @@ class AnalysisExternalCatalogSuite extends AnalysisTest with Matchers {
   }
 
   test("query builtin functions don't call the external catalog") {
-    withTempDir { tempDir =>
-      val inMemoryCatalog = new InMemoryCatalog
-      val catalog = spy(inMemoryCatalog)
-      val analyzer = getAnalyzer(catalog, tempDir)
-      reset(catalog)
-      val testRelation = LocalRelation(AttributeReference("a", IntegerType, nullable = true)())
-      val func =
-        Alias(UnresolvedFunction("sum", Seq(UnresolvedAttribute("a")), isDistinct = false), "s")()
-      val plan = Project(Seq(func), testRelation)
-      analyzer.execute(plan)
-      verifyZeroInteractions(catalog)
-    }
+    val inMemoryCatalog = new InMemoryCatalog
+    val catalog = spy(inMemoryCatalog)
+    val analyzer = getAnalyzer(catalog)
+    reset(catalog)
+    val testRelation = LocalRelation(AttributeReference("a", IntegerType, nullable = true)())
+    val func =
+      Alias(UnresolvedFunction("sum", Seq(UnresolvedAttribute("a")), isDistinct = false), "s")()
+    val plan = Project(Seq(func), testRelation)
+    analyzer.execute(plan)
+    verifyZeroInteractions(catalog)
   }
 
   test("check the existence of builtin functions don't call the external catalog") {
-    withTempDir { tempDir =>
-      val inMemoryCatalog = new InMemoryCatalog
-      val externCatalog = spy(inMemoryCatalog)
-      val catalog = new SessionCatalog(externCatalog, FunctionRegistry.builtin, conf)
-      catalog.createDatabase(
-        CatalogDatabase("default", "", new URI(tempDir.toString), Map.empty),
-        ignoreIfExists = false)
-      reset(externCatalog)
-      catalog.functionExists(FunctionIdentifier("sum"))
-      verifyZeroInteractions(externCatalog)
-    }
+    val inMemoryCatalog = new InMemoryCatalog
+    val externCatalog = spy(inMemoryCatalog)
+    val catalog = new SessionCatalog(externCatalog, FunctionRegistry.builtin, conf)
+    catalog.createDatabase(
+      CatalogDatabase("default", "", new URI("loc"), Map.empty),
+      ignoreIfExists = false)
+    reset(externCatalog)
+    catalog.functionExists(FunctionIdentifier("sum"))
+    verifyZeroInteractions(externCatalog)
   }
 
 }

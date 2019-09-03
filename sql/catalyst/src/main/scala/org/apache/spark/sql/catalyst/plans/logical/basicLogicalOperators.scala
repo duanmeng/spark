@@ -23,7 +23,6 @@ import org.apache.spark.sql.catalog.v2.expressions.Transform
 import org.apache.spark.sql.catalyst.AliasIdentifier
 import org.apache.spark.sql.catalyst.analysis.{MultiInstanceRelation, NamedRelation}
 import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable}
-import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.aggregate.{AggregateExpression, AggregateFunction}
 import org.apache.spark.sql.catalyst.plans._
@@ -418,11 +417,7 @@ case class CreateV2Table(
     tableSchema: StructType,
     partitioning: Seq[Transform],
     properties: Map[String, String],
-    ignoreIfExists: Boolean) extends Command with V2CreateTablePlan {
-  override def withPartitioning(rewritten: Seq[Transform]): V2CreateTablePlan = {
-    this.copy(partitioning = rewritten)
-  }
-}
+    ignoreIfExists: Boolean) extends Command
 
 /**
  * Create a new table from a select query with a v2 catalog.
@@ -434,9 +429,8 @@ case class CreateTableAsSelect(
     query: LogicalPlan,
     properties: Map[String, String],
     writeOptions: Map[String, String],
-    ignoreIfExists: Boolean) extends Command with V2CreateTablePlan {
+    ignoreIfExists: Boolean) extends Command {
 
-  override def tableSchema: StructType = query.schema
   override def children: Seq[LogicalPlan] = Seq(query)
 
   override lazy val resolved: Boolean = childrenResolved && {
@@ -444,60 +438,6 @@ case class CreateTableAsSelect(
     // that the columns referenced by the table's partitioning exist in the query schema
     val references = partitioning.flatMap(_.references).toSet
     references.map(_.fieldNames).forall(query.schema.findNestedField(_).isDefined)
-  }
-
-  override def withPartitioning(rewritten: Seq[Transform]): V2CreateTablePlan = {
-    this.copy(partitioning = rewritten)
-  }
-}
-
-/**
- * Replace a table with a v2 catalog.
- *
- * If the table does not exist, and orCreate is true, then it will be created.
- * If the table does not exist, and orCreate is false, then an exception will be thrown.
- *
- * The persisted table will have no contents as a result of this operation.
- */
-case class ReplaceTable(
-    catalog: TableCatalog,
-    tableName: Identifier,
-    tableSchema: StructType,
-    partitioning: Seq[Transform],
-    properties: Map[String, String],
-    orCreate: Boolean) extends Command with V2CreateTablePlan {
-  override def withPartitioning(rewritten: Seq[Transform]): V2CreateTablePlan = {
-    this.copy(partitioning = rewritten)
-  }
-}
-
-/**
- * Replaces a table from a select query with a v2 catalog.
- *
- * If the table does not exist, and orCreate is true, then it will be created.
- * If the table does not exist, and orCreate is false, then an exception will be thrown.
- */
-case class ReplaceTableAsSelect(
-    catalog: TableCatalog,
-    tableName: Identifier,
-    partitioning: Seq[Transform],
-    query: LogicalPlan,
-    properties: Map[String, String],
-    writeOptions: Map[String, String],
-    orCreate: Boolean) extends Command with V2CreateTablePlan {
-
-  override def tableSchema: StructType = query.schema
-  override def children: Seq[LogicalPlan] = Seq(query)
-
-  override lazy val resolved: Boolean = {
-    // the table schema is created from the query schema, so the only resolution needed is to check
-    // that the columns referenced by the table's partitioning exist in the query schema
-    val references = partitioning.flatMap(_.references).toSet
-    references.map(_.fieldNames).forall(query.schema.findNestedField(_).isDefined)
-  }
-
-  override def withPartitioning(rewritten: Seq[Transform]): V2CreateTablePlan = {
-    this.copy(partitioning = rewritten)
   }
 }
 
@@ -560,20 +500,6 @@ object OverwritePartitionsDynamic {
   }
 }
 
-case class DescribeTable(table: NamedRelation, isExtended: Boolean) extends Command {
-
-  override def children: Seq[LogicalPlan] = Seq(table)
-
-  override val output = DescribeTableSchema.describeTableAttributes()
-}
-
-case class DeleteFromTable(
-    child: LogicalPlan,
-    condition: Expression) extends Command {
-
-  override def children: Seq[LogicalPlan] = child :: Nil
-}
-
 /**
  * Drop a table.
  */
@@ -616,17 +542,6 @@ case class AlterTable(
   }
 }
 
-/**
- * The logical plan of the SHOW TABLE command that works for v2 catalogs.
- */
-case class ShowTables(
-    catalog: TableCatalog,
-    namespace: Seq[String],
-    pattern: Option[String]) extends Command {
-  override val output: Seq[Attribute] = Seq(
-    AttributeReference("namespace", StringType, nullable = false)(),
-    AttributeReference("tableName", StringType, nullable = false)())
-}
 
 /**
  * Insert some data into a table. Note that this plan is unresolved and has to be replaced by the
@@ -1236,17 +1151,4 @@ case class Deduplicate(
     child: LogicalPlan) extends UnaryNode {
 
   override def output: Seq[Attribute] = child.output
-}
-
-/** A trait used for logical plan nodes that create or replace V2 table definitions. */
-trait V2CreateTablePlan extends LogicalPlan {
-  def tableName: Identifier
-  def partitioning: Seq[Transform]
-  def tableSchema: StructType
-
-  /**
-   * Creates a copy of this node with the new partitoning transforms. This method is used to
-   * rewrite the partition transforms normalized according to the table schema.
-   */
-  def withPartitioning(rewritten: Seq[Transform]): V2CreateTablePlan
 }

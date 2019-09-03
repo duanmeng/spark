@@ -25,9 +25,9 @@ import org.apache.hadoop.fs.Path
 import org.apache.parquet.hadoop.ParquetOutputFormat
 
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.test.SharedSparkSession
+import org.apache.spark.sql.test.SharedSQLContext
 
-class ParquetCompressionCodecPrecedenceSuite extends ParquetTest with SharedSparkSession {
+class ParquetCompressionCodecPrecedenceSuite extends ParquetTest with SharedSQLContext {
   test("Test `spark.sql.parquet.compression.codec` config") {
     Seq("NONE", "UNCOMPRESSED", "SNAPPY", "GZIP", "LZO", "LZ4", "BROTLI", "ZSTD").foreach { c =>
       withSQLConf(SQLConf.PARQUET_COMPRESSION.key -> c) {

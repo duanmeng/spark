@@ -17,7 +17,8 @@
 
 package org.apache.spark.deploy.worker
 
-import java.io.{File, IOException}
+import java.io.File
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.{Date, Locale, UUID}
 import java.util.concurrent._
@@ -33,8 +34,7 @@ import org.apache.spark.{SecurityManager, SparkConf}
 import org.apache.spark.deploy.{Command, ExecutorDescription, ExecutorState}
 import org.apache.spark.deploy.DeployMessages._
 import org.apache.spark.deploy.ExternalShuffleService
-import org.apache.spark.deploy.StandaloneResourceUtils._
-import org.apache.spark.deploy.master.{DriverState, Master, WorkerResourceInfo}
+import org.apache.spark.deploy.master.{DriverState, Master}
 import org.apache.spark.deploy.worker.ui.WorkerWebUI
 import org.apache.spark.internal.{config, Logging}
 import org.apache.spark.internal.config.Tests.IS_TESTING
@@ -44,7 +44,7 @@ import org.apache.spark.metrics.{MetricsSystem, MetricsSystemInstances}
 import org.apache.spark.resource.ResourceInformation
 import org.apache.spark.resource.ResourceUtils._
 import org.apache.spark.rpc._
-import org.apache.spark.util.{SignalUtils, SparkUncaughtExceptionHandler, ThreadUtils, Utils}
+import org.apache.spark.util.{SparkUncaughtExceptionHandler, ThreadUtils, Utils}
 
 private[deploy] class Worker(
     override val rpcEnv: RpcEnv,
@@ -57,8 +57,7 @@ private[deploy] class Worker(
     val conf: SparkConf,
     val securityMgr: SecurityManager,
     resourceFileOpt: Option[String] = None,
-    externalShuffleServiceSupplier: Supplier[ExternalShuffleService] = null,
-    pid: Int = Utils.getProcessId)
+    externalShuffleServiceSupplier: Supplier[ExternalShuffleService] = null)
   extends ThreadSafeRpcEndpoint with Logging {
 
   private val host = rpcEnv.address.host
@@ -181,19 +180,29 @@ private[deploy] class Worker(
   )
 
   // visible for tests
-  private[deploy] var resources: Map[String, ResourceInformation] = Map.empty
+  private[deploy] var resources: Map[String, ResourceInformation] = _
 
   var coresUsed = 0
   var memoryUsed = 0
-  val resourcesUsed = new HashMap[String, MutableResourceInfo]()
 
   def coresFree: Int = cores - coresUsed
   def memoryFree: Int = memory - memoryUsed
 
   private def createWorkDir() {
     workDir = Option(workDirPath).map(new File(_)).getOrElse(new File(sparkHome, "work"))
-    if (!Utils.createDirectory(workDir)) {
-      System.exit(1)
+    try {
+      // This sporadically fails - not sure why ... !workDir.exists() && !workDir.mkdirs()
+      // So attempting to create and then check if directory was created or not.
+      workDir.mkdirs()
+      if ( !workDir.exists() || !workDir.isDirectory) {
+        logError("Failed to create work directory " + workDir)
+        System.exit(1)
+      }
+      assert (workDir.isDirectory)
+    } catch {
+      case e: Exception =>
+        logError("Failed to create work directory " + workDir, e)
+        System.exit(1)
     }
   }
 
@@ -205,7 +214,6 @@ private[deploy] class Worker(
     logInfo("Spark home: " + sparkHome)
     createWorkDir()
     startExternalShuffleService()
-    releaseResourcesOnInterrupt()
     setupWorkerResources()
     webUi = new WorkerWebUI(this, workDir, webUiPort)
     webUi.bind()
@@ -219,44 +227,13 @@ private[deploy] class Worker(
     metricsSystem.getServletHandlers.foreach(webUi.attachHandler)
   }
 
-  /**
-   * Used to catch the TERM signal from sbin/stop-slave.sh and
-   * release resources before Worker exits
-   */
-  private def releaseResourcesOnInterrupt(): Unit = {
-    SignalUtils.register("TERM") {
-      releaseResources(conf, SPARK_WORKER_PREFIX, resources, pid)
-      false
-    }
-  }
-
   private def setupWorkerResources(): Unit = {
     try {
-      val allResources = getOrDiscoverAllResources(conf, SPARK_WORKER_PREFIX, resourceFileOpt)
-      resources = acquireResources(conf, SPARK_WORKER_PREFIX, allResources, pid)
-      logResourceInfo(SPARK_WORKER_PREFIX, resources)
+      resources = getOrDiscoverAllResources(conf, SPARK_WORKER_PREFIX, resourceFileOpt)
     } catch {
       case e: Exception =>
         logError("Failed to setup worker resources: ", e)
-        releaseResources(conf, SPARK_WORKER_PREFIX, resources, pid)
-        if (!Utils.isTesting) {
-          System.exit(1)
-        }
-    }
-    resources.keys.foreach { rName =>
-      resourcesUsed(rName) = MutableResourceInfo(rName, new HashSet[String])
-    }
-  }
-
-  private def addResourcesUsed(deltaInfo: Map[String, ResourceInformation]): Unit = {
-    deltaInfo.foreach { case (rName, rInfo) =>
-      resourcesUsed(rName) = resourcesUsed(rName) + rInfo
-    }
-  }
-
-  private def removeResourcesUsed(deltaInfo: Map[String, ResourceInformation]): Unit = {
-    deltaInfo.foreach { case (rName, rInfo) =>
-      resourcesUsed(rName) = resourcesUsed(rName) - rInfo
+        System.exit(1)
     }
   }
 
@@ -372,7 +349,6 @@ private[deploy] class Worker(
               TimeUnit.SECONDS))
         }
       } else {
-        releaseResources(conf, SPARK_WORKER_PREFIX, resources, pid)
         logError("All masters are unresponsive! Giving up.")
         System.exit(1)
       }
@@ -429,8 +405,7 @@ private[deploy] class Worker(
       cores,
       memory,
       workerWebUiUrl,
-      masterEndpoint.address,
-      resources))
+      masterEndpoint.address))
   }
 
   private def handleRegisterResponse(msg: RegisterWorkerResponse): Unit = synchronized {
@@ -471,7 +446,6 @@ private[deploy] class Worker(
       case RegisterWorkerFailed(message) =>
         if (!registered) {
           logError("Worker registration failed: " + message)
-          releaseResources(conf, SPARK_WORKER_PREFIX, resources, pid)
           System.exit(1)
         }
 
@@ -532,20 +506,15 @@ private[deploy] class Worker(
       logInfo("Master has changed, new master is at " + masterRef.address.toSparkURL)
       changeMaster(masterRef, masterWebUiUrl, masterRef.address)
 
-      val executorResponses = executors.values.map { e =>
-        WorkerExecutorStateResponse(new ExecutorDescription(
-          e.appId, e.execId, e.cores, e.state), e.resources)
-      }
-      val driverResponses = drivers.keys.map { id =>
-        WorkerDriverStateResponse(id, drivers(id).resources)}
-      masterRef.send(WorkerSchedulerStateResponse(
-        workerId, executorResponses.toList, driverResponses.toSeq))
+      val execs = executors.values.
+        map(e => new ExecutorDescription(e.appId, e.execId, e.cores, e.state))
+      masterRef.send(WorkerSchedulerStateResponse(workerId, execs.toList, drivers.keys.toSeq))
 
     case ReconnectWorker(masterUrl) =>
       logInfo(s"Master with url $masterUrl requested this worker to reconnect.")
       registerWithMaster()
 
-    case LaunchExecutor(masterUrl, appId, execId, appDesc, cores_, memory_, resources_) =>
+    case LaunchExecutor(masterUrl, appId, execId, appDesc, cores_, memory_) =>
       if (masterUrl != activeMasterUrl) {
         logWarning("Invalid Master (" + masterUrl + ") attempted to launch executor.")
       } else {
@@ -598,13 +567,11 @@ private[deploy] class Worker(
             workerUri,
             conf,
             appLocalDirs,
-            ExecutorState.LAUNCHING,
-            resources_)
+            ExecutorState.LAUNCHING)
           executors(appId + "/" + execId) = manager
           manager.start()
           coresUsed += cores_
           memoryUsed += memory_
-          addResourcesUsed(resources_)
         } catch {
           case e: Exception =>
             logError(s"Failed to launch executor $appId/$execId for ${appDesc.name}.", e)
@@ -634,7 +601,7 @@ private[deploy] class Worker(
         }
       }
 
-    case LaunchDriver(driverId, driverDesc, resources_) =>
+    case LaunchDriver(driverId, driverDesc) =>
       logInfo(s"Asked to launch driver $driverId")
       val driver = new DriverRunner(
         conf,
@@ -644,14 +611,12 @@ private[deploy] class Worker(
         driverDesc.copy(command = Worker.maybeUpdateSSLSettings(driverDesc.command, conf)),
         self,
         workerUri,
-        securityMgr,
-        resources_)
+        securityMgr)
       drivers(driverId) = driver
       driver.start()
 
       coresUsed += driverDesc.cores
       memoryUsed += driverDesc.mem
-      addResourcesUsed(resources_)
 
     case KillDriver(driverId) =>
       logInfo(s"Asked to kill driver $driverId")
@@ -678,8 +643,7 @@ private[deploy] class Worker(
       context.reply(WorkerStateResponse(host, port, workerId, executors.values.toList,
         finishedExecutors.values.toList, drivers.values.toList,
         finishedDrivers.values.toList, activeMasterUrl, cores, memory,
-        coresUsed, memoryUsed, activeMasterWebUiUrl, resources,
-        resourcesUsed.toMap.map { case (k, v) => (k, v.toResourceInformation)}))
+        coresUsed, memoryUsed, activeMasterWebUiUrl))
   }
 
   override def onDisconnected(remoteAddress: RpcAddress): Unit = {
@@ -737,7 +701,6 @@ private[deploy] class Worker(
   }
 
   override def onStop() {
-    releaseResources(conf, SPARK_WORKER_PREFIX, resources, pid)
     cleanupThreadExecutor.shutdownNow()
     metricsSystem.report()
     cancelLastRegistrationRetry()
@@ -792,7 +755,6 @@ private[deploy] class Worker(
     trimFinishedDriversIfNecessary()
     memoryUsed -= driver.driverDesc.mem
     coresUsed -= driver.driverDesc.cores
-    removeResourcesUsed(driver.resources)
   }
 
   private[worker] def handleExecutorStateChanged(executorStateChanged: ExecutorStateChanged):
@@ -814,7 +776,6 @@ private[deploy] class Worker(
           trimFinishedExecutorsIfNecessary()
           coresUsed -= executor.cores
           memoryUsed -= executor.memory
-          removeResourcesUsed(executor.resources)
 
           if (CLEANUP_FILES_AFTER_EXECUTOR_EXIT) {
             shuffleService.executorRemoved(executorStateChanged.execId.toString, appId)
@@ -874,9 +835,8 @@ private[deploy] object Worker extends Logging {
     val securityMgr = new SecurityManager(conf)
     val rpcEnv = RpcEnv.create(systemName, host, port, conf, securityMgr)
     val masterAddresses = masterUrls.map(RpcAddress.fromSparkURL)
-    val pid = if (Utils.isTesting) workerNumber.get else Utils.getProcessId
     rpcEnv.setupEndpoint(ENDPOINT_NAME, new Worker(rpcEnv, webUiPort, cores, memory,
-      masterAddresses, ENDPOINT_NAME, workDir, conf, securityMgr, resourceFileOpt, pid = pid))
+      masterAddresses, ENDPOINT_NAME, workDir, conf, securityMgr, resourceFileOpt))
     rpcEnv
   }
 

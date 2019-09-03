@@ -20,9 +20,9 @@ package org.apache.spark.sql.execution
 import org.apache.spark.sql.Strategy
 import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.catalyst.plans.logical.{LeafNode, LocalRelation, LogicalPlan, ReturnAnswer, Union}
-import org.apache.spark.sql.test.SharedSparkSession
+import org.apache.spark.sql.test.SharedSQLContext
 
-class SparkPlannerSuite extends SharedSparkSession {
+class SparkPlannerSuite extends SharedSQLContext {
   import testImplicits._
 
   test("Ensure to go down only the first branch, not any other possible branches") {

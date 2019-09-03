@@ -223,6 +223,7 @@ abstract class Catalog {
   }
 
   /**
+   * :: Experimental ::
    * Creates a table from the given path and returns the corresponding DataFrame.
    * It will use the default data source configured by spark.sql.sources.default.
    *
@@ -231,6 +232,8 @@ abstract class Catalog {
    *                  the current database.
    * @since 2.2.0
    */
+  @Experimental
+  @Evolving
   def createTable(tableName: String, path: String): DataFrame
 
   /**
@@ -248,6 +251,7 @@ abstract class Catalog {
   }
 
   /**
+   * :: Experimental ::
    * Creates a table from the given path based on a data source and returns the corresponding
    * DataFrame.
    *
@@ -256,6 +260,8 @@ abstract class Catalog {
    *                  the current database.
    * @since 2.2.0
    */
+  @Experimental
+  @Evolving
   def createTable(tableName: String, path: String, source: String): DataFrame
 
   /**
@@ -276,6 +282,7 @@ abstract class Catalog {
   }
 
   /**
+   * :: Experimental ::
    * Creates a table based on the dataset in a data source and a set of options.
    * Then, returns the corresponding DataFrame.
    *
@@ -284,6 +291,8 @@ abstract class Catalog {
    *                  the current database.
    * @since 2.2.0
    */
+  @Experimental
+  @Evolving
   def createTable(
       tableName: String,
       source: String,
@@ -310,6 +319,7 @@ abstract class Catalog {
   }
 
   /**
+   * :: Experimental ::
    * (Scala-specific)
    * Creates a table based on the dataset in a data source and a set of options.
    * Then, returns the corresponding DataFrame.
@@ -319,12 +329,15 @@ abstract class Catalog {
    *                  the current database.
    * @since 2.2.0
    */
+  @Experimental
+  @Evolving
   def createTable(
       tableName: String,
       source: String,
       options: Map[String, String]): DataFrame
 
   /**
+   * :: Experimental ::
    * Create a table from the given path based on a data source, a schema and a set of options.
    * Then, returns the corresponding DataFrame.
    *
@@ -343,6 +356,7 @@ abstract class Catalog {
   }
 
   /**
+   * :: Experimental ::
    * Create a table based on the dataset in a data source, a schema and a set of options.
    * Then, returns the corresponding DataFrame.
    *
@@ -351,6 +365,8 @@ abstract class Catalog {
    *                  the current database.
    * @since 2.2.0
    */
+  @Experimental
+  @Evolving
   def createTable(
       tableName: String,
       source: String,
@@ -379,6 +395,7 @@ abstract class Catalog {
   }
 
   /**
+   * :: Experimental ::
    * (Scala-specific)
    * Create a table based on the dataset in a data source, a schema and a set of options.
    * Then, returns the corresponding DataFrame.
@@ -388,6 +405,8 @@ abstract class Catalog {
    *                  the current database.
    * @since 2.2.0
    */
+  @Experimental
+  @Evolving
   def createTable(
       tableName: String,
       source: String,

@@ -159,11 +159,15 @@ pre {
   display: none;
 }
 
-span.expand-dag-viz, span.collapse-table {
+span.expand-additional-metrics, span.expand-dag-viz, span.collapse-table {
   cursor: pointer;
 }
 
-.collapsible-table.collapsed {
+span.additional-metric-title {
+  cursor: pointer;
+}
+
+.additional-metrics.collapsed, .collapsible-table.collapsed {
   display: none;
 }
 
@@ -200,6 +204,14 @@ span.expand-dag-viz, span.collapse-table {
   margin: 0;
   font-weight: bold;
   color: #777;
+}
+
+/* Hide all additional metrics by default. This is done here rather than using JavaScript to
+ * avoid slow page loads for stage pages with large numbers (e.g., thousands) of tasks. */
+.scheduler_delay, .deserialization_time, .fetch_wait_time, .shuffle_read_remote,
+.serialization_time, .getting_result_time, .peak_execution_memory,
+.on_heap_memory, .off_heap_memory {
+  display: none;
 }
 
 .accordion-inner {

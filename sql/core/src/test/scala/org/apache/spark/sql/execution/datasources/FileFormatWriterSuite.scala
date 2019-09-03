@@ -19,11 +19,11 @@ package org.apache.spark.sql.execution.datasources
 
 import org.apache.spark.sql.{QueryTest, Row}
 import org.apache.spark.sql.catalyst.plans.CodegenInterpretedPlanTest
-import org.apache.spark.sql.test.SharedSparkSession
+import org.apache.spark.sql.test.SharedSQLContext
 
 class FileFormatWriterSuite
   extends QueryTest
-  with SharedSparkSession
+  with SharedSQLContext
   with CodegenInterpretedPlanTest{
 
   import testImplicits._

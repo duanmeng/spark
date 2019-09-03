@@ -98,6 +98,7 @@ class Estimator(Params):
                  using `paramMaps[index]`. `index` values may not be sequential.
 
         .. note:: DeveloperApi
+        .. note:: Experimental
         """
         estimator = self.copy()
 

@@ -18,6 +18,7 @@
 package org.apache.spark.sql.execution.datasources.v2
 
 import java.util
+import java.util.Locale
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -31,8 +32,7 @@ import org.apache.spark.sql.catalyst.analysis.{NoSuchNamespaceException, NoSuchT
 import org.apache.spark.sql.catalyst.catalog.{BucketSpec, CatalogTable, CatalogTableType, CatalogUtils, SessionCatalog}
 import org.apache.spark.sql.execution.datasources.DataSource
 import org.apache.spark.sql.internal.SessionState
-import org.apache.spark.sql.sources.v2.Table
-import org.apache.spark.sql.sources.v2.internal.UnresolvedTable
+import org.apache.spark.sql.sources.v2.{Table, TableCapability}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
@@ -71,7 +71,7 @@ class V2SessionCatalog(sessionState: SessionState) extends TableCatalog {
         throw new NoSuchTableException(ident)
     }
 
-    UnresolvedTable(catalogTable)
+    CatalogTableAsV2(catalogTable)
   }
 
   override def invalidateTable(ident: Identifier): Unit = {
@@ -90,11 +90,10 @@ class V2SessionCatalog(sessionState: SessionState) extends TableCatalog {
     val location = Option(properties.get("location"))
     val storage = DataSource.buildStorageFormatFromOptions(tableProperties.toMap)
         .copy(locationUri = location.map(CatalogUtils.stringToURI))
-    val tableType = if (location.isDefined) CatalogTableType.EXTERNAL else CatalogTableType.MANAGED
 
     val tableDesc = CatalogTable(
       identifier = ident.asTableIdentifier,
-      tableType = tableType,
+      tableType = CatalogTableType.MANAGED,
       storage = storage,
       schema = schema,
       provider = Some(provider),
@@ -154,16 +153,6 @@ class V2SessionCatalog(sessionState: SessionState) extends TableCatalog {
     }
   }
 
-  override def renameTable(oldIdent: Identifier, newIdent: Identifier): Unit = {
-    if (tableExists(newIdent)) {
-      throw new TableAlreadyExistsException(newIdent)
-    }
-
-    // Load table to make sure the table exists
-    loadTable(oldIdent)
-    catalog.renameTable(oldIdent.asTableIdentifier, newIdent.asTableIdentifier)
-  }
-
   implicit class TableIdentifierHelper(ident: Identifier) {
     def asTableIdentifier: TableIdentifier = {
       ident.namespace match {
@@ -178,6 +167,66 @@ class V2SessionCatalog(sessionState: SessionState) extends TableCatalog {
   }
 
   override def toString: String = s"V2SessionCatalog($name)"
+}
+
+/**
+ * An implementation of catalog v2 [[Table]] to expose v1 table metadata.
+ */
+case class CatalogTableAsV2(v1Table: CatalogTable) extends Table {
+  implicit class IdentifierHelper(identifier: TableIdentifier) {
+    def quoted: String = {
+      identifier.database match {
+        case Some(db) =>
+          Seq(db, identifier.table).map(quote).mkString(".")
+        case _ =>
+          quote(identifier.table)
+
+      }
+    }
+
+    private def quote(part: String): String = {
+      if (part.contains(".") || part.contains("`")) {
+        s"`${part.replace("`", "``")}`"
+      } else {
+        part
+      }
+    }
+  }
+
+  def catalogTable: CatalogTable = v1Table
+
+  lazy val options: Map[String, String] = {
+    v1Table.storage.locationUri match {
+      case Some(uri) =>
+        v1Table.storage.properties + ("path" -> uri.toString)
+      case _ =>
+        v1Table.storage.properties
+    }
+  }
+
+  override lazy val properties: util.Map[String, String] = v1Table.properties.asJava
+
+  override lazy val schema: StructType = v1Table.schema
+
+  override lazy val partitioning: Array[Transform] = {
+    val partitions = new mutable.ArrayBuffer[Transform]()
+
+    v1Table.partitionColumnNames.foreach { col =>
+      partitions += LogicalExpressions.identity(col)
+    }
+
+    v1Table.bucketSpec.foreach { spec =>
+      partitions += LogicalExpressions.bucket(spec.numBuckets, spec.bucketColumnNames: _*)
+    }
+
+    partitions.toArray
+  }
+
+  override def name: String = v1Table.identifier.quoted
+
+  override def capabilities: util.Set[TableCapability] = new util.HashSet[TableCapability]()
+
+  override def toString: String = s"CatalogTableAsV2($name)"
 }
 
 private[sql] object V2SessionCatalog {
@@ -203,3 +252,4 @@ private[sql] object V2SessionCatalog {
     (identityCols, bucketSpec)
   }
 }
+

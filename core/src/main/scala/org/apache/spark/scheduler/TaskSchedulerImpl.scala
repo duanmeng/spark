@@ -22,7 +22,6 @@ import java.util.{Locale, Timer, TimerTask}
 import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
 import java.util.concurrent.atomic.AtomicLong
 
-import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, Buffer, HashMap, HashSet}
 import scala.util.Random
 
@@ -94,7 +93,7 @@ private[spark] class TaskSchedulerImpl(
   val CPUS_PER_TASK = conf.get(config.CPUS_PER_TASK)
 
   // Resources to request per task
-  val resourcesReqsPerTask = ResourceUtils.parseResourceRequirements(sc.conf, SPARK_TASK_PREFIX)
+  val resourcesReqsPerTask = ResourceUtils.parseTaskResourceRequirements(sc.conf)
 
   // TaskSetManagers are not thread safe, so any access to one should be synchronized
   // on this class.  Protected by `this`
@@ -383,8 +382,9 @@ private[spark] class TaskSchedulerImpl(
    * Check whether the resources from the WorkerOffer are enough to run at least one task.
    */
   private def resourcesMeetTaskRequirements(resources: Map[String, Buffer[String]]): Boolean = {
-    val resourcesFree = resources.map(r => r._1 -> r._2.length)
-    ResourceUtils.resourcesMeetRequirements(resourcesFree, resourcesReqsPerTask)
+    resourcesReqsPerTask.forall { req =>
+      resources.contains(req.resourceName) && resources(req.resourceName).size >= req.amount
+    }
   }
 
   /**
@@ -551,7 +551,7 @@ private[spark] class TaskSchedulerImpl(
       taskSet: TaskSetManager,
       taskIndex: Int): TimerTask = {
     new TimerTask() {
-      override def run(): Unit = TaskSchedulerImpl.this.synchronized {
+      override def run() {
         if (unschedulableTaskSetToExpiryTime.contains(taskSet) &&
             unschedulableTaskSetToExpiryTime(taskSet) <= clock.getTimeMillis()) {
           logInfo("Cannot schedule any task because of complete blacklisting. " +
@@ -628,7 +628,7 @@ private[spark] class TaskSchedulerImpl(
       execId: String,
       accumUpdates: Array[(Long, Seq[AccumulatorV2[_, _]])],
       blockManagerId: BlockManagerId,
-      executorUpdates: mutable.Map[(Int, Int), ExecutorMetrics]): Boolean = {
+      executorMetrics: ExecutorMetrics): Boolean = {
     // (taskId, stageId, stageAttemptId, accumUpdates)
     val accumUpdatesWithTaskIds: Array[(Long, Int, Int, Seq[AccumulableInfo])] = {
       accumUpdates.flatMap { case (id, updates) =>
@@ -639,7 +639,7 @@ private[spark] class TaskSchedulerImpl(
       }
     }
     dagScheduler.executorHeartbeatReceived(execId, accumUpdatesWithTaskIds, blockManagerId,
-      executorUpdates)
+      executorMetrics)
   }
 
   def handleTaskGettingResult(taskSetManager: TaskSetManager, tid: Long): Unit = synchronized {

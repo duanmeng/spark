@@ -219,8 +219,8 @@ class StreamSuite extends StreamTest {
     }
 
     val df = spark.readStream.format(classOf[FakeDefaultSource].getName).load()
-    Seq("", "parquet").foreach { useV1Source =>
-      withSQLConf(SQLConf.USE_V1_SOURCE_LIST.key -> useV1Source) {
+    Seq("", "parquet").foreach { useV1SourceReader =>
+      withSQLConf(SQLConf.USE_V1_SOURCE_READER_LIST.key -> useV1SourceReader) {
         assertDF(df)
         assertDF(df)
       }

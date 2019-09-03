@@ -105,31 +105,10 @@ function totalDurationColor(totalGCTime, totalDuration) {
     return (totalGCTime > GCTimePercent * totalDuration) ? "white" : "black";
 }
 
-var sumOptionalColumns = [3, 4];
-var execOptionalColumns = [5, 6];
-var execDataTable;
-var sumDataTable;
-
-function reselectCheckboxesBasedOnTaskTableState() {
-    var allChecked = true;
-    if (typeof execDataTable !== "undefined") {
-        for (var k = 0; k < execOptionalColumns.length; k++) {
-            if (execDataTable.column(execOptionalColumns[k]).visible()) {
-                $("[data-exec-col-idx=" + execOptionalColumns[k] + "]").prop("checked", true);
-            } else {
-                allChecked = false;
-            }
-        }
-    }
-    if (allChecked) {
-        $("#select-all-box").prop("checked", true);
-    }
-}
-
 $(document).ready(function () {
     setDataTableDefaults();
 
-    var executorsSummary = $("#active-executors");
+    executorsSummary = $("#active-executors");
 
     getStandAloneAppId(function (appId) {
 
@@ -388,6 +367,9 @@ $(document).ready(function () {
                                 else
                                     return (formatBytes(row.memoryMetrics.usedOnHeapStorageMemory, type) + ' / ' +
                                         formatBytes(row.memoryMetrics.totalOnHeapStorageMemory, type));
+                            },
+                            "fnCreatedCell": function (nTd, sData, oData, iRow, iCol) {
+                                $(nTd).addClass('on_heap_memory')
                             }
                         },
                         {
@@ -397,6 +379,9 @@ $(document).ready(function () {
                                 else
                                     return (formatBytes(row.memoryMetrics.usedOffHeapStorageMemory, type) + ' / ' +
                                         formatBytes(row.memoryMetrics.totalOffHeapStorageMemory, type));
+                            },
+                            "fnCreatedCell": function (nTd, sData, oData, iRow, iCol) {
+                                $(nTd).addClass('off_heap_memory')
                             }
                         },
                         {data: 'diskUsed', render: formatBytes},
@@ -443,16 +428,12 @@ $(document).ready(function () {
                             }
                         }
                     ],
-                    "order": [[0, "asc"]],
-                    "columnDefs": [
-                        {"visible": false, "targets": 5},
-                        {"visible": false, "targets": 6}
-                    ]
+                    "order": [[0, "asc"]]
                 };
-
-                execDataTable = $(selector).DataTable(conf);
-                execDataTable.column('executorLogsCol:name').visible(logsExist(response));
-                execDataTable.column('threadDumpCol:name').visible(getThreadDumpEnabled());
+    
+                var dt = $(selector).DataTable(conf);
+                dt.column('executorLogsCol:name').visible(logsExist(response));
+                dt.column('threadDumpCol:name').visible(getThreadDumpEnabled());
                 $('#active-executors [data-toggle="tooltip"]').tooltip();
     
                 var sumSelector = "#summary-execs-table";
@@ -482,6 +463,9 @@ $(document).ready(function () {
                                 else
                                     return (formatBytes(row.allOnHeapMemoryUsed, type) + ' / ' +
                                         formatBytes(row.allOnHeapMaxMemory, type));
+                            },
+                            "fnCreatedCell": function (nTd, sData, oData, iRow, iCol) {
+                                $(nTd).addClass('on_heap_memory')
                             }
                         },
                         {
@@ -491,6 +475,9 @@ $(document).ready(function () {
                                 else
                                     return (formatBytes(row.allOffHeapMemoryUsed, type) + ' / ' +
                                         formatBytes(row.allOffHeapMaxMemory, type));
+                            },
+                            "fnCreatedCell": function (nTd, sData, oData, iRow, iCol) {
+                                $(nTd).addClass('off_heap_memory')
                             }
                         },
                         {data: 'allDiskUsed', render: formatBytes},
@@ -533,69 +520,13 @@ $(document).ready(function () {
                     ],
                     "paging": false,
                     "searching": false,
-                    "info": false,
-                    "columnDefs": [
-                        {"visible": false, "targets": 3},
-                        {"visible": false, "targets": 4}
-                    ]
+                    "info": false
 
                 };
     
-                sumDataTable = $(sumSelector).DataTable(sumConf);
+                $(sumSelector).DataTable(sumConf);
                 $('#execSummary [data-toggle="tooltip"]').tooltip();
-
-                $("#showAdditionalMetrics").append(
-                    "<div><a id='additionalMetrics'>" +
-                    "<span class='expand-input-rate-arrow arrow-closed' id='arrowtoggle-optional-metrics'></span>" +
-                    "Show Additional Metrics" +
-                    "</a></div>" +
-                    "<div class='container-fluid container-fluid-div' id='toggle-metrics' hidden>" +
-                    "<div><input type='checkbox' class='toggle-vis' id='select-all-box'>Select All</div>" +
-                    "<div id='on_heap_memory' class='on-heap-memory-checkbox-div'><input type='checkbox' class='toggle-vis' data-sum-col-idx='3' data-exec-col-idx='5'>On Heap Memory</div>" +
-                    "<div id='off_heap_memory' class='off-heap-memory-checkbox-div'><input type='checkbox' class='toggle-vis' data-sum-col-idx='4' data-exec-col-idx='6'>Off Heap Memory</div>" +
-                    "</div>");
-
-                reselectCheckboxesBasedOnTaskTableState();
-
-                $("#additionalMetrics").click(function() {
-                    $("#arrowtoggle-optional-metrics").toggleClass("arrow-open arrow-closed");
-                    $("#toggle-metrics").toggle();
-                    if (window.localStorage) {
-                        window.localStorage.setItem("arrowtoggle-optional-metrics-class", $("#arrowtoggle-optional-metrics").attr('class'));
-                    }
-                });
-
-                $(".toggle-vis").on("click", function() {
-                    var thisBox = $(this);
-                    if (thisBox.is("#select-all-box")) {
-                        var sumColumn = sumDataTable.columns(sumOptionalColumns);
-                        var execColumn = execDataTable.columns(execOptionalColumns);
-                        if (thisBox.is(":checked")) {
-                            $(".toggle-vis").prop("checked", true);
-                            sumColumn.visible(true);
-                            execColumn.visible(true);
-                        } else {
-                            $(".toggle-vis").prop("checked", false);
-                            sumColumn.visible(false);
-                            execColumn.visible(false);
-                        }
-                    } else {
-                        var execColIdx = thisBox.attr("data-exec-col-idx");
-                        var execCol = execDataTable.column(execColIdx);
-                        execCol.visible(!execCol.visible());
-                        var sumColIdx = thisBox.attr("data-sum-col-idx");
-                        var sumCol = sumDataTable.column(sumColIdx);
-                        sumCol.visible(!sumCol.visible());
-                    }
-                });
-
-                if (window.localStorage) {
-                    if (window.localStorage.getItem("arrowtoggle-optional-metrics-class") != null &&
-                        window.localStorage.getItem("arrowtoggle-optional-metrics-class").includes("arrow-open")) {
-                        $("#arrowtoggle-optional-metrics").toggleClass("arrow-open arrow-closed");
-                        $("#toggle-metrics").toggle();
-                    }
-                }
+    
             });
         });
     });

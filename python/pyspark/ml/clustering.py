@@ -33,6 +33,8 @@ __all__ = ['BisectingKMeans', 'BisectingKMeansModel', 'BisectingKMeansSummary',
 
 class ClusteringSummary(JavaWrapper):
     """
+    .. note:: Experimental
+
     Clustering results for a given model.
 
     .. versionadded:: 2.1.0
@@ -261,6 +263,8 @@ class GaussianMixture(JavaEstimator, HasFeaturesCol, HasPredictionCol, HasMaxIte
 
 class GaussianMixtureSummary(ClusteringSummary):
     """
+    .. note:: Experimental
+
     Gaussian mixture clustering results for a given model.
 
     .. versionadded:: 2.1.0
@@ -293,6 +297,8 @@ class GaussianMixtureSummary(ClusteringSummary):
 
 class KMeansSummary(ClusteringSummary):
     """
+    .. note:: Experimental
+
     Summary of KMeans.
 
     .. versionadded:: 2.1.0
@@ -665,6 +671,8 @@ class BisectingKMeans(JavaEstimator, HasDistanceMeasure, HasFeaturesCol, HasPred
 
 class BisectingKMeansSummary(ClusteringSummary):
     """
+    .. note:: Experimental
+
     Bisecting KMeans clustering results for a given model.
 
     .. versionadded:: 2.1.0
@@ -1167,6 +1175,8 @@ class LDA(JavaEstimator, HasFeaturesCol, HasMaxIter, HasSeed, HasCheckpointInter
 class PowerIterationClustering(HasMaxIter, HasWeightCol, JavaParams, JavaMLReadable,
                                JavaMLWritable):
     """
+    .. note:: Experimental
+
     Power Iteration Clustering (PIC), a scalable graph clustering algorithm developed by
     `Lin and Cohen <http://www.cs.cmu.edu/~frank/papers/icml2010-pic-final.pdf>`_. From the
     abstract: PIC finds a very low-dimensional embedding of a dataset using truncated power

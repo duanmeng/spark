@@ -89,8 +89,7 @@ class StopWordsRemover @Since("1.5.0") (@Since("1.5.0") override val uid: String
   /**
    * Locale of the input for case insensitive matching. Ignored when [[caseSensitive]]
    * is true.
-   * Default: the string of default locale (`Locale.getDefault`), or `Locale.US` if default locale
-   * is not in available locales in JVM.
+   * Default: Locale.getDefault.toString
    * @group param
    */
   @Since("2.4.0")
@@ -106,23 +105,8 @@ class StopWordsRemover @Since("1.5.0") (@Since("1.5.0") override val uid: String
   @Since("2.4.0")
   def getLocale: String = $(locale)
 
-  /**
-   * Returns system default locale, or `Locale.US` if the default locale is not in available locales
-   * in JVM.
-   */
-  private val getDefaultOrUS: Locale = {
-    if (Locale.getAvailableLocales.contains(Locale.getDefault)) {
-      Locale.getDefault
-    } else {
-      logWarning(s"Default locale set was [${Locale.getDefault.toString}]; however, it was " +
-        "not found in available locales in JVM, falling back to en_US locale. Set param `locale` " +
-        "in order to respect another locale.")
-      Locale.US
-    }
-  }
-
   setDefault(stopWords -> StopWordsRemover.loadDefaultStopWords("english"),
-    caseSensitive -> false, locale -> getDefaultOrUS.toString)
+    caseSensitive -> false, locale -> Locale.getDefault.toString)
 
   @Since("2.0.0")
   override def transform(dataset: Dataset[_]): DataFrame = {

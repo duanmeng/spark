@@ -113,14 +113,6 @@ statement
         (AS? query)?                                                   #createHiveTable
     | CREATE TABLE (IF NOT EXISTS)? target=tableIdentifier
         LIKE source=tableIdentifier locationSpec?                      #createTableLike
-    | replaceTableHeader ('(' colTypeList ')')? tableProvider
-        ((OPTIONS options=tablePropertyList) |
-        (PARTITIONED BY partitioning=transformList) |
-        bucketSpec |
-        locationSpec |
-        (COMMENT comment=STRING) |
-        (TBLPROPERTIES tableProps=tablePropertyList))*
-        (AS? query)?                                                   #replaceTable
     | ANALYZE TABLE tableIdentifier partitionSpec? COMPUTE STATISTICS
         (identifier | FOR COLUMNS identifierSeq | FOR ALL COLUMNS)?    #analyze
     | ALTER TABLE multipartIdentifier
@@ -183,7 +175,7 @@ statement
     | DROP TEMPORARY? FUNCTION (IF EXISTS)? qualifiedName              #dropFunction
     | EXPLAIN (LOGICAL | FORMATTED | EXTENDED | CODEGEN | COST)?
         statement                                                      #explain
-    | SHOW TABLES ((FROM | IN) multipartIdentifier)?
+    | SHOW TABLES ((FROM | IN) db=errorCapturingIdentifier)?
         (LIKE? pattern=STRING)?                                        #showTables
     | SHOW TABLE EXTENDED ((FROM | IN) db=errorCapturingIdentifier)?
         LIKE pattern=STRING partitionSpec?                             #showTable
@@ -198,7 +190,7 @@ statement
     | (DESC | DESCRIBE) FUNCTION EXTENDED? describeFuncName            #describeFunction
     | (DESC | DESCRIBE) database EXTENDED? db=errorCapturingIdentifier #describeDatabase
     | (DESC | DESCRIBE) TABLE? option=(EXTENDED | FORMATTED)?
-        multipartIdentifier partitionSpec? describeColName?                #describeTable
+        tableIdentifier partitionSpec? describeColName?                #describeTable
     | (DESC | DESCRIBE) QUERY? query                                   #describeQuery
     | REFRESH TABLE tableIdentifier                                    #refreshTable
     | REFRESH (STRING | .*?)                                           #refreshResource
@@ -214,7 +206,6 @@ statement
     | SET ROLE .*?                                                     #failNativeCommand
     | SET .*?                                                          #setConfiguration
     | RESET                                                            #resetConfiguration
-    | DELETE FROM multipartIdentifier tableAlias whereClause           #deleteFromTable
     | unsupportedHiveNativeCommands .*?                                #failNativeCommand
     ;
 
@@ -270,10 +261,6 @@ createTableHeader
     : CREATE TEMPORARY? EXTERNAL? TABLE (IF NOT EXISTS)? multipartIdentifier
     ;
 
-replaceTableHeader
-    : (CREATE OR)? REPLACE TABLE multipartIdentifier
-    ;
-
 bucketSpec
     : CLUSTERED BY identifierList
       (SORTED BY orderedIdentifierList)?
@@ -295,8 +282,8 @@ query
     ;
 
 insertInto
-    : INSERT OVERWRITE TABLE? multipartIdentifier (partitionSpec (IF NOT EXISTS)?)?                         #insertOverwriteTable
-    | INSERT INTO TABLE? multipartIdentifier partitionSpec? (IF NOT EXISTS)?                                #insertIntoTable
+    : INSERT OVERWRITE TABLE tableIdentifier (partitionSpec (IF NOT EXISTS)?)?                              #insertOverwriteTable
+    | INSERT INTO TABLE? tableIdentifier partitionSpec?                                                     #insertIntoTable
     | INSERT OVERWRITE LOCAL? DIRECTORY path=STRING rowFormat? createFileFormat?                            #insertOverwriteHiveDir
     | INSERT OVERWRITE LOCAL? DIRECTORY (path=STRING)? tableProvider (OPTIONS options=tablePropertyList)?   #insertOverwriteDir
     ;
@@ -673,7 +660,6 @@ predicate
     | NOT? kind=IN '(' query ')'
     | NOT? kind=(RLIKE | LIKE) pattern=valueExpression
     | IS NOT? kind=NULL
-    | IS NOT? kind=(TRUE | FALSE | UNKNOWN)
     | IS NOT? kind=DISTINCT FROM right=valueExpression
     ;
 
@@ -1348,7 +1334,6 @@ nonReserved
     | UNBOUNDED
     | UNCACHE
     | UNIQUE
-    | UNKNOWN
     | UNLOCK
     | UNSET
     | USE
@@ -1614,7 +1599,6 @@ UNBOUNDED: 'UNBOUNDED';
 UNCACHE: 'UNCACHE';
 UNION: 'UNION';
 UNIQUE: 'UNIQUE';
-UNKNOWN: 'UNKNOWN';
 UNLOCK: 'UNLOCK';
 UNSET: 'UNSET';
 USE: 'USE';

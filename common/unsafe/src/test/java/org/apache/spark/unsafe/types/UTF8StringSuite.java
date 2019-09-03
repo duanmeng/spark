@@ -467,7 +467,7 @@ public class UTF8StringSuite {
       )));
     assertEquals(
       fromString("translate"),
-      fromString("translate").translate(new HashMap<>()));
+      fromString("translate").translate(new HashMap<Character, Character>()));
     assertEquals(
       fromString("asae"),
       fromString("translate").translate(ImmutableMap.of(
@@ -621,13 +621,13 @@ public class UTF8StringSuite {
   public void writeToOutputStream() throws IOException {
     final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
     EMPTY_UTF8.writeTo(outputStream);
-    assertEquals("", outputStream.toString(StandardCharsets.UTF_8.name()));
+    assertEquals("", outputStream.toString("UTF-8"));
     outputStream.reset();
 
     fromString("数据砖很重").writeTo(outputStream);
     assertEquals(
         "数据砖很重",
-        outputStream.toString(StandardCharsets.UTF_8.name()));
+        outputStream.toString("UTF-8"));
     outputStream.reset();
   }
 
@@ -651,7 +651,7 @@ public class UTF8StringSuite {
     final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
     fromAddress(array, Platform.INT_ARRAY_OFFSET, length)
         .writeTo(outputStream);
-    assertEquals("大千世界", outputStream.toString(StandardCharsets.UTF_8.name()));
+    assertEquals("大千世界", outputStream.toString("UTF-8"));
   }
 
   @Test

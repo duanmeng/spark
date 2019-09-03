@@ -416,7 +416,7 @@ object QueryTest {
   }
 }
 
-class QueryTestSuite extends QueryTest with test.SharedSparkSession {
+class QueryTestSuite extends QueryTest with test.SharedSQLContext {
   test("SPARK-16940: checkAnswer should raise TestFailedException for wrong results") {
     intercept[org.scalatest.exceptions.TestFailedException] {
       checkAnswer(sql("SELECT 1"), Row(2) :: Nil)

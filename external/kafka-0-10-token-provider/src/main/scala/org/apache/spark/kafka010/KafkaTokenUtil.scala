@@ -125,9 +125,7 @@ private[spark] object KafkaTokenUtil extends Logging {
       adminClientProperties.put(SaslConfigs.SASL_MECHANISM, SaslConfigs.GSSAPI_MECHANISM)
       if (sparkConf.contains(KEYTAB)) {
         logDebug("Keytab detected, using it for login.")
-        val keyTab = sparkConf.get(KEYTAB).get
-        val principal = sparkConf.get(PRINCIPAL).get
-        val jaasParams = getKeytabJaasParams(keyTab, principal, clusterConf.kerberosServiceName)
+        val jaasParams = getKeytabJaasParams(sparkConf, clusterConf)
         adminClientProperties.put(SaslConfigs.SASL_JAAS_CONFIG, jaasParams)
       } else {
         logDebug("Using ticket cache for login.")
@@ -183,18 +181,17 @@ private[spark] object KafkaTokenUtil extends Logging {
     }
   }
 
-  def getKeytabJaasParams(
-      keyTab: String,
-      principal: String,
-      kerberosServiceName: String): String = {
+  private def getKeytabJaasParams(
+      sparkConf: SparkConf,
+      clusterConf: KafkaTokenClusterConf): String = {
     val params =
       s"""
       |${getKrb5LoginModuleName} required
       | debug=${isGlobalKrbDebugEnabled()}
       | useKeyTab=true
-      | serviceName="$kerberosServiceName"
-      | keyTab="$keyTab"
-      | principal="$principal";
+      | serviceName="${clusterConf.kerberosServiceName}"
+      | keyTab="${sparkConf.get(KEYTAB).get}"
+      | principal="${sparkConf.get(PRINCIPAL).get}";
       """.stripMargin.replace("\n", "")
     logDebug(s"Krb keytab JAAS params: $params")
     params
@@ -216,7 +213,7 @@ private[spark] object KafkaTokenUtil extends Logging {
    * Krb5LoginModule package vary in different JVMs.
    * Please see Hadoop UserGroupInformation for further details.
    */
-  def getKrb5LoginModuleName(): String = {
+  private def getKrb5LoginModuleName(): String = {
     if (System.getProperty("java.vendor").contains("IBM")) {
       "com.ibm.security.auth.module.Krb5LoginModule"
     } else {

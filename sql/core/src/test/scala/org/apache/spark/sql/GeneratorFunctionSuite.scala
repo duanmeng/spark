@@ -22,10 +22,10 @@ import org.apache.spark.sql.catalyst.expressions.{Expression, Generator}
 import org.apache.spark.sql.catalyst.expressions.codegen.{CodegenContext, ExprCode}
 import org.apache.spark.sql.catalyst.expressions.codegen.Block._
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.test.SharedSparkSession
+import org.apache.spark.sql.test.SharedSQLContext
 import org.apache.spark.sql.types.{IntegerType, StructType}
 
-class GeneratorFunctionSuite extends QueryTest with SharedSparkSession {
+class GeneratorFunctionSuite extends QueryTest with SharedSQLContext {
   import testImplicits._
 
   test("stack") {

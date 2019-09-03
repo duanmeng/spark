@@ -146,17 +146,17 @@ object InMemoryRelation {
       storageLevel: StorageLevel,
       child: SparkPlan,
       tableName: Option[String],
-      optimizedPlan: LogicalPlan): InMemoryRelation = {
+      logicalPlan: LogicalPlan): InMemoryRelation = {
     val cacheBuilder = CachedRDDBuilder(useCompression, batchSize, storageLevel, child, tableName)
-    val relation = new InMemoryRelation(child.output, cacheBuilder, optimizedPlan.outputOrdering)
-    relation.statsOfPlanToCache = optimizedPlan.stats
+    val relation = new InMemoryRelation(child.output, cacheBuilder, logicalPlan.outputOrdering)
+    relation.statsOfPlanToCache = logicalPlan.stats
     relation
   }
 
-  def apply(cacheBuilder: CachedRDDBuilder, optimizedPlan: LogicalPlan): InMemoryRelation = {
+  def apply(cacheBuilder: CachedRDDBuilder, logicalPlan: LogicalPlan): InMemoryRelation = {
     val relation = new InMemoryRelation(
-      cacheBuilder.cachedPlan.output, cacheBuilder, optimizedPlan.outputOrdering)
-    relation.statsOfPlanToCache = optimizedPlan.stats
+      cacheBuilder.cachedPlan.output, cacheBuilder, logicalPlan.outputOrdering)
+    relation.statsOfPlanToCache = logicalPlan.stats
     relation
   }
 
@@ -179,10 +179,10 @@ case class InMemoryRelation(
 
   @volatile var statsOfPlanToCache: Statistics = null
 
-  override def innerChildren: Seq[SparkPlan] = Seq(cachedPlan)
+  override protected def innerChildren: Seq[SparkPlan] = Seq(cachedPlan)
 
   override def doCanonicalize(): logical.LogicalPlan =
-    copy(output = output.map(QueryPlan.normalizeExpressions(_, cachedPlan.output)),
+    copy(output = output.map(QueryPlan.normalizeExprId(_, cachedPlan.output)),
       cacheBuilder,
       outputOrdering)
 
@@ -221,13 +221,6 @@ case class InMemoryRelation(
       cacheBuilder,
       outputOrdering,
       statsOfPlanToCache).asInstanceOf[this.type]
-  }
-
-  // override `clone` since the default implementation won't carry over mutable states.
-  override def clone(): LogicalPlan = {
-    val cloned = this.copy()
-    cloned.statsOfPlanToCache = this.statsOfPlanToCache
-    cloned
   }
 
   override def simpleString(maxFields: Int): String =

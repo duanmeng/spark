@@ -46,6 +46,8 @@ class Window(object):
          unboundedPreceding, unboundedFollowing) is used by default. When ordering is defined,
          a growing window frame (rangeFrame, unboundedPreceding, currentRow) is used by default.
 
+    .. note:: Experimental
+
     .. versionadded:: 1.4
     """
 
@@ -202,6 +204,8 @@ class WindowSpec(object):
     and frame boundaries.
 
     Use the static methods in :class:`Window` to create a :class:`WindowSpec`.
+
+    .. note:: Experimental
 
     .. versionadded:: 1.4
     """

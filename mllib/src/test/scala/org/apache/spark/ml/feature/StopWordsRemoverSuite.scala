@@ -17,8 +17,6 @@
 
 package org.apache.spark.ml.feature
 
-import java.util.Locale
-
 import org.apache.spark.ml.util.{DefaultReadWriteTest, MLTest}
 import org.apache.spark.sql.{DataFrame, Row}
 
@@ -201,20 +199,5 @@ class StopWordsRemoverSuite extends MLTest with DefaultReadWriteTest {
       remover,
       s"requirement failed: Column $outputCol already exists.",
       "expected")
-  }
-
-  test("SPARK-28365: Fallback to en_US if default locale isn't in available locales") {
-    val oldDefault = Locale.getDefault()
-    try {
-      val dummyLocale = Locale.forLanguageTag("test")
-      Locale.setDefault(dummyLocale)
-
-      val remover = new StopWordsRemover()
-        .setInputCol("raw")
-        .setOutputCol("filtered")
-      assert(remover.getLocale == "en_US")
-    } finally {
-      Locale.setDefault(oldDefault)
-    }
   }
 }

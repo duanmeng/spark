@@ -19,16 +19,14 @@ package org.apache.spark.sql.catalyst.optimizer
 
 import org.apache.spark.sql.catalyst.dsl.expressions._
 import org.apache.spark.sql.catalyst.dsl.plans._
-import org.apache.spark.sql.catalyst.expressions._
+import org.apache.spark.sql.catalyst.expressions.{InSubquery, ListQuery}
 import org.apache.spark.sql.catalyst.plans.PlanTest
-import org.apache.spark.sql.catalyst.plans.logical.{Filter, LocalRelation, LogicalPlan}
+import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan}
 import org.apache.spark.sql.catalyst.rules.RuleExecutor
 
 class PullupCorrelatedPredicatesSuite extends PlanTest {
 
   object Optimize extends RuleExecutor[LogicalPlan] {
-    override protected val blacklistedOnceBatches = Set("PullupCorrelatedPredicates")
-
     val batches =
       Batch("PullupCorrelatedPredicates", Once,
         PullupCorrelatedPredicates) :: Nil
@@ -38,65 +36,17 @@ class PullupCorrelatedPredicatesSuite extends PlanTest {
   val testRelation2 = LocalRelation('c.int, 'd.double)
 
   test("PullupCorrelatedPredicates should not produce unresolved plan") {
-    val subPlan =
+    val correlatedSubquery =
       testRelation2
         .where('b < 'd)
         .select('c)
-    val inSubquery =
+    val outerQuery =
       testRelation
-        .where(InSubquery(Seq('a), ListQuery(subPlan)))
+        .where(InSubquery(Seq('a), ListQuery(correlatedSubquery)))
         .select('a).analyze
-    assert(inSubquery.resolved)
+    assert(outerQuery.resolved)
 
-    val optimized = Optimize.execute(inSubquery)
+    val optimized = Optimize.execute(outerQuery)
     assert(optimized.resolved)
-  }
-
-  test("PullupCorrelatedPredicates in correlated subquery idempotency check") {
-    val subPlan =
-      testRelation2
-      .where('b < 'd)
-      .select('c)
-    val inSubquery =
-      testRelation
-      .where(InSubquery(Seq('a), ListQuery(subPlan)))
-      .select('a).analyze
-    assert(inSubquery.resolved)
-
-    val optimized = Optimize.execute(inSubquery)
-    val doubleOptimized = Optimize.execute(optimized)
-    comparePlans(optimized, doubleOptimized)
-  }
-
-  test("PullupCorrelatedPredicates exists correlated subquery idempotency check") {
-    val subPlan =
-      testRelation2
-        .where('b === 'd && 'd === 1)
-        .select(Literal(1))
-    val existsSubquery =
-      testRelation
-        .where(Exists(subPlan))
-        .select('a).analyze
-    assert(existsSubquery.resolved)
-
-    val optimized = Optimize.execute(existsSubquery)
-    val doubleOptimized = Optimize.execute(optimized)
-    comparePlans(optimized, doubleOptimized)
-  }
-
-  test("PullupCorrelatedPredicates scalar correlated subquery idempotency check") {
-    val subPlan =
-      testRelation2
-        .where('b === 'd && 'd === 1)
-        .select(max('d))
-    val scalarSubquery =
-      testRelation
-        .where(ScalarSubquery(subPlan))
-        .select('a).analyze
-    assert(scalarSubquery.resolved)
-
-    val optimized = Optimize.execute(scalarSubquery)
-    val doubleOptimized = Optimize.execute(optimized)
-    comparePlans(optimized, doubleOptimized, false)
   }
 }

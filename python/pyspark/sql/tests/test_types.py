@@ -830,8 +830,7 @@ class DataTypeVerificationTests(unittest.TestCase):
             (2**31 - 1, IntegerType()),
 
             # Long
-            (-(2**63), LongType()),
-            (2**63 - 1, LongType()),
+            (2**64, LongType()),
 
             # Float & Double
             (1.0, FloatType()),

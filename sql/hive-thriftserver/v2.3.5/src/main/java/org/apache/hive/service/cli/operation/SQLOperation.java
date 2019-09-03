@@ -30,8 +30,6 @@ import java.util.Properties;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-
 import org.apache.commons.codec.binary.Base64;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
@@ -374,7 +372,11 @@ public class SQLOperation extends ExecuteStatementOperation {
 
     int protocol = getProtocolVersion().getValue();
     for (Object rowString : rows) {
-      rowObj = serde.deserialize(new BytesWritable(((String)rowString).getBytes(UTF_8)));
+      try {
+        rowObj = serde.deserialize(new BytesWritable(((String)rowString).getBytes("UTF-8")));
+      } catch (UnsupportedEncodingException e) {
+        throw new SerDeException(e);
+      }
       for (int i = 0; i < fieldRefs.size(); i++) {
         StructField fieldRef = fieldRefs.get(i);
         fieldOI = fieldRef.getFieldObjectInspector();

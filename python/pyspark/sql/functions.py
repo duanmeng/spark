@@ -1247,7 +1247,7 @@ def last_day(date):
 
 @ignore_unicode_prefix
 @since(1.5)
-def from_unixtime(timestamp, format="uuuu-MM-dd HH:mm:ss"):
+def from_unixtime(timestamp, format="yyyy-MM-dd HH:mm:ss"):
     """
     Converts the number of seconds from unix epoch (1970-01-01 00:00:00 UTC) to a string
     representing the timestamp of that moment in the current system time zone in the given
@@ -1264,9 +1264,9 @@ def from_unixtime(timestamp, format="uuuu-MM-dd HH:mm:ss"):
 
 
 @since(1.5)
-def unix_timestamp(timestamp=None, format='uuuu-MM-dd HH:mm:ss'):
+def unix_timestamp(timestamp=None, format='yyyy-MM-dd HH:mm:ss'):
     """
-    Convert time string with given pattern ('uuuu-MM-dd HH:mm:ss', by default)
+    Convert time string with given pattern ('yyyy-MM-dd HH:mm:ss', by default)
     to Unix time stamp (in seconds), using the default timezone and the default
     locale, return null if fail.
 
@@ -1569,9 +1569,8 @@ def format_string(format, *cols):
     """
     Formats the arguments in printf-style and returns the result as a string column.
 
-    :param format: string that can contain embedded format tags and used as result column's value
-    :param cols: list of column names (string) or list of :class:`Column` expressions to
-        be used in formatting
+    :param col: the column name of the numeric value to be formatted
+    :param d: the N decimal places
 
     >>> df = spark.createDataFrame([(5, "hello")], ['a', 'b'])
     >>> df.select(format_string('%d %s', df.a, df.b).alias('v')).collect()
@@ -2699,10 +2698,7 @@ def array_repeat(col, count):
     [Row(r=[u'ab', u'ab', u'ab'])]
     """
     sc = SparkContext._active_spark_context
-    return Column(sc._jvm.functions.array_repeat(
-        _to_java_column(col),
-        _to_java_column(count) if isinstance(count, Column) else count
-    ))
+    return Column(sc._jvm.functions.array_repeat(_to_java_column(col), count))
 
 
 @since(2.4)
@@ -2916,6 +2912,8 @@ def pandas_udf(f=None, returnType=None, functionType=None):
         :class:`pyspark.sql.types.DataType` object or a DDL-formatted type string.
     :param functionType: an enum value in :class:`pyspark.sql.functions.PandasUDFType`.
                          Default: SCALAR.
+
+    .. note:: Experimental
 
     The function type of the UDF can be one of the following:
 

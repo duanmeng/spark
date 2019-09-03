@@ -22,9 +22,9 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.SparkException
 import org.apache.spark.sql.QueryTest
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.test.SharedSparkSession
+import org.apache.spark.sql.test.SharedSQLContext
 
-class ParquetFileFormatSuite extends QueryTest with ParquetTest with SharedSparkSession {
+class ParquetFileFormatSuite extends QueryTest with ParquetTest with SharedSQLContext {
 
   test("read parquet footers in parallel") {
     def testReadFooters(ignoreCorruptFiles: Boolean): Unit = {

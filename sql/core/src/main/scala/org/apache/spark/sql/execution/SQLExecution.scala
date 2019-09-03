@@ -85,7 +85,7 @@ object SQLExecution {
         }.getOrElse(callSite.shortForm)
 
       withSQLConfPropagated(sparkSession) {
-        var ex: Option[Throwable] = None
+        var ex: Option[Exception] = None
         val startTime = System.nanoTime()
         try {
           sc.listenerBus.post(SparkListenerSQLExecutionStart(
@@ -99,7 +99,7 @@ object SQLExecution {
             time = System.currentTimeMillis()))
           body
         } catch {
-          case e: Throwable =>
+          case e: Exception =>
             ex = Some(e)
             throw e
         } finally {

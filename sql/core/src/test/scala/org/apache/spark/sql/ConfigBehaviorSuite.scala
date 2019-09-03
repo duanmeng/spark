@@ -20,10 +20,10 @@ package org.apache.spark.sql
 import org.apache.commons.math3.stat.inference.ChiSquareTest
 
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.test.SharedSparkSession
+import org.apache.spark.sql.test.SharedSQLContext
 
 
-class ConfigBehaviorSuite extends QueryTest with SharedSparkSession {
+class ConfigBehaviorSuite extends QueryTest with SharedSQLContext {
 
   import testImplicits._
 

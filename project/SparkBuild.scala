@@ -16,7 +16,6 @@
  */
 
 import java.io._
-import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Files
 import java.util.Locale
 
@@ -249,7 +248,7 @@ object SparkBuild extends PomBuild {
     javaVersion := SbtPomKeys.effectivePom.value.getProperties.get("java.version").asInstanceOf[String],
 
     javacOptions in Compile ++= Seq(
-      "-encoding", UTF_8.name(),
+      "-encoding", "UTF-8",
       "-source", javaVersion.value
     ),
     // This -target and Xlint:unchecked options cannot be set in the Compile configuration scope since
@@ -474,8 +473,7 @@ object SparkParallelTestGrouping {
     "org.apache.spark.sql.hive.HiveExternalCatalogVersionsSuite",
     "org.apache.spark.ml.classification.LogisticRegressionSuite",
     "org.apache.spark.ml.classification.LinearSVCSuite",
-    "org.apache.spark.sql.SQLQueryTestSuite",
-    "org.apache.spark.sql.hive.thriftserver.ThriftServerQueryTestSuite"
+    "org.apache.spark.sql.SQLQueryTestSuite"
   )
 
   private val DEFAULT_TEST_GROUP = "default_test_group"
@@ -818,9 +816,7 @@ object Unidoc {
       .map(_.filterNot(_.getCanonicalPath.contains("org/apache/spark/examples")))
       .map(_.filterNot(_.getCanonicalPath.contains("org/apache/spark/memory")))
       .map(_.filterNot(_.getCanonicalPath.contains("org/apache/spark/network")))
-      .map(_.filterNot(f =>
-        f.getCanonicalPath.contains("org/apache/spark/shuffle") &&
-        !f.getCanonicalPath.contains("org/apache/spark/shuffle/api")))
+      .map(_.filterNot(_.getCanonicalPath.contains("org/apache/spark/shuffle")))
       .map(_.filterNot(_.getCanonicalPath.contains("org/apache/spark/executor")))
       .map(_.filterNot(_.getCanonicalPath.contains("org/apache/spark/unsafe")))
       .map(_.filterNot(_.getCanonicalPath.contains("python")))

@@ -18,7 +18,6 @@
 package org.apache.spark.sql.execution.ui
 
 import java.net.URLEncoder
-import java.nio.charset.StandardCharsets.UTF_8
 import javax.servlet.http.HttpServletRequest
 
 import scala.collection.JavaConverters._
@@ -250,7 +249,7 @@ private[ui] class ExecutionPagedTable(
       "table-head-clickable table-cell-width-limited"
 
   override def pageLink(page: Int): String = {
-    val encodedSortColumn = URLEncoder.encode(sortColumn, UTF_8.name())
+    val encodedSortColumn = URLEncoder.encode(sortColumn, "UTF-8")
     parameterPath +
       s"&$pageNumberFormField=$page" +
       s"&$executionTag.sort=$encodedSortColumn" +
@@ -264,7 +263,7 @@ private[ui] class ExecutionPagedTable(
   override def pageNumberFormField: String = s"$executionTag.page"
 
   override def goButtonFormPath: String = {
-    val encodedSortColumn = URLEncoder.encode(sortColumn, UTF_8.name())
+    val encodedSortColumn = URLEncoder.encode(sortColumn, "UTF-8")
     s"$parameterPath&$executionTag.sort=$encodedSortColumn&$executionTag.desc=$desc#$tableHeaderId"
   }
 
@@ -301,7 +300,7 @@ private[ui] class ExecutionPagedTable(
         if (header == sortColumn) {
           val headerLink = Unparsed(
             parameterPath +
-              s"&$executionTag.sort=${URLEncoder.encode(header, UTF_8.name())}" +
+              s"&$executionTag.sort=${URLEncoder.encode(header, "UTF-8")}" +
               s"&$executionTag.desc=${!desc}" +
               s"&$executionTag.pageSize=$pageSize" +
               s"#$tableHeaderId")
@@ -318,7 +317,7 @@ private[ui] class ExecutionPagedTable(
           if (sortable) {
             val headerLink = Unparsed(
               parameterPath +
-                s"&$executionTag.sort=${URLEncoder.encode(header, UTF_8.name())}" +
+                s"&$executionTag.sort=${URLEncoder.encode(header, "UTF-8")}" +
                 s"&$executionTag.pageSize=$pageSize" +
                 s"#$tableHeaderId")
 

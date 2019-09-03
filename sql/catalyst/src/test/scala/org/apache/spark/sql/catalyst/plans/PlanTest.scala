@@ -81,15 +81,6 @@ trait PlanTestBase extends PredicateHelper with SQLHelper { self: Suite =>
         ae.copy(resultId = ExprId(0))
       case lv: NamedLambdaVariable =>
         lv.copy(exprId = ExprId(0), value = null)
-      case udf: PythonUDF =>
-        udf.copy(resultId = ExprId(0))
-    }
-  }
-
-  private def rewriteNameFromAttrNullability(plan: LogicalPlan): LogicalPlan = {
-    plan.transformAllExpressions {
-      case a @ AttributeReference(name, _, false, _) =>
-        a.copy(name = s"*$name")(exprId = a.exprId, qualifier = a.qualifier)
     }
   }
 
@@ -147,9 +138,7 @@ trait PlanTestBase extends PredicateHelper with SQLHelper { self: Suite =>
       fail(
         s"""
           |== FAIL: Plans do not match ===
-          |${sideBySide(
-            rewriteNameFromAttrNullability(normalized1).treeString,
-            rewriteNameFromAttrNullability(normalized2).treeString).mkString("\n")}
+          |${sideBySide(normalized1.treeString, normalized2.treeString).mkString("\n")}
          """.stripMargin)
     }
   }
@@ -167,9 +156,7 @@ trait PlanTestBase extends PredicateHelper with SQLHelper { self: Suite =>
       fail(
         s"""
            |== FAIL: Plans do not match ===
-           |${sideBySide(
-             rewriteNameFromAttrNullability(normalized1).treeString,
-             rewriteNameFromAttrNullability(normalized2).treeString).mkString("\n")}
+           |${sideBySide(normalized1.treeString, normalized2.treeString).mkString("\n")}
          """.stripMargin)
     }
   }

@@ -26,7 +26,6 @@ import scala.reflect.ClassTag
 
 import org.apache.hadoop.conf.{Configurable, Configuration}
 import org.apache.hadoop.io.Writable
-import org.apache.hadoop.io.compress.CompressionCodecFactory
 import org.apache.hadoop.mapred.JobConf
 import org.apache.hadoop.mapreduce._
 import org.apache.hadoop.mapreduce.lib.input.{CombineFileSplit, FileInputFormat, FileSplit, InvalidInputException}
@@ -39,7 +38,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config._
 import org.apache.spark.rdd.NewHadoopRDD.NewHadoopMapPartitionsWithSplitRDD
 import org.apache.spark.storage.StorageLevel
-import org.apache.spark.util.{SerializableConfiguration, ShutdownHookManager, Utils}
+import org.apache.spark.util.{SerializableConfiguration, ShutdownHookManager}
 
 private[spark] class NewHadoopPartition(
     rddId: Int,
@@ -134,22 +133,6 @@ class NewHadoopRDD[K, V](
       } else {
         allRowSplits
       }
-
-      if (rawSplits.length == 1 && rawSplits(0).isInstanceOf[FileSplit]) {
-        val fileSplit = rawSplits(0).asInstanceOf[FileSplit]
-        val path = fileSplit.getPath
-        if (fileSplit.getLength > conf.get(IO_WARNING_LARGEFILETHRESHOLD)) {
-          val codecFactory = new CompressionCodecFactory(_conf)
-          if (Utils.isFileSplittable(path, codecFactory)) {
-            logWarning(s"Loading one large file ${path.toString} with only one partition, " +
-              s"we can increase partition numbers for improving performance.")
-          } else {
-            logWarning(s"Loading one large unsplittable file ${path.toString} with only one " +
-              s"partition, because the file is compressed by unsplittable compression codec.")
-          }
-        }
-      }
-
       val result = new Array[Partition](rawSplits.size)
       for (i <- 0 until rawSplits.size) {
         result(i) =

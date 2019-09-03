@@ -20,11 +20,11 @@ import scala.collection.JavaConverters._
 
 import org.apache.parquet.hadoop.ParquetOutputFormat
 
-import org.apache.spark.sql.test.SharedSparkSession
+import org.apache.spark.sql.test.SharedSQLContext
 
 // TODO: this needs a lot more testing but it's currently not easy to test with the parquet
 // writer abstractions. Revisit.
-class ParquetEncodingSuite extends ParquetCompatibilityTest with SharedSparkSession {
+class ParquetEncodingSuite extends ParquetCompatibilityTest with SharedSQLContext {
   import testImplicits._
 
   val ROW = ((1).toByte, 2, 3L, "abc")

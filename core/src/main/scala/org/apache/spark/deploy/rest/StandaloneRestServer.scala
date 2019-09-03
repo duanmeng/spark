@@ -25,7 +25,6 @@ import org.apache.spark.deploy.{Command, DeployMessages, DriverDescription}
 import org.apache.spark.deploy.ClientArguments._
 import org.apache.spark.internal.config
 import org.apache.spark.launcher.SparkLauncher
-import org.apache.spark.resource.ResourceUtils
 import org.apache.spark.rpc.RpcEndpointRef
 import org.apache.spark.util.Utils
 
@@ -175,11 +174,8 @@ private[rest] class StandaloneSubmitRequestServlet(
     val actualDriverMemory = driverMemory.map(Utils.memoryStringToMb).getOrElse(DEFAULT_MEMORY)
     val actualDriverCores = driverCores.map(_.toInt).getOrElse(DEFAULT_CORES)
     val actualSuperviseDriver = superviseDriver.map(_.toBoolean).getOrElse(DEFAULT_SUPERVISE)
-    val driverResourceReqs = ResourceUtils.parseResourceRequirements(conf,
-      config.SPARK_DRIVER_PREFIX)
     new DriverDescription(
-      appResource, actualDriverMemory, actualDriverCores, actualSuperviseDriver, command,
-      driverResourceReqs)
+      appResource, actualDriverMemory, actualDriverCores, actualSuperviseDriver, command)
   }
 
   /**

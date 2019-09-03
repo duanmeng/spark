@@ -20,7 +20,6 @@ package org.apache.spark.repl
 import java.io.{ByteArrayOutputStream, FileNotFoundException, FilterInputStream, InputStream}
 import java.net.{URI, URL, URLEncoder}
 import java.nio.channels.Channels
-import java.nio.charset.StandardCharsets.UTF_8
 
 import scala.util.control.NonFatal
 
@@ -235,7 +234,7 @@ class ExecutorClassLoader(
    * URL-encode a string, preserving only slashes
    */
   def urlEncode(str: String): String = {
-    str.split('/').map(part => URLEncoder.encode(part, UTF_8.name())).mkString("/")
+    str.split('/').map(part => URLEncoder.encode(part, "UTF-8")).mkString("/")
   }
 }
 

@@ -22,16 +22,18 @@ import java.util.concurrent.TimeUnit._
 import java.util.concurrent.atomic.AtomicReference
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 import scala.reflect.runtime.universe.TypeTag
 import scala.util.control.NonFatal
 
 import org.apache.spark.{SPARK_VERSION, SparkConf, SparkContext, TaskContext}
-import org.apache.spark.annotation.{DeveloperApi, Experimental, Stable, Unstable}
+import org.apache.spark.annotation.{DeveloperApi, Evolving, Experimental, Stable, Unstable}
 import org.apache.spark.api.java.JavaRDD
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.scheduler.{SparkListener, SparkListenerApplicationEnd}
 import org.apache.spark.sql.catalog.Catalog
+import org.apache.spark.sql.catalog.v2.{CatalogPlugin, Catalogs}
 import org.apache.spark.sql.catalyst._
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.encoders._
@@ -180,11 +182,14 @@ class SparkSession private(
   @transient lazy val conf: RuntimeConfig = new RuntimeConfig(sessionState.conf)
 
   /**
+   * :: Experimental ::
    * An interface to register custom [[org.apache.spark.sql.util.QueryExecutionListener]]s
    * that listen for execution metrics.
    *
    * @since 2.0.0
    */
+  @Experimental
+  @Evolving
   def listenerManager: ExecutionListenerManager = sessionState.listenerManager
 
   /**
@@ -222,11 +227,13 @@ class SparkSession private(
   def udf: UDFRegistration = sessionState.udfRegistration
 
   /**
+   * :: Experimental ::
    * Returns a `StreamingQueryManager` that allows managing all the
    * `StreamingQuery`s active on `this`.
    *
    * @since 2.0.0
    */
+  @Experimental
   @Unstable
   def streams: StreamingQueryManager = sessionState.streamingQueryManager
 
@@ -279,20 +286,26 @@ class SparkSession private(
   }
 
   /**
+   * :: Experimental ::
    * Creates a new [[Dataset]] of type T containing zero elements.
    *
    * @return 2.0.0
    */
+  @Experimental
+  @Evolving
   def emptyDataset[T: Encoder]: Dataset[T] = {
     val encoder = implicitly[Encoder[T]]
     new Dataset(self, LocalRelation(encoder.schema.toAttributes), encoder)
   }
 
   /**
+   * :: Experimental ::
    * Creates a `DataFrame` from an RDD of Product (e.g. case classes, tuples).
    *
    * @since 2.0.0
    */
+  @Experimental
+  @Evolving
   def createDataFrame[A <: Product : TypeTag](rdd: RDD[A]): DataFrame = {
     SparkSession.setActiveSession(this)
     val encoder = Encoders.product[A]
@@ -300,10 +313,13 @@ class SparkSession private(
   }
 
   /**
+   * :: Experimental ::
    * Creates a `DataFrame` from a local Seq of Product.
    *
    * @since 2.0.0
    */
+  @Experimental
+  @Evolving
   def createDataFrame[A <: Product : TypeTag](data: Seq[A]): DataFrame = {
     SparkSession.setActiveSession(this)
     val schema = ScalaReflection.schemaFor[A].dataType.asInstanceOf[StructType]
@@ -343,6 +359,7 @@ class SparkSession private(
    * @since 2.0.0
    */
   @DeveloperApi
+  @Evolving
   def createDataFrame(rowRDD: RDD[Row], schema: StructType): DataFrame = {
     // TODO: use MutableProjection when rowRDD is another DataFrame and the applied
     // schema differs from the existing schema on any field data type.
@@ -360,6 +377,7 @@ class SparkSession private(
    * @since 2.0.0
    */
   @DeveloperApi
+  @Evolving
   def createDataFrame(rowRDD: JavaRDD[Row], schema: StructType): DataFrame = {
     createDataFrame(rowRDD.rdd, schema)
   }
@@ -373,6 +391,7 @@ class SparkSession private(
    * @since 2.0.0
    */
   @DeveloperApi
+  @Evolving
   def createDataFrame(rows: java.util.List[Row], schema: StructType): DataFrame = {
     Dataset.ofRows(self, LocalRelation.fromExternalRows(schema.toAttributes, rows.asScala))
   }
@@ -434,6 +453,7 @@ class SparkSession private(
    * ------------------------------- */
 
   /**
+   * :: Experimental ::
    * Creates a [[Dataset]] from a local Seq of data of a given type. This method requires an
    * encoder (to convert a JVM object of type `T` to and from the internal Spark SQL representation)
    * that is generally created automatically through implicits from a `SparkSession`, or can be
@@ -460,6 +480,8 @@ class SparkSession private(
    *
    * @since 2.0.0
    */
+  @Experimental
+  @Evolving
   def createDataset[T : Encoder](data: Seq[T]): Dataset[T] = {
     val enc = encoderFor[T]
     val attributes = enc.schema.toAttributes
@@ -469,6 +491,7 @@ class SparkSession private(
   }
 
   /**
+   * :: Experimental ::
    * Creates a [[Dataset]] from an RDD of a given type. This method requires an
    * encoder (to convert a JVM object of type `T` to and from the internal Spark SQL representation)
    * that is generally created automatically through implicits from a `SparkSession`, or can be
@@ -476,11 +499,14 @@ class SparkSession private(
    *
    * @since 2.0.0
    */
+  @Experimental
+  @Evolving
   def createDataset[T : Encoder](data: RDD[T]): Dataset[T] = {
     Dataset[T](self, ExternalRDD(data, self))
   }
 
   /**
+   * :: Experimental ::
    * Creates a [[Dataset]] from a `java.util.List` of a given type. This method requires an
    * encoder (to convert a JVM object of type `T` to and from the internal Spark SQL representation)
    * that is generally created automatically through implicits from a `SparkSession`, or can be
@@ -495,45 +521,59 @@ class SparkSession private(
    *
    * @since 2.0.0
    */
+  @Experimental
+  @Evolving
   def createDataset[T : Encoder](data: java.util.List[T]): Dataset[T] = {
     createDataset(data.asScala)
   }
 
   /**
+   * :: Experimental ::
    * Creates a [[Dataset]] with a single `LongType` column named `id`, containing elements
    * in a range from 0 to `end` (exclusive) with step value 1.
    *
    * @since 2.0.0
    */
+  @Experimental
+  @Evolving
   def range(end: Long): Dataset[java.lang.Long] = range(0, end)
 
   /**
+   * :: Experimental ::
    * Creates a [[Dataset]] with a single `LongType` column named `id`, containing elements
    * in a range from `start` to `end` (exclusive) with step value 1.
    *
    * @since 2.0.0
    */
+  @Experimental
+  @Evolving
   def range(start: Long, end: Long): Dataset[java.lang.Long] = {
     range(start, end, step = 1, numPartitions = sparkContext.defaultParallelism)
   }
 
   /**
+   * :: Experimental ::
    * Creates a [[Dataset]] with a single `LongType` column named `id`, containing elements
    * in a range from `start` to `end` (exclusive) with a step value.
    *
    * @since 2.0.0
    */
+  @Experimental
+  @Evolving
   def range(start: Long, end: Long, step: Long): Dataset[java.lang.Long] = {
     range(start, end, step, numPartitions = sparkContext.defaultParallelism)
   }
 
   /**
+   * :: Experimental ::
    * Creates a [[Dataset]] with a single `LongType` column named `id`, containing elements
    * in a range from `start` to `end` (exclusive) with a step value, with partition number
    * specified.
    *
    * @since 2.0.0
    */
+  @Experimental
+  @Evolving
   def range(start: Long, end: Long, step: Long, numPartitions: Int): Dataset[java.lang.Long] = {
     new Dataset(self, Range(start, end, step, numPartitions), Encoders.LONG)
   }
@@ -566,6 +606,12 @@ class SparkSession private(
    * @since 2.0.0
    */
   @transient lazy val catalog: Catalog = new CatalogImpl(self)
+
+  @transient private lazy val catalogs = new mutable.HashMap[String, CatalogPlugin]()
+
+  private[sql] def catalog(name: String): CatalogPlugin = synchronized {
+    catalogs.getOrElseUpdate(name, Catalogs.load(name, sessionState.conf))
+  }
 
   /**
    * Returns the specified table/view as a `DataFrame`.
@@ -628,6 +674,7 @@ class SparkSession private(
    *
    * @since 2.0.0
    */
+  @Evolving
   def readStream: DataStreamReader = new DataStreamReader(self)
 
   /**
@@ -649,6 +696,7 @@ class SparkSession private(
   // scalastyle:off
   // Disable style checker so "implicits" object can start with lowercase i
   /**
+   * :: Experimental ::
    * (Scala-specific) Implicit methods available in Scala for converting
    * common Scala objects into `DataFrame`s.
    *
@@ -659,6 +707,8 @@ class SparkSession private(
    *
    * @since 2.0.0
    */
+  @Experimental
+  @Evolving
   object implicits extends SQLImplicits with Serializable {
     protected override def _sqlContext: SQLContext = SparkSession.this.sqlContext
   }

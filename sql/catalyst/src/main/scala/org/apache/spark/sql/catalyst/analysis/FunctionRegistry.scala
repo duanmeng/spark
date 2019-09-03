@@ -216,7 +216,6 @@ object FunctionRegistry {
     expression[PosExplode]("posexplode"),
     expressionGeneratorOuter[PosExplode]("posexplode_outer"),
     expression[Rand]("rand"),
-    expression[Rand]("random"),
     expression[Randn]("randn"),
     expression[Stack]("stack"),
     expression[CaseWhen]("when"),
@@ -415,8 +414,6 @@ object FunctionRegistry {
     expression[WeekOfYear]("weekofyear"),
     expression[Year]("year"),
     expression[TimeWindow]("window"),
-    expression[MakeDate]("make_date"),
-    expression[MakeTimestamp]("make_timestamp"),
 
     // collection functions
     expression[CreateArray]("array"),
@@ -456,7 +453,6 @@ object FunctionRegistry {
     expression[MapFilter]("map_filter"),
     expression[ArrayFilter]("filter"),
     expression[ArrayExists]("exists"),
-    expression[ArrayForAll]("forall"),
     expression[ArrayAggregate]("aggregate"),
     expression[TransformValues]("transform_values"),
     expression[TransformKeys]("transform_keys"),
@@ -591,19 +587,14 @@ object FunctionRegistry {
           val validParametersCount = constructors
             .filter(_.getParameterTypes.forall(_ == classOf[Expression]))
             .map(_.getParameterCount).distinct.sorted
-          val invalidArgumentsMsg = if (validParametersCount.length == 0) {
-            s"Invalid arguments for function $name"
+          val expectedNumberOfParameters = if (validParametersCount.length == 1) {
+            validParametersCount.head.toString
           } else {
-            val expectedNumberOfParameters = if (validParametersCount.length == 1) {
-              validParametersCount.head.toString
-            } else {
-              validParametersCount.init.mkString("one of ", ", ", " and ") +
-                validParametersCount.last
-            }
-            s"Invalid number of arguments for function $name. " +
-              s"Expected: $expectedNumberOfParameters; Found: ${params.length}"
+            validParametersCount.init.mkString("one of ", ", ", " and ") +
+              validParametersCount.last
           }
-          throw new AnalysisException(invalidArgumentsMsg)
+          throw new AnalysisException(s"Invalid number of arguments for function $name. " +
+            s"Expected: $expectedNumberOfParameters; Found: ${params.length}")
         }
         Try(f.newInstance(expressions : _*).asInstanceOf[Expression]) match {
           case Success(e) => e

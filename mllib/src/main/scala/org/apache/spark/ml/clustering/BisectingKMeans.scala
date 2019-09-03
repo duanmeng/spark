@@ -19,7 +19,7 @@ package org.apache.spark.ml.clustering
 
 import org.apache.hadoop.fs.Path
 
-import org.apache.spark.annotation.Since
+import org.apache.spark.annotation.{Experimental, Since}
 import org.apache.spark.ml.{Estimator, Model}
 import org.apache.spark.ml.linalg.Vector
 import org.apache.spark.ml.param._
@@ -301,6 +301,7 @@ object BisectingKMeans extends DefaultParamsReadable[BisectingKMeans] {
 
 
 /**
+ * :: Experimental ::
  * Summary of BisectingKMeans.
  *
  * @param predictions  `DataFrame` produced by `BisectingKMeansModel.transform()`.
@@ -312,6 +313,7 @@ object BisectingKMeans extends DefaultParamsReadable[BisectingKMeans] {
  *                     dataset. This is equivalent to sklearn's inertia.
  */
 @Since("2.1.0")
+@Experimental
 class BisectingKMeansSummary private[clustering] (
     predictions: DataFrame,
     predictionCol: String,

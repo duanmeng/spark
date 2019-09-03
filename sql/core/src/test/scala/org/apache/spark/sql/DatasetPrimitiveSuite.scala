@@ -22,7 +22,7 @@ import scala.collection.immutable.Queue
 import scala.collection.mutable.{LinkedHashMap => LHMap}
 import scala.collection.mutable.ArrayBuffer
 
-import org.apache.spark.sql.test.SharedSparkSession
+import org.apache.spark.sql.test.SharedSQLContext
 
 case class IntClass(value: Int)
 
@@ -47,7 +47,7 @@ package object packageobject {
   case class PackageClass(value: Int)
 }
 
-class DatasetPrimitiveSuite extends QueryTest with SharedSparkSession {
+class DatasetPrimitiveSuite extends QueryTest with SharedSQLContext {
   import testImplicits._
 
   test("toDS") {

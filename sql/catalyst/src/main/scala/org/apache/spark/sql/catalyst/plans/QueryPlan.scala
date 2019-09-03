@@ -19,8 +19,7 @@ package org.apache.spark.sql.catalyst.plans
 
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.trees.{CurrentOrigin, TreeNode, TreeNodeTag}
-import org.apache.spark.sql.catalyst.util.StringUtils.PlanStringConcat
+import org.apache.spark.sql.catalyst.trees.{CurrentOrigin, TreeNode}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{DataType, StructType}
 
@@ -180,20 +179,6 @@ abstract class QueryPlan[PlanType <: QueryPlan[PlanType]] extends TreeNode[PlanT
 
   override def verboseString(maxFields: Int): String = simpleString(maxFields)
 
-  override def simpleStringWithNodeId(): String = {
-    val operatorId = getTagValue(QueryPlan.OP_ID_TAG).map(id => s"$id").getOrElse("unknown")
-    s"$nodeName ($operatorId)".trim
-  }
-
-  def verboseStringWithOperatorId(): String = {
-    val codegenIdStr =
-      getTagValue(QueryPlan.CODEGEN_ID_TAG).map(id => s"[codegen id : $id]").getOrElse("")
-    val operatorId = getTagValue(QueryPlan.OP_ID_TAG).map(id => s"$id").getOrElse("unknown")
-    s"""
-       |($operatorId) $nodeName $codegenIdStr
-     """.stripMargin
-  }
-
   /**
    * All the subqueries of current plan.
    */
@@ -203,23 +188,7 @@ abstract class QueryPlan[PlanType <: QueryPlan[PlanType]] extends TreeNode[PlanT
     })
   }
 
-  /**
-   * Returns a sequence containing the result of applying a partial function to all elements in this
-   * plan, also considering all the plans in its (nested) subqueries
-   */
-  def collectInPlanAndSubqueries[B](f: PartialFunction[PlanType, B]): Seq[B] =
-    (this +: subqueriesAll).flatMap(_.collect(f))
-
-  /**
-   * Returns a sequence containing the subqueries in this plan, also including the (nested)
-   * subquries in its children
-   */
-  def subqueriesAll: Seq[PlanType] = {
-    val subqueries = this.flatMap(_.subqueries)
-    subqueries ++ subqueries.flatMap(_.subqueriesAll)
-  }
-
-  override def innerChildren: Seq[QueryPlan[_]] = subqueries
+  override protected def innerChildren: Seq[QueryPlan[_]] = subqueries
 
   /**
    * A private mutable variable to indicate whether this plan is the result of canonicalization.
@@ -264,7 +233,7 @@ abstract class QueryPlan[PlanType <: QueryPlan[PlanType]] extends TreeNode[PlanT
         // As the root of the expression, Alias will always take an arbitrary exprId, we need to
         // normalize that for equality testing, by assigning expr id from 0 incrementally. The
         // alias name doesn't matter and should be erased.
-        val normalizedChild = QueryPlan.normalizeExpressions(a.child, allAttributes)
+        val normalizedChild = QueryPlan.normalizeExprId(a.child, allAttributes)
         Alias(normalizedChild, "")(ExprId(id), a.qualifier)
 
       case ar: AttributeReference if allAttributes.indexOf(ar.exprId) == -1 =>
@@ -273,7 +242,7 @@ abstract class QueryPlan[PlanType <: QueryPlan[PlanType]] extends TreeNode[PlanT
         id += 1
         ar.withExprId(ExprId(id)).canonicalized
 
-      case other => QueryPlan.normalizeExpressions(other, allAttributes)
+      case other => QueryPlan.normalizeExprId(other, allAttributes)
     }.withNewChildren(canonicalizedChildren)
   }
 
@@ -304,30 +273,21 @@ abstract class QueryPlan[PlanType <: QueryPlan[PlanType]] extends TreeNode[PlanT
 }
 
 object QueryPlan extends PredicateHelper {
-  val OP_ID_TAG = TreeNodeTag[Int]("operatorId")
-  val CODEGEN_ID_TAG = new TreeNodeTag[Int]("wholeStageCodegenId")
-
   /**
    * Normalize the exprIds in the given expression, by updating the exprId in `AttributeReference`
    * with its referenced ordinal from input attributes. It's similar to `BindReferences` but we
    * do not use `BindReferences` here as the plan may take the expression as a parameter with type
    * `Attribute`, and replace it with `BoundReference` will cause error.
    */
-  def normalizeExpressions[T <: Expression](e: T, input: AttributeSeq): T = {
+  def normalizeExprId[T <: Expression](e: T, input: AttributeSeq): T = {
     e.transformUp {
-      case s: PlanExpression[QueryPlan[_] @unchecked] =>
-        // Normalize the outer references in the subquery plan.
-        val normalizedPlan = s.plan.transformAllExpressions {
-          case OuterReference(r) => OuterReference(QueryPlan.normalizeExpressions(r, input))
-        }
-        s.withNewPlan(normalizedPlan)
-
+      case s: PlanExpression[_] => s.canonicalize(input)
       case ar: AttributeReference =>
         val ordinal = input.indexOf(ar.exprId)
         if (ordinal == -1) {
           ar
         } else {
-          ar.withExprId(ExprId(ordinal))
+          ar.withExprId(ExprId(ordinal)).canonicalized
         }
     }.canonicalized.asInstanceOf[T]
   }
@@ -338,7 +298,7 @@ object QueryPlan extends PredicateHelper {
    */
   def normalizePredicates(predicates: Seq[Expression], output: AttributeSeq): Seq[Expression] = {
     if (predicates.nonEmpty) {
-      val normalized = normalizeExpressions(predicates.reduce(And), output)
+      val normalized = normalizeExprId(predicates.reduce(And), output)
       splitConjunctivePredicates(normalized)
     } else {
       Nil
@@ -353,10 +313,9 @@ object QueryPlan extends PredicateHelper {
       append: String => Unit,
       verbose: Boolean,
       addSuffix: Boolean,
-      maxFields: Int = SQLConf.get.maxToStringFields,
-      printOperatorId: Boolean = false): Unit = {
+      maxFields: Int = SQLConf.get.maxToStringFields): Unit = {
     try {
-      plan.treeString(append, verbose, addSuffix, maxFields, printOperatorId)
+      plan.treeString(append, verbose, addSuffix, maxFields)
     } catch {
       case e: AnalysisException => append(e.toString)
     }

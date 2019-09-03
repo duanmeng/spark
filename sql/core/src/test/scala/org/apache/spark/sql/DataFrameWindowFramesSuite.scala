@@ -21,12 +21,12 @@ import java.sql.Date
 
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.test.SharedSparkSession
+import org.apache.spark.sql.test.SharedSQLContext
 
 /**
  * Window frame testing for DataFrame API.
  */
-class DataFrameWindowFramesSuite extends QueryTest with SharedSparkSession {
+class DataFrameWindowFramesSuite extends QueryTest with SharedSQLContext {
   import testImplicits._
 
   test("lead/lag with empty data frame") {

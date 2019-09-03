@@ -33,7 +33,7 @@ import org.scalatest.mockito.MockitoSugar
 import org.apache.spark.{LocalSparkContext, SecurityManager, SparkConf, SparkContext, SparkFunSuite}
 import org.apache.spark.deploy.mesos.{config => mesosConfig}
 import org.apache.spark.internal.config._
-import org.apache.spark.network.shuffle.mesos.MesosExternalBlockStoreClient
+import org.apache.spark.network.shuffle.mesos.MesosExternalShuffleClient
 import org.apache.spark.rpc.{RpcAddress, RpcEndpointRef}
 import org.apache.spark.scheduler.TaskSchedulerImpl
 import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.{RegisterExecutor}
@@ -49,7 +49,7 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
   private var driver: SchedulerDriver = _
   private var taskScheduler: TaskSchedulerImpl = _
   private var backend: MesosCoarseGrainedSchedulerBackend = _
-  private var externalShuffleClient: MesosExternalBlockStoreClient = _
+  private var externalShuffleClient: MesosExternalShuffleClient = _
   private var driverEndpoint: RpcEndpointRef = _
   @volatile private var stopCalled = false
 
@@ -587,30 +587,6 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
     assert(networkInfos.get(0).getLabels.getLabels(1).getValue == "val2")
   }
 
-  test("SPARK-28778 '--hostname' shouldn't be set for executor when virtual network is enabled") {
-    setBackend()
-    val (mem, cpu) = (backend.executorMemory(sc), 4)
-    val offer = createOffer("o1", "s1", mem, cpu)
-
-    assert(backend.createCommand(offer, cpu, "test").getValue.contains("--hostname"))
-    sc.stop()
-
-    setBackend(Map("spark.executor.uri" -> "hdfs://test/executor.jar"))
-    assert(backend.createCommand(offer, cpu, "test").getValue.contains("--hostname"))
-    sc.stop()
-
-    setBackend(Map("spark.mesos.network.name" -> "test"))
-    assert(!backend.createCommand(offer, cpu, "test").getValue.contains("--hostname"))
-    sc.stop()
-
-    setBackend(Map(
-      "spark.mesos.network.name" -> "test",
-      "spark.executor.uri" -> "hdfs://test/executor.jar"
-    ))
-    assert(!backend.createCommand(offer, cpu, "test").getValue.contains("--hostname"))
-    sc.stop()
-  }
-
   test("supports spark.scheduler.minRegisteredResourcesRatio") {
     val expectedCores = 1
     setBackend(Map(
@@ -762,7 +738,7 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
   private def createSchedulerBackend(
       taskScheduler: TaskSchedulerImpl,
       driver: SchedulerDriver,
-      shuffleClient: MesosExternalBlockStoreClient) = {
+      shuffleClient: MesosExternalShuffleClient) = {
     val securityManager = mock[SecurityManager]
 
     val backend = new MesosCoarseGrainedSchedulerBackend(
@@ -778,7 +754,7 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
           failoverTimeout: Option[Double] = None,
           frameworkId: Option[String] = None): SchedulerDriver = driver
 
-      override protected def getShuffleClient(): MesosExternalBlockStoreClient = shuffleClient
+      override protected def getShuffleClient(): MesosExternalShuffleClient = shuffleClient
 
       // override to avoid race condition with the driver thread on `mesosDriver`
       override def startScheduler(newDriver: SchedulerDriver): Unit = {}
@@ -820,7 +796,7 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
     when(taskScheduler.nodeBlacklist).thenReturn(Set[String]())
     when(taskScheduler.sc).thenReturn(sc)
 
-    externalShuffleClient = mock[MesosExternalBlockStoreClient]
+    externalShuffleClient = mock[MesosExternalShuffleClient]
 
     backend = createSchedulerBackend(taskScheduler, driver, externalShuffleClient)
   }

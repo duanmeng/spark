@@ -19,9 +19,9 @@ package org.apache.spark.sql.execution.datasources
 
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SaveMode
-import org.apache.spark.sql.test.SharedSparkSession
+import org.apache.spark.sql.test.SharedSQLContext
 
-class SaveIntoDataSourceCommandSuite extends SharedSparkSession {
+class SaveIntoDataSourceCommandSuite extends SharedSQLContext {
 
   test("simpleString is redacted") {
     val URL = "connection.url"

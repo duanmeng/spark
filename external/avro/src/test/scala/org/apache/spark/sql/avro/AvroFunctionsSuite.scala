@@ -30,9 +30,9 @@ import org.apache.spark.sql.{QueryTest, Row}
 import org.apache.spark.sql.execution.LocalTableScanExec
 import org.apache.spark.sql.functions.{col, struct}
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.test.SharedSparkSession
+import org.apache.spark.sql.test.{SharedSQLContext, SQLTestUtils}
 
-class AvroFunctionsSuite extends QueryTest with SharedSparkSession {
+class AvroFunctionsSuite extends QueryTest with SharedSQLContext with SQLTestUtils {
   import testImplicits._
 
   test("roundtrip in to_avro and from_avro - int and string") {

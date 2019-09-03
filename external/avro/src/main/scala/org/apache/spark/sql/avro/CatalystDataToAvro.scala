@@ -19,7 +19,6 @@ package org.apache.spark.sql.avro
 
 import java.io.ByteArrayOutputStream
 
-import org.apache.avro.Schema
 import org.apache.avro.generic.GenericDatumWriter
 import org.apache.avro.io.{BinaryEncoder, EncoderFactory}
 
@@ -27,16 +26,12 @@ import org.apache.spark.sql.catalyst.expressions.{Expression, UnaryExpression}
 import org.apache.spark.sql.catalyst.expressions.codegen.{CodegenContext, ExprCode}
 import org.apache.spark.sql.types.{BinaryType, DataType}
 
-case class CatalystDataToAvro(
-    child: Expression,
-    jsonFormatSchema: Option[String]) extends UnaryExpression {
+case class CatalystDataToAvro(child: Expression) extends UnaryExpression {
 
   override def dataType: DataType = BinaryType
 
   @transient private lazy val avroType =
-    jsonFormatSchema
-      .map(new Schema.Parser().parse)
-      .getOrElse(SchemaConverters.toAvroType(child.dataType, child.nullable))
+    SchemaConverters.toAvroType(child.dataType, child.nullable)
 
   @transient private lazy val serializer =
     new AvroSerializer(child.dataType, avroType, child.nullable)

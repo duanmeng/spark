@@ -34,6 +34,7 @@ import org.apache.hadoop.mapreduce.{Job => NewAPIHadoopJob, OutputFormat => NewO
 
 import org.apache.spark._
 import org.apache.spark.Partitioner.defaultPartitioner
+import org.apache.spark.annotation.Experimental
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config.SPECULATION_ENABLED
 import org.apache.spark.internal.io._
@@ -51,6 +52,7 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
   extends Logging with Serializable {
 
   /**
+   * :: Experimental ::
    * Generic function to combine the elements for each key using a custom set of aggregation
    * functions. Turns an RDD[(K, V)] into a result of type RDD[(K, C)], for a "combined type" C
    *
@@ -66,6 +68,7 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
    * @note V and C can be different -- for example, one might group an RDD of type
    * (Int, Int) into an RDD of type (Int, Seq[Int]).
    */
+  @Experimental
   def combineByKeyWithClassTag[C](
       createCombiner: V => C,
       mergeValue: (C, V) => C,
@@ -133,8 +136,10 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
   }
 
   /**
+   * :: Experimental ::
    * Simplified version of combineByKeyWithClassTag that hash-partitions the output RDD.
    */
+  @Experimental
   def combineByKeyWithClassTag[C](
       createCombiner: V => C,
       mergeValue: (C, V) => C,
@@ -695,9 +700,11 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
   }
 
   /**
+   * :: Experimental ::
    * Simplified version of combineByKeyWithClassTag that hash-partitions the resulting RDD using the
    * existing partitioner/parallelism level.
    */
+  @Experimental
   def combineByKeyWithClassTag[C](
       createCombiner: V => C,
       mergeValue: (C, V) => C,

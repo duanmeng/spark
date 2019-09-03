@@ -28,9 +28,9 @@ import org.apache.spark.sql.execution.datasources.BucketingUtils
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.StaticSQLConf.CATALOG_IMPLEMENTATION
-import org.apache.spark.sql.test.{SharedSparkSession, SQLTestUtils}
+import org.apache.spark.sql.test.{SharedSQLContext, SQLTestUtils}
 
-class BucketedWriteWithoutHiveSupportSuite extends BucketedWriteSuite with SharedSparkSession {
+class BucketedWriteWithoutHiveSupportSuite extends BucketedWriteSuite with SharedSQLContext {
   protected override def beforeAll(): Unit = {
     super.beforeAll()
     assume(spark.sparkContext.conf.get(CATALOG_IMPLEMENTATION) == "in-memory")

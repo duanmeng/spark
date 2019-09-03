@@ -17,7 +17,6 @@
 
 package org.apache.spark.sql.execution.adaptive
 
-import scala.collection.mutable
 import scala.concurrent.Future
 
 import org.apache.spark.{FutureAction, MapOutputStatistics}
@@ -25,7 +24,6 @@ import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.logical.Statistics
 import org.apache.spark.sql.catalyst.plans.physical.Partitioning
 import org.apache.spark.sql.execution._
@@ -109,18 +107,10 @@ abstract class QueryStageExec extends LeafExecNode {
       verbose: Boolean,
       prefix: String = "",
       addSuffix: Boolean = false,
-      maxFields: Int,
-      printNodeId: Boolean): Unit = {
-    super.generateTreeString(depth,
-      lastChildren,
-      append,
-      verbose,
-      prefix,
-      addSuffix,
-      maxFields,
-      printNodeId)
+      maxFields: Int): Unit = {
+    super.generateTreeString(depth, lastChildren, append, verbose, prefix, addSuffix, maxFields)
     plan.generateTreeString(
-      depth + 1, lastChildren :+ true, append, verbose, "", false, maxFields, printNodeId)
+      depth + 1, lastChildren :+ true, append, verbose, "", false, maxFields)
   }
 }
 

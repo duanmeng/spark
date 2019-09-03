@@ -27,10 +27,10 @@ import org.apache.spark.SparkException
 import org.apache.spark.scheduler.{SparkListener, SparkListenerTaskStart}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.test.SharedSparkSession
+import org.apache.spark.sql.test.SharedSQLContext
 
 
-class DataFrameRangeSuite extends QueryTest with SharedSparkSession with Eventually {
+class DataFrameRangeSuite extends QueryTest with SharedSQLContext with Eventually {
 
   test("SPARK-7150 range api") {
     // numSlice is greater than length
@@ -113,7 +113,11 @@ class DataFrameRangeSuite extends QueryTest with SharedSparkSession with Eventua
     val random = new Random(seed)
 
     def randomBound(): Long = {
-      val n = random.nextLong() % (Long.MaxValue / (100 * MAX_NUM_STEPS))
+      val n = if (random.nextBoolean()) {
+        random.nextLong() % (Long.MaxValue / (100 * MAX_NUM_STEPS))
+      } else {
+        random.nextLong() / 2
+      }
       if (random.nextBoolean()) n else -n
     }
 

@@ -26,8 +26,6 @@ private[spark] trait ExecutorPodsSnapshotsStore {
 
   def stop(): Unit
 
-  def notifySubscribers(): Unit
-
   def updatePod(updatedPod: Pod): Unit
 
   def replaceSnapshot(newSnapshot: Seq[Pod]): Unit

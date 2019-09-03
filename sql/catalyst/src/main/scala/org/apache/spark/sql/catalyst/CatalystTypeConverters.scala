@@ -343,9 +343,6 @@ object CatalystTypeConverters {
 
   private class DecimalConverter(dataType: DecimalType)
     extends CatalystTypeConverter[Any, JavaBigDecimal, Decimal] {
-
-    private val nullOnOverflow = SQLConf.get.decimalOperationsNullOnOverflow
-
     override def toCatalystImpl(scalaValue: Any): Decimal = {
       val decimal = scalaValue match {
         case d: BigDecimal => Decimal(d)
@@ -356,7 +353,7 @@ object CatalystTypeConverters {
           s"The value (${other.toString}) of the type (${other.getClass.getCanonicalName}) "
             + s"cannot be converted to ${dataType.catalogString}")
       }
-      decimal.toPrecision(dataType.precision, dataType.scale, Decimal.ROUND_HALF_UP, nullOnOverflow)
+      decimal.toPrecision(dataType.precision, dataType.scale)
     }
     override def toScala(catalystValue: Decimal): JavaBigDecimal = {
       if (catalystValue == null) null

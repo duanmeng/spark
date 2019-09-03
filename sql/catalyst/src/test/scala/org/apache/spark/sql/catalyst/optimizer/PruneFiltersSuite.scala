@@ -32,7 +32,7 @@ class PruneFiltersSuite extends PlanTest {
     val batches =
       Batch("Subqueries", Once,
         EliminateSubqueryAliases) ::
-      Batch("Filter Pushdown and Pruning", FixedPoint(1),
+      Batch("Filter Pushdown and Pruning", Once,
         CombineFilters,
         PruneFilters,
         PushPredicateThroughNonJoin,

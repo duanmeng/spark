@@ -64,7 +64,6 @@ case class SparkListenerTaskEnd(
     taskType: String,
     reason: TaskEndReason,
     taskInfo: TaskInfo,
-    taskExecutorMetrics: ExecutorMetrics,
     // may be null if the task has failed
     @Nullable taskMetrics: TaskMetrics)
   extends SparkListenerEvent
@@ -163,13 +162,13 @@ case class SparkListenerBlockUpdated(blockUpdatedInfo: BlockUpdatedInfo) extends
  * Periodic updates from executors.
  * @param execId executor id
  * @param accumUpdates sequence of (taskId, stageId, stageAttemptId, accumUpdates)
- * @param executorUpdates executor level per-stage metrics updates
+ * @param executorUpdates executor level metrics updates
  */
 @DeveloperApi
 case class SparkListenerExecutorMetricsUpdate(
     execId: String,
     accumUpdates: Seq[(Long, Int, Int, Seq[AccumulableInfo])],
-    executorUpdates: Map[(Int, Int), ExecutorMetrics] = Map.empty)
+    executorUpdates: Option[ExecutorMetrics] = None)
   extends SparkListenerEvent
 
 /**
@@ -178,7 +177,7 @@ case class SparkListenerExecutorMetricsUpdate(
  * @param execId executor id
  * @param stageId stage id
  * @param stageAttemptId stage attempt
- * @param executorMetrics executor level metrics peak values
+ * @param executorMetrics executor level metrics, indexed by ExecutorMetricType.values
  */
 @DeveloperApi
 case class SparkListenerStageExecutorMetrics(

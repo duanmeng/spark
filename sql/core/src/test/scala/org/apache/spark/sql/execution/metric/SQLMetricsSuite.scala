@@ -22,6 +22,7 @@ import java.io.File
 import scala.reflect.{classTag, ClassTag}
 import scala.util.Random
 
+import org.apache.spark.SparkFunSuite
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.expressions.aggregate.{Final, Partial}
 import org.apache.spark.sql.catalyst.plans.logical.LocalRelation
@@ -29,10 +30,10 @@ import org.apache.spark.sql.execution.{FilterExec, RangeExec, SparkPlan, WholeSt
 import org.apache.spark.sql.execution.aggregate.HashAggregateExec
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.test.SharedSparkSession
+import org.apache.spark.sql.test.SharedSQLContext
 import org.apache.spark.util.{AccumulatorContext, JsonProtocol}
 
-class SQLMetricsSuite extends SharedSparkSession with SQLMetricsTestUtils {
+class SQLMetricsSuite extends SparkFunSuite with SQLMetricsTestUtils with SharedSQLContext {
   import testImplicits._
 
   /**
@@ -437,7 +438,7 @@ class SQLMetricsSuite extends SharedSparkSession with SQLMetricsTestUtils {
     assert(res2 === (150L, 0L, 150L) :: (0L, 150L, 10L) :: Nil)
 
     // TODO: test file source V2 as well when its statistics is correctly computed.
-    withSQLConf(SQLConf.USE_V1_SOURCE_LIST.key -> "parquet") {
+    withSQLConf(SQLConf.USE_V1_SOURCE_READER_LIST.key -> "parquet") {
       withTempDir { tempDir =>
         val dir = new File(tempDir, "pqS").getCanonicalPath
 

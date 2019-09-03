@@ -112,6 +112,14 @@ case class DescribeFunctionCommand(
     schema.toAttributes
   }
 
+  private def replaceFunctionName(usage: String, functionName: String): String = {
+    if (usage == null) {
+      "N/A."
+    } else {
+      usage.replaceAll("_FUNC_", functionName)
+    }
+  }
+
   override def run(sparkSession: SparkSession): Seq[Row] = {
     // Hard code "<>", "!=", "between", and "case" for now as there is no corresponding functions.
     functionName.funcName.toLowerCase(Locale.ROOT) match {
@@ -140,11 +148,11 @@ case class DescribeFunctionCommand(
           val result =
             Row(s"Function: $name") ::
               Row(s"Class: ${info.getClassName}") ::
-              Row(s"Usage: ${info.getUsage}") :: Nil
+              Row(s"Usage: ${replaceFunctionName(info.getUsage, info.getName)}") :: Nil
 
           if (isExtended) {
             result :+
-              Row(s"Extended Usage:${info.getExtended}")
+              Row(s"Extended Usage:${replaceFunctionName(info.getExtended, info.getName)}")
           } else {
             result
           }

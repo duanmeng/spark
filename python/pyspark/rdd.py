@@ -706,7 +706,7 @@ class RDD(object):
             if numPartitions is None:
                 numPartitions = self._defaultReducePartitions()
 
-            memory = self._memory_limit()
+            memory = _parse_memory(self.ctx._conf.get("spark.python.worker.memory", "512m"))
             serializer = self._jrdd_deserializer
 
             def sortPartition(iterator):
@@ -1892,7 +1892,8 @@ class RDD(object):
             # grouped into chunks.
             outputSerializer = self.ctx._unbatched_serializer
 
-            limit = (self._memory_limit() / 2)
+            limit = (_parse_memory(self.ctx._conf.get(
+                "spark.python.worker.memory", "512m")) / 2)
 
             def add_shuffle_key(split, iterator):
 
@@ -2448,6 +2449,8 @@ class RDD(object):
 
     def countApprox(self, timeout, confidence=0.95):
         """
+        .. note:: Experimental
+
         Approximate version of count() that returns a potentially incomplete
         result within a timeout, even if not all tasks have finished.
 
@@ -2461,6 +2464,8 @@ class RDD(object):
 
     def sumApprox(self, timeout, confidence=0.95):
         """
+        .. note:: Experimental
+
         Approximate operation to return the sum within a timeout
         or meet the confidence.
 
@@ -2477,6 +2482,8 @@ class RDD(object):
 
     def meanApprox(self, timeout, confidence=0.95):
         """
+        .. note:: Experimental
+
         Approximate operation to return the mean within a timeout
         or meet the confidence.
 
@@ -2493,6 +2500,8 @@ class RDD(object):
 
     def countApproxDistinct(self, relativeSD=0.05):
         """
+        .. note:: Experimental
+
         Return approximate number of distinct elements in the RDD.
 
         The algorithm used is based on streamlib's implementation of

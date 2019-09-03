@@ -26,7 +26,6 @@ import org.scalatest.BeforeAndAfter
 
 import org.apache.spark._
 import org.apache.spark.LocalSparkContext._
-import org.apache.spark.executor.ExecutorMetrics
 import org.apache.spark.internal.config
 import org.apache.spark.internal.config.Status._
 import org.apache.spark.rdd.RDD
@@ -39,13 +38,13 @@ import org.apache.spark.sql.catalyst.util.quietly
 import org.apache.spark.sql.execution.{LeafExecNode, QueryExecution, SparkPlanInfo, SQLExecution}
 import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics}
 import org.apache.spark.sql.internal.StaticSQLConf.UI_RETAINED_EXECUTIONS
-import org.apache.spark.sql.test.SharedSparkSession
+import org.apache.spark.sql.test.SharedSQLContext
 import org.apache.spark.status.ElementTrackingStore
 import org.apache.spark.util.{AccumulatorMetadata, JsonProtocol, LongAccumulator}
 import org.apache.spark.util.kvstore.InMemoryStore
 
 
-class SQLAppStatusListenerSuite extends SharedSparkSession with JsonTestUtils
+class SQLAppStatusListenerSuite extends SparkFunSuite with SharedSQLContext with JsonTestUtils
   with BeforeAndAfter {
 
   import testImplicits._
@@ -233,7 +232,6 @@ class SQLAppStatusListenerSuite extends SharedSparkSession with JsonTestUtils
       taskType = "",
       reason = null,
       createTaskInfo(0, 0, accums = accumulatorUpdates.mapValues(_ * 100)),
-      new ExecutorMetrics,
       null))
 
     checkAnswer(statusStore.executionMetrics(executionId), accumulatorUpdates.mapValues(_ * 2))
@@ -245,7 +243,6 @@ class SQLAppStatusListenerSuite extends SharedSparkSession with JsonTestUtils
       taskType = "",
       reason = null,
       createTaskInfo(0, 0, accums = accumulatorUpdates.mapValues(_ * 2)),
-      new ExecutorMetrics,
       null))
     listener.onTaskEnd(SparkListenerTaskEnd(
       stageId = 0,
@@ -253,7 +250,6 @@ class SQLAppStatusListenerSuite extends SharedSparkSession with JsonTestUtils
       taskType = "",
       reason = null,
       createTaskInfo(1, 0, accums = accumulatorUpdates.mapValues(_ * 3)),
-      new ExecutorMetrics,
       null))
 
     checkAnswer(statusStore.executionMetrics(executionId), accumulatorUpdates.mapValues(_ * 5))
@@ -276,7 +272,6 @@ class SQLAppStatusListenerSuite extends SharedSparkSession with JsonTestUtils
       taskType = "",
       reason = null,
       createTaskInfo(0, 0, accums = accumulatorUpdates.mapValues(_ * 3)),
-      new ExecutorMetrics,
       null))
     listener.onTaskEnd(SparkListenerTaskEnd(
       stageId = 1,
@@ -284,7 +279,6 @@ class SQLAppStatusListenerSuite extends SharedSparkSession with JsonTestUtils
       taskType = "",
       reason = null,
       createTaskInfo(1, 0, accums = accumulatorUpdates.mapValues(_ * 3)),
-      new ExecutorMetrics,
       null))
 
     checkAnswer(statusStore.executionMetrics(executionId), accumulatorUpdates.mapValues(_ * 11))

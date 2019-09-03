@@ -17,8 +17,6 @@
 
 package org.apache.spark.sql.hive.execution
 
-import java.util.Locale
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.hive.ql.ErrorMsg
@@ -188,15 +186,10 @@ case class InsertIntoHiveTable(
     }
 
     val partitionAttributes = partitionColumnNames.takeRight(numDynamicPartitions).map { name =>
-      val attr = query.resolve(name :: Nil, sparkSession.sessionState.analyzer.resolver).getOrElse {
+      query.resolve(name :: Nil, sparkSession.sessionState.analyzer.resolver).getOrElse {
         throw new AnalysisException(
           s"Unable to resolve $name given [${query.output.map(_.name).mkString(", ")}]")
       }.asInstanceOf[Attribute]
-      // SPARK-28054: Hive metastore is not case preserving and keeps partition columns
-      // with lower cased names. Hive will validate the column names in the partition directories
-      // during `loadDynamicPartitions`. Spark needs to write partition directories with lower-cased
-      // column names in order to make `loadDynamicPartitions` work.
-      attr.withName(name.toLowerCase(Locale.ROOT))
     }
 
     saveAsHiveFile(

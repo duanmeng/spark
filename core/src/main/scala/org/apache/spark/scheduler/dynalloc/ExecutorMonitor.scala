@@ -182,21 +182,19 @@ private[spark] class ExecutorMonitor(
     if (updateExecutors) {
       val activeShuffleIds = shuffleStages.map(_._2).toSeq
       var needTimeoutUpdate = false
-      val activatedExecs = new ExecutorIdCollector()
+      val activatedExecs = new mutable.ArrayBuffer[String]()
       executors.asScala.foreach { case (id, exec) =>
         if (!exec.hasActiveShuffle) {
           exec.updateActiveShuffles(activeShuffleIds)
           if (exec.hasActiveShuffle) {
             needTimeoutUpdate = true
-            activatedExecs.add(id)
+            activatedExecs += id
           }
         }
       }
 
-      if (activatedExecs.nonEmpty) {
-        logDebug(s"Activated executors $activatedExecs due to shuffle data needed by new job" +
-          s"${event.jobId}.")
-      }
+      logDebug(s"Activated executors ${activatedExecs.mkString(",")} due to shuffle data " +
+        s"needed by new job ${event.jobId}.")
 
       if (needTimeoutUpdate) {
         nextTimeout.set(Long.MinValue)
@@ -235,20 +233,18 @@ private[spark] class ExecutorMonitor(
         }
       }
 
-      val deactivatedExecs = new ExecutorIdCollector()
+      val deactivatedExecs = new mutable.ArrayBuffer[String]()
       executors.asScala.foreach { case (id, exec) =>
         if (exec.hasActiveShuffle) {
           exec.updateActiveShuffles(activeShuffles)
           if (!exec.hasActiveShuffle) {
-            deactivatedExecs.add(id)
+            deactivatedExecs += id
           }
         }
       }
 
-      if (deactivatedExecs.nonEmpty) {
-        logDebug(s"Executors $deactivatedExecs do not have active shuffle data after job " +
-          s"${event.jobId} finished.")
-      }
+      logDebug(s"Executors ${deactivatedExecs.mkString(",")} do not have active shuffle data " +
+        s"after job ${event.jobId} finished.")
     }
 
     jobToStageIDs.remove(event.jobId).foreach { stages =>
@@ -355,12 +351,9 @@ private[spark] class ExecutorMonitor(
   override def rddCleaned(rddId: Int): Unit = { }
 
   override def shuffleCleaned(shuffleId: Int): Unit = {
-    // Only post the event if tracking is enabled
-    if (shuffleTrackingEnabled) {
-      // Because this is called in a completely separate thread, we post a custom event to the
-      // listener bus so that the internal state is safely updated.
-      listenerBus.post(ShuffleCleanedEvent(shuffleId))
-    }
+    // Because this is called in a completely separate thread, we post a custom event to the
+    // listener bus so that the internal state is safely updated.
+    listenerBus.post(ShuffleCleanedEvent(shuffleId))
   }
 
   override def broadcastCleaned(broadcastId: Long): Unit = { }
@@ -455,8 +448,7 @@ private[spark] class ExecutorMonitor(
         } else {
           idleTimeoutMs
         }
-        val deadline = idleStart + timeout
-        if (deadline >= 0) deadline else Long.MaxValue
+        idleStart + timeout
       } else {
         Long.MaxValue
       }
@@ -498,25 +490,5 @@ private[spark] class ExecutorMonitor(
 
   private case class ShuffleCleanedEvent(id: Int) extends SparkListenerEvent {
     override protected[spark] def logEvent: Boolean = false
-  }
-
-  /** Used to collect executor IDs for debug messages (and avoid too long messages). */
-  private class ExecutorIdCollector {
-    private val ids = if (log.isDebugEnabled) new mutable.ArrayBuffer[String]() else null
-    private var excess = 0
-
-    def add(id: String): Unit = if (log.isDebugEnabled) {
-      if (ids.size < 10) {
-        ids += id
-      } else {
-        excess += 1
-      }
-    }
-
-    def nonEmpty: Boolean = ids != null && ids.nonEmpty
-
-    override def toString(): String = {
-      ids.mkString(",") + (if (excess > 0) s" (and $excess more)" else "")
-    }
   }
 }

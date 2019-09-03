@@ -152,9 +152,7 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {
         .getOrElse(List.empty)
 
       if (containerType == ContainerInfo.Type.DOCKER) {
-        containerInfo.setDocker(
-          dockerInfo(image, forcePullImage, portMaps, params, conf.get(NETWORK_NAME))
-        )
+        containerInfo.setDocker(dockerInfo(image, forcePullImage, portMaps, params))
       } else {
         containerInfo.setMesos(mesosInfo(image, forcePullImage))
       }
@@ -264,23 +262,12 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {
       image: String,
       forcePullImage: Boolean,
       portMaps: List[ContainerInfo.DockerInfo.PortMapping],
-      params: List[Parameter],
-      networkName: Option[String]): DockerInfo = {
+      params: List[Parameter]): DockerInfo = {
     val dockerBuilder = ContainerInfo.DockerInfo.newBuilder()
       .setImage(image)
       .setForcePullImage(forcePullImage)
     portMaps.foreach(dockerBuilder.addPortMappings(_))
     params.foreach(dockerBuilder.addParameters(_))
-
-    networkName.foreach { net =>
-      val network = Parameter.newBuilder()
-        .setKey("net")
-        .setValue(net)
-        .build()
-
-      dockerBuilder.setNetwork(DockerInfo.Network.USER)
-      dockerBuilder.addParameters(network)
-    }
 
     dockerBuilder.build
   }

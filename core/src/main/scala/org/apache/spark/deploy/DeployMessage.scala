@@ -24,7 +24,6 @@ import org.apache.spark.deploy.master.{ApplicationInfo, DriverInfo, WorkerInfo}
 import org.apache.spark.deploy.master.DriverState.DriverState
 import org.apache.spark.deploy.master.RecoveryState.MasterState
 import org.apache.spark.deploy.worker.{DriverRunner, ExecutorRunner}
-import org.apache.spark.resource.ResourceInformation
 import org.apache.spark.rpc.{RpcAddress, RpcEndpointRef}
 import org.apache.spark.util.Utils
 
@@ -32,6 +31,7 @@ private[deploy] sealed trait DeployMessage extends Serializable
 
 /** Contains messages sent between Scheduler endpoint nodes. */
 private[deploy] object DeployMessages {
+
   // Worker to Master
 
   /**
@@ -43,7 +43,6 @@ private[deploy] object DeployMessages {
    * @param memory the memory size of worker
    * @param workerWebUiUrl the worker Web UI address
    * @param masterAddress the master address used by the worker to connect
-   * @param resources the resources of worker
    */
   case class RegisterWorker(
       id: String,
@@ -53,8 +52,7 @@ private[deploy] object DeployMessages {
       cores: Int,
       memory: Int,
       workerWebUiUrl: String,
-      masterAddress: RpcAddress,
-      resources: Map[String, ResourceInformation] = Map.empty)
+      masterAddress: RpcAddress)
     extends DeployMessage {
     Utils.checkHost(host)
     assert (port > 0)
@@ -74,18 +72,8 @@ private[deploy] object DeployMessages {
       exception: Option[Exception])
     extends DeployMessage
 
-  case class WorkerExecutorStateResponse(
-      desc: ExecutorDescription,
-      resources: Map[String, ResourceInformation])
-
-  case class WorkerDriverStateResponse(
-      driverId: String,
-      resources: Map[String, ResourceInformation])
-
-  case class WorkerSchedulerStateResponse(
-      id: String,
-      execResponses: List[WorkerExecutorStateResponse],
-      driverResponses: Seq[WorkerDriverStateResponse])
+  case class WorkerSchedulerStateResponse(id: String, executors: List[ExecutorDescription],
+     driverIds: Seq[String])
 
   /**
    * A worker will send this message to the master when it registers with the master. Then the
@@ -130,14 +118,10 @@ private[deploy] object DeployMessages {
       execId: Int,
       appDesc: ApplicationDescription,
       cores: Int,
-      memory: Int,
-      resources: Map[String, ResourceInformation] = Map.empty)
+      memory: Int)
     extends DeployMessage
 
-  case class LaunchDriver(
-      driverId: String,
-      driverDesc: DriverDescription,
-      resources: Map[String, ResourceInformation] = Map.empty) extends DeployMessage
+  case class LaunchDriver(driverId: String, driverDesc: DriverDescription) extends DeployMessage
 
   case class KillDriver(driverId: String) extends DeployMessage
 
@@ -238,9 +222,7 @@ private[deploy] object DeployMessages {
   case class WorkerStateResponse(host: String, port: Int, workerId: String,
     executors: List[ExecutorRunner], finishedExecutors: List[ExecutorRunner],
     drivers: List[DriverRunner], finishedDrivers: List[DriverRunner], masterUrl: String,
-    cores: Int, memory: Int, coresUsed: Int, memoryUsed: Int, masterWebUiUrl: String,
-    resources: Map[String, ResourceInformation] = Map.empty,
-    resourcesUsed: Map[String, ResourceInformation] = Map.empty) {
+    cores: Int, memory: Int, coresUsed: Int, memoryUsed: Int, masterWebUiUrl: String) {
 
     Utils.checkHost(host)
     assert (port > 0)

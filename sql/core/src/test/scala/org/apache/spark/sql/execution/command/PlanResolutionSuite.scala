@@ -20,84 +20,67 @@ package org.apache.spark.sql.execution.command
 import java.net.URI
 import java.util.Locale
 
-import org.mockito.ArgumentMatchers.any
-import org.mockito.Mockito.{mock, when}
-import org.mockito.invocation.InvocationOnMock
-
 import org.apache.spark.sql.{AnalysisException, SaveMode}
-import org.apache.spark.sql.catalog.v2.{CatalogManager, CatalogNotFoundException, Identifier, TableCatalog}
+import org.apache.spark.sql.catalog.v2.{CatalogNotFoundException, CatalogPlugin, Identifier, LookupCatalog, TableCatalog, TestTableCatalog}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.AnalysisTest
 import org.apache.spark.sql.catalyst.catalog.{BucketSpec, CatalogStorageFormat, CatalogTable, CatalogTableType}
 import org.apache.spark.sql.catalyst.parser.CatalystSqlParser
 import org.apache.spark.sql.catalyst.plans.logical.{CreateTableAsSelect, CreateV2Table, DropTable, LogicalPlan}
-import org.apache.spark.sql.connector.InMemoryTableCatalog
 import org.apache.spark.sql.execution.datasources.{CreateTable, DataSourceResolution}
+import org.apache.spark.sql.execution.datasources.v2.orc.OrcDataSourceV2
 import org.apache.spark.sql.internal.SQLConf.DEFAULT_V2_CATALOG
-import org.apache.spark.sql.sources.v2.InMemoryTableProvider
 import org.apache.spark.sql.types.{DoubleType, IntegerType, LongType, StringType, StructType}
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
 class PlanResolutionSuite extends AnalysisTest {
   import CatalystSqlParser._
 
-  private val v2Format = classOf[InMemoryTableProvider].getName
+  private val orc2 = classOf[OrcDataSourceV2].getName
 
   private val testCat: TableCatalog = {
-    val newCatalog = new InMemoryTableCatalog
+    val newCatalog = new TestTableCatalog
     newCatalog.initialize("testcat", CaseInsensitiveStringMap.empty())
     newCatalog
   }
 
   private val v2SessionCatalog = {
-    val newCatalog = new InMemoryTableCatalog
+    val newCatalog = new TestTableCatalog
     newCatalog.initialize("session", CaseInsensitiveStringMap.empty())
     newCatalog
   }
 
-  private val catalogManagerWithDefault = {
-    val manager = mock(classOf[CatalogManager])
-    when(manager.catalog(any())).thenAnswer((invocation: InvocationOnMock) => {
-      invocation.getArgument[String](0) match {
-        case "testcat" =>
-          testCat
-        case "session" =>
-          v2SessionCatalog
-        case name =>
-          throw new CatalogNotFoundException(s"No such catalog: $name")
-      }
-    })
-    when(manager.defaultCatalog).thenReturn(Some(testCat))
-    when(manager.v2SessionCatalog).thenCallRealMethod()
-    manager
+  private val lookupWithDefault: LookupCatalog = new LookupCatalog {
+    override protected def defaultCatalogName: Option[String] = Some("testcat")
+
+    override protected def lookupCatalog(name: String): CatalogPlugin = name match {
+      case "testcat" =>
+        testCat
+      case "session" =>
+        v2SessionCatalog
+      case _ =>
+        throw new CatalogNotFoundException(s"No such catalog: $name")
+    }
   }
 
-  private val catalogManagerWithoutDefault = {
-    val manager = mock(classOf[CatalogManager])
-    when(manager.catalog(any())).thenAnswer((invocation: InvocationOnMock) => {
-      invocation.getArgument[String](0) match {
-        case "testcat" =>
-          testCat
-        case "session" =>
-          v2SessionCatalog
-        case name =>
-          throw new CatalogNotFoundException(s"No such catalog: $name")
-      }
-    })
-    when(manager.defaultCatalog).thenReturn(None)
-    when(manager.v2SessionCatalog).thenCallRealMethod()
-    manager
+  private val lookupWithoutDefault: LookupCatalog = new LookupCatalog {
+    override protected def defaultCatalogName: Option[String] = None
+
+    override protected def lookupCatalog(name: String): CatalogPlugin = name match {
+      case "testcat" =>
+        testCat
+      case "session" =>
+        v2SessionCatalog
+      case _ =>
+        throw new CatalogNotFoundException(s"No such catalog: $name")
+    }
   }
 
   def parseAndResolve(query: String, withDefault: Boolean = false): LogicalPlan = {
     val newConf = conf.copy()
     newConf.setConfString(DEFAULT_V2_CATALOG.key, "testcat")
-    val catalogManager = if (withDefault) {
-      catalogManagerWithDefault
-    } else {
-      catalogManagerWithoutDefault
-    }
-    DataSourceResolution(newConf, catalogManager).apply(parsePlan(query))
+    DataSourceResolution(newConf, if (withDefault) lookupWithDefault else lookupWithoutDefault)
+        .apply(parsePlan(query))
   }
 
   private def parseResolveCompare(query: String, expected: LogicalPlan): Unit =
@@ -428,7 +411,7 @@ class PlanResolutionSuite extends AnalysisTest {
          |    id bigint,
          |    description string,
          |    point struct<x: double, y: double>)
-         |USING $v2Format
+         |USING $orc2
          |COMMENT 'This is the staging page view table'
          |LOCATION '/user/external/page_view'
          |TBLPROPERTIES ('p1'='v1', 'p2'='v2')
@@ -437,7 +420,7 @@ class PlanResolutionSuite extends AnalysisTest {
     val expectedProperties = Map(
       "p1" -> "v1",
       "p2" -> "v2",
-      "provider" -> v2Format,
+      "provider" -> orc2,
       "location" -> "/user/external/page_view",
       "comment" -> "This is the staging page view table")
 
@@ -531,7 +514,7 @@ class PlanResolutionSuite extends AnalysisTest {
     val sql =
       s"""
         |CREATE TABLE IF NOT EXISTS mydb.page_view
-        |USING $v2Format
+        |USING $orc2
         |COMMENT 'This is the staging page view table'
         |LOCATION '/user/external/page_view'
         |TBLPROPERTIES ('p1'='v1', 'p2'='v2')
@@ -541,7 +524,7 @@ class PlanResolutionSuite extends AnalysisTest {
     val expectedProperties = Map(
       "p1" -> "v1",
       "p2" -> "v2",
-      "provider" -> v2Format,
+      "provider" -> orc2,
       "location" -> "/user/external/page_view",
       "comment" -> "This is the staging page view table")
 

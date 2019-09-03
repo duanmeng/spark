@@ -31,6 +31,7 @@ import org.apache.spark.unsafe.types.UTF8String
 class DateTimeUtilsSuite extends SparkFunSuite {
 
   val TimeZonePST = TimeZone.getTimeZone("PST")
+  private def defaultTz = DateTimeUtils.defaultTimeZone()
   private def defaultZoneId = ZoneId.systemDefault()
 
   test("nanoseconds truncation") {
@@ -365,13 +366,13 @@ class DateTimeUtilsSuite extends SparkFunSuite {
   test("timestamp add months") {
     val ts1 = date(1997, 2, 28, 10, 30, 0)
     val ts2 = date(2000, 2, 28, 10, 30, 0, 123000)
-    assert(timestampAddInterval(ts1, 36, 123000, defaultZoneId) === ts2)
+    assert(timestampAddInterval(ts1, 36, 123000, defaultTz) === ts2)
 
     val ts3 = date(1997, 2, 27, 16, 0, 0, 0, TimeZonePST)
     val ts4 = date(2000, 2, 27, 16, 0, 0, 123000, TimeZonePST)
     val ts5 = date(2000, 2, 28, 0, 0, 0, 123000, TimeZoneGMT)
-    assert(timestampAddInterval(ts3, 36, 123000, TimeZonePST.toZoneId) === ts4)
-    assert(timestampAddInterval(ts3, 36, 123000, TimeZoneGMT.toZoneId) === ts5)
+    assert(timestampAddInterval(ts3, 36, 123000, TimeZonePST) === ts4)
+    assert(timestampAddInterval(ts3, 36, 123000, TimeZoneGMT) === ts5)
   }
 
   test("monthsBetween") {
@@ -462,7 +463,7 @@ class DateTimeUtilsSuite extends SparkFunSuite {
     }
 
     val defaultInputTS = DateTimeUtils.stringToTimestamp(
-      UTF8String.fromString("2015-03-05T09:32:05.359123"), defaultZoneId)
+      UTF8String.fromString("2015-03-05T09:32:05.359"), defaultZoneId)
     val defaultInputTS1 = DateTimeUtils.stringToTimestamp(
       UTF8String.fromString("2015-03-31T20:32:05.359"), defaultZoneId)
     val defaultInputTS2 = DateTimeUtils.stringToTimestamp(
@@ -486,11 +487,6 @@ class DateTimeUtilsSuite extends SparkFunSuite {
     testTrunc(DateTimeUtils.TRUNC_TO_QUARTER, "2015-01-01T00:00:00", defaultInputTS.get)
     testTrunc(DateTimeUtils.TRUNC_TO_QUARTER, "2015-01-01T00:00:00", defaultInputTS1.get)
     testTrunc(DateTimeUtils.TRUNC_TO_QUARTER, "2015-04-01T00:00:00", defaultInputTS2.get)
-    testTrunc(DateTimeUtils.TRUNC_TO_MICROSECOND, "2015-03-05T09:32:05.359123", defaultInputTS.get)
-    testTrunc(DateTimeUtils.TRUNC_TO_MILLISECOND, "2015-03-05T09:32:05.359", defaultInputTS.get)
-    testTrunc(DateTimeUtils.TRUNC_TO_DECADE, "2010-01-01", defaultInputTS.get)
-    testTrunc(DateTimeUtils.TRUNC_TO_CENTURY, "2001-01-01", defaultInputTS.get)
-    testTrunc(DateTimeUtils.TRUNC_TO_MILLENNIUM, "2001-01-01", defaultInputTS.get)
 
     for (tz <- ALL_TIMEZONES) {
       withDefaultTimeZone(tz) {
@@ -504,8 +500,6 @@ class DateTimeUtilsSuite extends SparkFunSuite {
           UTF8String.fromString("2015-03-30T02:32:05.359"), defaultZoneId)
         val inputTS4 = DateTimeUtils.stringToTimestamp(
           UTF8String.fromString("2015-03-29T02:32:05.359"), defaultZoneId)
-        val inputTS5 = DateTimeUtils.stringToTimestamp(
-          UTF8String.fromString("1999-03-29T01:02:03.456789"), defaultZoneId)
 
         testTrunc(DateTimeUtils.TRUNC_TO_YEAR, "2015-01-01T00:00:00", inputTS.get, tz)
         testTrunc(DateTimeUtils.TRUNC_TO_MONTH, "2015-03-01T00:00:00", inputTS.get, tz)
@@ -521,9 +515,6 @@ class DateTimeUtilsSuite extends SparkFunSuite {
         testTrunc(DateTimeUtils.TRUNC_TO_QUARTER, "2015-01-01T00:00:00", inputTS.get, tz)
         testTrunc(DateTimeUtils.TRUNC_TO_QUARTER, "2015-01-01T00:00:00", inputTS1.get, tz)
         testTrunc(DateTimeUtils.TRUNC_TO_QUARTER, "2015-04-01T00:00:00", inputTS2.get, tz)
-        testTrunc(DateTimeUtils.TRUNC_TO_DECADE, "1990-01-01", inputTS5.get, tz)
-        testTrunc(DateTimeUtils.TRUNC_TO_CENTURY, "1901-01-01", inputTS5.get, tz)
-        testTrunc(DateTimeUtils.TRUNC_TO_MILLENNIUM, "2001-01-01", inputTS.get, tz)
       }
     }
   }
@@ -542,12 +533,12 @@ class DateTimeUtilsSuite extends SparkFunSuite {
 
     // There are some days are skipped entirely in some timezone, skip them here.
     val skipped_days = Map[String, Set[Int]](
-      "Kwajalein" -> Set(8632, 8633),
+      "Kwajalein" -> Set(8632),
       "Pacific/Apia" -> Set(15338),
       "Pacific/Enderbury" -> Set(9130, 9131),
       "Pacific/Fakaofo" -> Set(15338),
       "Pacific/Kiritimati" -> Set(9130, 9131),
-      "Pacific/Kwajalein" -> Set(8632, 8633),
+      "Pacific/Kwajalein" -> Set(8632),
       "MIT" -> Set(15338))
     for (tz <- ALL_TIMEZONES) {
       val skipped = skipped_days.getOrElse(tz.getID, Set.empty)

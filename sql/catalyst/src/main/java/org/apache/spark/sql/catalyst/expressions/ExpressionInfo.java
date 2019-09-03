@@ -37,7 +37,7 @@ public class ExpressionInfo {
     }
 
     public String getUsage() {
-        return replaceFunctionName(usage);
+        return usage;
     }
 
     public String getName() {
@@ -45,7 +45,7 @@ public class ExpressionInfo {
     }
 
     public String getExtended() {
-        return replaceFunctionName(extended);
+        return extended;
     }
 
     public String getSince() {
@@ -57,7 +57,7 @@ public class ExpressionInfo {
     }
 
     public String getExamples() {
-        return replaceFunctionName(examples);
+        return examples;
     }
 
     public String getNote() {
@@ -149,13 +149,5 @@ public class ExpressionInfo {
         // `arguments` and `examples` are concatenated for the extended description. So, here
         // simply pass the `extended` as `arguments` and an empty string for `examples`.
         this(className, db, name, usage, extended, "", "", "", "");
-    }
-
-    private String replaceFunctionName(String usage) {
-        if (usage == null) {
-            return "N/A.";
-        } else {
-            return usage.replaceAll("_FUNC_", name);
-        }
     }
 }

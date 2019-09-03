@@ -25,9 +25,9 @@ import org.apache.spark.sql.execution.exchange.BroadcastExchangeExec
 import org.apache.spark.sql.execution.joins.HashedRelation
 import org.apache.spark.sql.functions.broadcast
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.test.SharedSparkSession
+import org.apache.spark.sql.test.SharedSQLContext
 
-class BroadcastExchangeSuite extends SparkPlanTest with SharedSparkSession {
+class BroadcastExchangeSuite extends SparkPlanTest with SharedSQLContext {
 
   import testImplicits._
 

@@ -29,7 +29,6 @@ class RDDInfo(
     var name: String,
     val numPartitions: Int,
     var storageLevel: StorageLevel,
-    val isBarrier: Boolean,
     val parentIds: Seq[Int],
     val callSite: String = "",
     val scope: Option[RDDOperationScope] = None)
@@ -69,6 +68,6 @@ private[spark] object RDDInfo {
       rdd.creationSite.shortForm
     }
     new RDDInfo(rdd.id, rddName, rdd.partitions.length,
-      rdd.getStorageLevel, rdd.isBarrier(), parentIds, callSite, rdd.scope)
+      rdd.getStorageLevel, parentIds, callSite, rdd.scope)
   }
 }

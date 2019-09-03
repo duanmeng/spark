@@ -21,9 +21,9 @@ import org.apache.spark.sql.catalyst.dsl.expressions._
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.PlanTest
 import org.apache.spark.sql.sources
-import org.apache.spark.sql.test.SharedSparkSession
+import org.apache.spark.sql.test.SharedSQLContext
 
-class DataSourceStrategySuite extends PlanTest with SharedSparkSession {
+class DataSourceStrategySuite extends PlanTest with SharedSQLContext {
 
   test("translate simple expression") {
     val attrInt = 'cint.int

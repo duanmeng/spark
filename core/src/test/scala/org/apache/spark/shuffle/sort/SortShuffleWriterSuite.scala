@@ -17,32 +17,24 @@
 
 package org.apache.spark.shuffle.sort
 
-import org.mockito.{Mock, MockitoAnnotations}
-import org.mockito.Answers.RETURNS_SMART_NULLS
 import org.mockito.Mockito._
+import org.mockito.MockitoAnnotations
 import org.scalatest.Matchers
 
 import org.apache.spark.{Partitioner, SharedSparkContext, ShuffleDependency, SparkFunSuite}
 import org.apache.spark.memory.MemoryTestingUtils
 import org.apache.spark.serializer.JavaSerializer
 import org.apache.spark.shuffle.{BaseShuffleHandle, IndexShuffleBlockResolver}
-import org.apache.spark.shuffle.api.ShuffleExecutorComponents
-import org.apache.spark.shuffle.sort.io.LocalDiskShuffleExecutorComponents
-import org.apache.spark.storage.BlockManager
 import org.apache.spark.util.Utils
 
 
 class SortShuffleWriterSuite extends SparkFunSuite with SharedSparkContext with Matchers {
-
-  @Mock(answer = RETURNS_SMART_NULLS)
-  private var blockManager: BlockManager = _
 
   private val shuffleId = 0
   private val numMaps = 5
   private var shuffleHandle: BaseShuffleHandle[Int, Int, Int] = _
   private val shuffleBlockResolver = new IndexShuffleBlockResolver(conf)
   private val serializer = new JavaSerializer(conf)
-  private var shuffleExecutorComponents: ShuffleExecutorComponents = _
 
   override def beforeEach(): Unit = {
     super.beforeEach()
@@ -59,8 +51,6 @@ class SortShuffleWriterSuite extends SparkFunSuite with SharedSparkContext with 
       when(dependency.keyOrdering).thenReturn(None)
       new BaseShuffleHandle(shuffleId, numMaps = numMaps, dependency)
     }
-    shuffleExecutorComponents = new LocalDiskShuffleExecutorComponents(
-      conf, blockManager, shuffleBlockResolver)
   }
 
   override def afterAll(): Unit = {
@@ -77,8 +67,7 @@ class SortShuffleWriterSuite extends SparkFunSuite with SharedSparkContext with 
       shuffleBlockResolver,
       shuffleHandle,
       mapId = 1,
-      context,
-      shuffleExecutorComponents)
+      context)
     writer.write(Iterator.empty)
     writer.stop(success = true)
     val dataFile = shuffleBlockResolver.getDataFile(shuffleId, 1)
@@ -95,8 +84,7 @@ class SortShuffleWriterSuite extends SparkFunSuite with SharedSparkContext with 
       shuffleBlockResolver,
       shuffleHandle,
       mapId = 2,
-      context,
-      shuffleExecutorComponents)
+      context)
     writer.write(records.toIterator)
     writer.stop(success = true)
     val dataFile = shuffleBlockResolver.getDataFile(shuffleId, 2)

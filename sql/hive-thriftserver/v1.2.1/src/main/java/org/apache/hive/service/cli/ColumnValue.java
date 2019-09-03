@@ -23,6 +23,7 @@ import java.sql.Date;
 import java.sql.Timestamp;
 
 import org.apache.hadoop.hive.common.type.HiveChar;
+import org.apache.hadoop.hive.common.type.HiveDecimal;
 import org.apache.hadoop.hive.common.type.HiveIntervalDayTime;
 import org.apache.hadoop.hive.common.type.HiveIntervalYearMonth;
 import org.apache.hadoop.hive.common.type.HiveVarchar;
@@ -34,8 +35,6 @@ import org.apache.hive.service.cli.thrift.TI16Value;
 import org.apache.hive.service.cli.thrift.TI32Value;
 import org.apache.hive.service.cli.thrift.TI64Value;
 import org.apache.hive.service.cli.thrift.TStringValue;
-
-import org.apache.spark.unsafe.types.UTF8String;
 
 /**
  * Protocols before HIVE_CLI_SERVICE_PROTOCOL_V6 (used by RowBasedSet)
@@ -139,6 +138,14 @@ public class ColumnValue {
     return TColumnValue.stringVal(tStringValue);
   }
 
+  private static TColumnValue stringValue(HiveDecimal value) {
+    TStringValue tStrValue = new TStringValue();
+    if (value != null) {
+      tStrValue.setValue(value.toString());
+    }
+    return TColumnValue.stringVal(tStrValue);
+  }
+
   private static TColumnValue stringValue(HiveIntervalYearMonth value) {
     TStringValue tStrValue = new TStringValue();
     if (value != null) {
@@ -186,17 +193,14 @@ public class ColumnValue {
     case INTERVAL_DAY_TIME_TYPE:
       return stringValue((HiveIntervalDayTime) value);
     case DECIMAL_TYPE:
-      return stringValue(((BigDecimal)value).toPlainString());
+      return stringValue(((HiveDecimal)value));
     case BINARY_TYPE:
-      String strVal = value == null ? null : UTF8String.fromBytes((byte[])value).toString();
-      return stringValue(strVal);
+      return stringValue((String)value);
     case ARRAY_TYPE:
     case MAP_TYPE:
     case STRUCT_TYPE:
     case UNION_TYPE:
     case USER_DEFINED_TYPE:
-      return stringValue((String)value);
-    case NULL_TYPE:
       return stringValue((String)value);
     default:
       return null;

@@ -466,12 +466,11 @@ class DataFrameTests(ReusedSQLTestCase):
         df1 = self.spark.createDataFrame([(1, "1")], ("key", "value"))
         df2 = self.spark.createDataFrame([(1, "1")], ("key", "value"))
 
-        with self.sql_conf({"spark.sql.crossJoin.enabled": False}):
-            # joins without conditions require cross join syntax
-            self.assertRaises(AnalysisException, lambda: df1.join(df2).collect())
+        # joins without conditions require cross join syntax
+        self.assertRaises(AnalysisException, lambda: df1.join(df2).collect())
 
-            # works with crossJoin
-            self.assertEqual(1, df1.crossJoin(df2).count())
+        # works with crossJoin
+        self.assertEqual(1, df1.crossJoin(df2).count())
 
     def test_cache(self):
         spark = self.spark

@@ -17,8 +17,6 @@
 
 package org.apache.spark.scheduler
 
-import scala.collection.mutable.Map
-
 import org.apache.spark.{LocalSparkContext, SparkConf, SparkContext, SparkFunSuite}
 import org.apache.spark.executor.ExecutorMetrics
 import org.apache.spark.scheduler.SchedulingMode.SchedulingMode
@@ -96,5 +94,5 @@ private class DummyTaskScheduler extends TaskScheduler {
       execId: String,
       accumUpdates: Array[(Long, Seq[AccumulatorV2[_, _]])],
       blockManagerId: BlockManagerId,
-      executorMetrics: Map[(Int, Int), ExecutorMetrics]): Boolean = true
+      executorMetrics: ExecutorMetrics): Boolean = true
 }

@@ -77,9 +77,9 @@ class ExpressionTypeCheckingSuite extends SparkFunSuite {
     assertErrorForDifferingTypes(BitwiseOr('intField, 'booleanField))
     assertErrorForDifferingTypes(BitwiseXor('intField, 'booleanField))
 
-    assertError(Add('booleanField, 'booleanField), "requires (numeric or interval) type")
+    assertError(Add('booleanField, 'booleanField), "requires (numeric or calendarinterval) type")
     assertError(Subtract('booleanField, 'booleanField),
-      "requires (numeric or interval) type")
+      "requires (numeric or calendarinterval) type")
     assertError(Multiply('booleanField, 'booleanField), "requires numeric type")
     assertError(Divide('booleanField, 'booleanField), "requires (double or decimal) type")
     assertError(Remainder('booleanField, 'booleanField), "requires numeric type")

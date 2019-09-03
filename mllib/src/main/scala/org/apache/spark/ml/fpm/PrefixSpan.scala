@@ -17,7 +17,7 @@
 
 package org.apache.spark.ml.fpm
 
-import org.apache.spark.annotation.Since
+import org.apache.spark.annotation.{Experimental, Since}
 import org.apache.spark.ml.param._
 import org.apache.spark.ml.util.Identifiable
 import org.apache.spark.ml.util.Instrumentation.instrumented
@@ -27,6 +27,7 @@ import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.types.{ArrayType, LongType, StructField, StructType}
 
 /**
+ * :: Experimental ::
  * A parallel PrefixSpan algorithm to mine frequent sequential patterns.
  * The PrefixSpan algorithm is described in J. Pei, et al., PrefixSpan: Mining Sequential Patterns
  * Efficiently by Prefix-Projected Pattern Growth
@@ -38,6 +39,7 @@ import org.apache.spark.sql.types.{ArrayType, LongType, StructField, StructType}
  * (Wikipedia)</a>
  */
 @Since("2.4.0")
+@Experimental
 final class PrefixSpan(@Since("2.4.0") override val uid: String) extends Params {
 
   @Since("2.4.0")
@@ -123,6 +125,7 @@ final class PrefixSpan(@Since("2.4.0") override val uid: String) extends Params 
     sequenceCol -> "sequence")
 
   /**
+   * :: Experimental ::
    * Finds the complete set of frequent sequential patterns in the input sequences of itemsets.
    *
    * @param dataset A dataset or a dataframe containing a sequence column which is

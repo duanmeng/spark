@@ -18,7 +18,6 @@
 package org.apache.spark.scheduler.cluster.mesos
 
 import java.io.{File, FileNotFoundException}
-import java.nio.charset.StandardCharsets.UTF_8
 
 import scala.collection.JavaConverters._
 
@@ -254,7 +253,7 @@ class MesosSchedulerUtilsSuite extends SparkFunSuite with Matchers with MockitoS
   test("Principal specified via spark.mesos.principal.file") {
     val pFile = File.createTempFile("MesosSchedulerUtilsSuite", ".txt")
     pFile.deleteOnExit()
-    Files.write("test-principal".getBytes(UTF_8), pFile)
+    Files.write("test-principal".getBytes("UTF-8"), pFile)
     val conf = new SparkConf()
     conf.set(mesosConfig.CREDENTIAL_PRINCIPAL_FILE, pFile.getAbsolutePath())
 
@@ -283,7 +282,7 @@ class MesosSchedulerUtilsSuite extends SparkFunSuite with Matchers with MockitoS
   test("Principal specified via SPARK_MESOS_PRINCIPAL_FILE") {
     val pFile = File.createTempFile("MesosSchedulerUtilsSuite", ".txt")
     pFile.deleteOnExit()
-    Files.write("test-principal".getBytes(UTF_8), pFile)
+    Files.write("test-principal".getBytes("UTF-8"), pFile)
     val conf = new SparkConfWithEnv(Map("SPARK_MESOS_PRINCIPAL_FILE" -> pFile.getAbsolutePath()))
 
     val credBuilder = utils.buildCredentials(conf, FrameworkInfo.newBuilder())
@@ -314,7 +313,7 @@ class MesosSchedulerUtilsSuite extends SparkFunSuite with Matchers with MockitoS
   test("Principal specified via spark.mesos.secret.file") {
     val sFile = File.createTempFile("MesosSchedulerUtilsSuite", ".txt")
     sFile.deleteOnExit()
-    Files.write("my-secret".getBytes(UTF_8), sFile)
+    Files.write("my-secret".getBytes("UTF-8"), sFile)
     val conf = new SparkConf()
     conf.set(mesosConfig.CREDENTIAL_PRINCIPAL, "test-principal")
     conf.set(mesosConfig.CREDENTIAL_SECRET_FILE, sFile.getAbsolutePath())
@@ -351,7 +350,7 @@ class MesosSchedulerUtilsSuite extends SparkFunSuite with Matchers with MockitoS
   test("Principal specified via SPARK_MESOS_SECRET_FILE") {
     val sFile = File.createTempFile("MesosSchedulerUtilsSuite", ".txt")
     sFile.deleteOnExit()
-    Files.write("my-secret".getBytes(UTF_8), sFile)
+    Files.write("my-secret".getBytes("UTF-8"), sFile)
 
     val sFilePath = sFile.getAbsolutePath()
     val env = Map("SPARK_MESOS_SECRET_FILE" -> sFilePath)

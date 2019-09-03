@@ -17,9 +17,9 @@
 
 package org.apache.spark.sql.execution
 
-import org.apache.spark.sql.test.SharedSparkSession
+import org.apache.spark.sql.test.SharedSQLContext
 
-class QueryPlanningTrackerEndToEndSuite extends SharedSparkSession {
+class QueryPlanningTrackerEndToEndSuite extends SharedSQLContext {
 
   test("programmatic API") {
     val df = spark.range(1000).selectExpr("count(*)")

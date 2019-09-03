@@ -25,13 +25,13 @@ import org.apache.spark.sql.execution.exchange.Exchange
 import org.apache.spark.sql.expressions.{MutableAggregationBuffer, UserDefinedAggregateFunction, Window}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.test.SharedSparkSession
+import org.apache.spark.sql.test.SharedSQLContext
 import org.apache.spark.sql.types._
 
 /**
  * Window function testing for DataFrame API.
  */
-class DataFrameWindowFunctionsSuite extends QueryTest with SharedSparkSession {
+class DataFrameWindowFunctionsSuite extends QueryTest with SharedSQLContext {
 
   import testImplicits._
 
@@ -697,6 +697,13 @@ class DataFrameWindowFunctionsSuite extends QueryTest with SharedSparkSession {
   }
 
   test("NaN and -0.0 in window partition keys") {
+    import java.lang.Float.floatToRawIntBits
+    import java.lang.Double.doubleToRawLongBits
+
+    // 0.0/0.0 and NaN are different values.
+    assert(floatToRawIntBits(0.0f/0.0f) != floatToRawIntBits(Float.NaN))
+    assert(doubleToRawLongBits(0.0/0.0) != doubleToRawLongBits(Double.NaN))
+
     val df = Seq(
       (Float.NaN, Double.NaN),
       (0.0f/0.0f, 0.0/0.0),

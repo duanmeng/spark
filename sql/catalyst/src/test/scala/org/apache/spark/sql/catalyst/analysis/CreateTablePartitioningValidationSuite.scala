@@ -17,11 +17,10 @@
 
 package org.apache.spark.sql.catalyst.analysis
 
-import org.apache.spark.sql.catalog.v2.{Identifier, TableCatalog}
+import org.apache.spark.sql.catalog.v2.{Identifier, TableCatalog, TestTableCatalog}
 import org.apache.spark.sql.catalog.v2.expressions.LogicalExpressions
 import org.apache.spark.sql.catalyst.expressions.AttributeReference
 import org.apache.spark.sql.catalyst.plans.logical.{CreateTableAsSelect, LeafNode}
-import org.apache.spark.sql.connector.InMemoryTableCatalog
 import org.apache.spark.sql.types.{DoubleType, LongType, StringType, StructType}
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
@@ -135,7 +134,7 @@ class CreateTablePartitioningValidationSuite extends AnalysisTest {
 
 private object CreateTablePartitioningValidationSuite {
   val catalog: TableCatalog = {
-    val cat = new InMemoryTableCatalog()
+    val cat = new TestTableCatalog()
     cat.initialize("test", CaseInsensitiveStringMap.empty())
     cat
   }

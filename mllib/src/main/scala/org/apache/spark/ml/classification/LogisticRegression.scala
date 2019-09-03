@@ -26,7 +26,7 @@ import breeze.optimize.{CachedDiffFunction, LBFGS => BreezeLBFGS, LBFGSB => Bree
 import org.apache.hadoop.fs.Path
 
 import org.apache.spark.SparkException
-import org.apache.spark.annotation.Since
+import org.apache.spark.annotation.{Experimental, Since}
 import org.apache.spark.internal.Logging
 import org.apache.spark.ml.feature.Instance
 import org.apache.spark.ml.linalg._
@@ -1349,10 +1349,12 @@ private[ml] class MultiClassSummarizer extends Serializable {
 }
 
 /**
+ * :: Experimental ::
  * Abstraction for logistic regression results for a given model.
  *
  * Currently, the summary ignores the instance weights.
  */
+@Experimental
 sealed trait LogisticRegressionSummary extends Serializable {
 
   /**
@@ -1480,10 +1482,12 @@ sealed trait LogisticRegressionSummary extends Serializable {
 }
 
 /**
+ * :: Experimental ::
  * Abstraction for multiclass logistic regression training results.
  * Currently, the training summary ignores the training weights except
  * for the objective trace.
  */
+@Experimental
 sealed trait LogisticRegressionTrainingSummary extends LogisticRegressionSummary {
 
   /** objective function (scaled loss + regularization) at each iteration. */
@@ -1497,10 +1501,12 @@ sealed trait LogisticRegressionTrainingSummary extends LogisticRegressionSummary
 }
 
 /**
+ * :: Experimental ::
  * Abstraction for binary logistic regression results for a given model.
  *
  * Currently, the summary ignores the instance weights.
  */
+@Experimental
 sealed trait BinaryLogisticRegressionSummary extends LogisticRegressionSummary {
 
   private val sparkSession = predictions.sparkSession
@@ -1584,10 +1590,12 @@ sealed trait BinaryLogisticRegressionSummary extends LogisticRegressionSummary {
 }
 
 /**
+ * :: Experimental ::
  * Abstraction for binary logistic regression training results.
  * Currently, the training summary ignores the training weights except
  * for the objective trace.
  */
+@Experimental
 sealed trait BinaryLogisticRegressionTrainingSummary extends BinaryLogisticRegressionSummary
   with LogisticRegressionTrainingSummary
 

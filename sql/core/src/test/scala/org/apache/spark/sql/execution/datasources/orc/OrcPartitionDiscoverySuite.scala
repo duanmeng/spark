@@ -24,7 +24,7 @@ import org.apache.hadoop.fs.{Path, PathFilter}
 import org.apache.spark.SparkConf
 import org.apache.spark.sql._
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.test.SharedSparkSession
+import org.apache.spark.sql.test.SharedSQLContext
 
 // The data where the partitioning key exists only in the directory structure.
 case class OrcParData(intField: Int, stringField: String)
@@ -168,7 +168,7 @@ abstract class OrcPartitionDiscoveryTest extends OrcTest {
   }
 }
 
-class OrcPartitionDiscoverySuite extends OrcPartitionDiscoveryTest with SharedSparkSession {
+class OrcPartitionDiscoverySuite extends OrcPartitionDiscoveryTest with SharedSQLContext {
   test("read partitioned table - partition key included in orc file") {
     withTempDir { base =>
       for {
@@ -252,11 +252,12 @@ class OrcPartitionDiscoverySuite extends OrcPartitionDiscoveryTest with SharedSp
   }
 }
 
-class OrcV1PartitionDiscoverySuite extends OrcPartitionDiscoveryTest with SharedSparkSession {
+class OrcV1PartitionDiscoverySuite extends OrcPartitionDiscoveryTest with SharedSQLContext {
   override protected def sparkConf: SparkConf =
     super
       .sparkConf
-      .set(SQLConf.USE_V1_SOURCE_LIST, "orc")
+      .set(SQLConf.USE_V1_SOURCE_READER_LIST, "orc")
+      .set(SQLConf.USE_V1_SOURCE_WRITER_LIST, "orc")
 
   test("read partitioned table - partition key included in orc file") {
     withTempDir { base =>

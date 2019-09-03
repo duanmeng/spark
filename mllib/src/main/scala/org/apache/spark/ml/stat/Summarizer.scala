@@ -19,7 +19,7 @@ package org.apache.spark.ml.stat
 
 import java.io._
 
-import org.apache.spark.annotation.Since
+import org.apache.spark.annotation.{Experimental, Since}
 import org.apache.spark.internal.Logging
 import org.apache.spark.ml.linalg.{Vector, Vectors, VectorUDT}
 import org.apache.spark.sql.Column
@@ -35,6 +35,7 @@ import org.apache.spark.sql.types._
  * Users should not directly create such builders, but instead use one of the methods in
  * [[Summarizer]].
  */
+@Experimental
 @Since("2.3.0")
 sealed abstract class SummaryBuilder {
   /**
@@ -77,6 +78,7 @@ sealed abstract class SummaryBuilder {
  * Note: Currently, the performance of this interface is about 2x~3x slower than using the RDD
  * interface.
  */
+@Experimental
 @Since("2.3.0")
 object Summarizer extends Logging {
 

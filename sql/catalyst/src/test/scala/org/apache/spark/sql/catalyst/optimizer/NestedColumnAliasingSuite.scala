@@ -29,8 +29,6 @@ import org.apache.spark.sql.types.{StringType, StructField, StructType}
 
 class NestedColumnAliasingSuite extends SchemaPruningTest {
 
-  import NestedColumnAliasingSuite._
-
   object Optimize extends RuleExecutor[LogicalPlan] {
     val batches = Batch("Nested column pruning", FixedPoint(100),
       ColumnPruning,
@@ -266,10 +264,9 @@ class NestedColumnAliasingSuite extends SchemaPruningTest {
       .analyze
     comparePlans(optimized, expected)
   }
-}
 
-object NestedColumnAliasingSuite {
-  def collectGeneratedAliases(query: LogicalPlan): ArrayBuffer[String] = {
+
+  private def collectGeneratedAliases(query: LogicalPlan): ArrayBuffer[String] = {
     val aliases = ArrayBuffer[String]()
     query.transformAllExpressions {
       case a @ Alias(_, name) if name.startsWith("_gen_alias_") =>

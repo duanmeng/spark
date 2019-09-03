@@ -18,7 +18,6 @@
 package org.apache.spark.ui.jobs
 
 import java.net.URLEncoder
-import java.nio.charset.StandardCharsets.UTF_8
 import java.util.Date
 import javax.servlet.http.HttpServletRequest
 
@@ -26,7 +25,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 import scala.xml._
 
-import org.apache.commons.text.StringEscapeUtils
+import org.apache.commons.lang3.StringEscapeUtils
 
 import org.apache.spark.JobExecutionStatus
 import org.apache.spark.internal.config.SCHEDULER_MODE
@@ -525,7 +524,7 @@ private[ui] class JobPagedTable(
     desc)
 
   override def pageLink(page: Int): String = {
-    val encodedSortColumn = URLEncoder.encode(sortColumn, UTF_8.name())
+    val encodedSortColumn = URLEncoder.encode(sortColumn, "UTF-8")
     parameterPath +
       s"&$pageNumberFormField=$page" +
       s"&$jobTag.sort=$encodedSortColumn" +
@@ -535,7 +534,7 @@ private[ui] class JobPagedTable(
   }
 
   override def goButtonFormPath: String = {
-    val encodedSortColumn = URLEncoder.encode(sortColumn, UTF_8.name())
+    val encodedSortColumn = URLEncoder.encode(sortColumn, "UTF-8")
     s"$parameterPath&$jobTag.sort=$encodedSortColumn&$jobTag.desc=$desc#$tableHeaderId"
   }
 
@@ -558,7 +557,7 @@ private[ui] class JobPagedTable(
         if (header == sortColumn) {
           val headerLink = Unparsed(
             parameterPath +
-              s"&$jobTag.sort=${URLEncoder.encode(header, UTF_8.name())}" +
+              s"&$jobTag.sort=${URLEncoder.encode(header, "UTF-8")}" +
               s"&$jobTag.desc=${!desc}" +
               s"&$jobTag.pageSize=$pageSize" +
               s"#$tableHeaderId")
@@ -575,7 +574,7 @@ private[ui] class JobPagedTable(
           if (sortable) {
             val headerLink = Unparsed(
               parameterPath +
-                s"&$jobTag.sort=${URLEncoder.encode(header, UTF_8.name())}" +
+                s"&$jobTag.sort=${URLEncoder.encode(header, "UTF-8")}" +
                 s"&$jobTag.pageSize=$pageSize" +
                 s"#$tableHeaderId")
 

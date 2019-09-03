@@ -25,11 +25,10 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.catalyst.{InternalRow, QueryPlanningTracker}
 import org.apache.spark.sql.catalyst.analysis.UnsupportedOperationChecker
-import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, ReturnAnswer}
 import org.apache.spark.sql.catalyst.rules.Rule
-import org.apache.spark.sql.catalyst.util.StringUtils.PlanStringConcat
+import org.apache.spark.sql.catalyst.util.StringUtils.{PlanStringConcat, StringConcat}
 import org.apache.spark.sql.catalyst.util.truncatedString
 import org.apache.spark.sql.execution.adaptive.InsertAdaptiveSparkPlan
 import org.apache.spark.sql.execution.exchange.{EnsureRequirements, ReuseExchange}
@@ -61,38 +60,36 @@ class QueryExecution(
 
   lazy val analyzed: LogicalPlan = tracker.measurePhase(QueryPlanningTracker.ANALYSIS) {
     SparkSession.setActiveSession(sparkSession)
-    // We can't clone `logical` here, which will reset the `_analyzed` flag.
     sparkSession.sessionState.analyzer.executeAndCheck(logical, tracker)
   }
 
   lazy val withCachedData: LogicalPlan = {
     assertAnalyzed()
     assertSupported()
-    // clone the plan to avoid sharing the plan instance between different stages like analyzing,
-    // optimizing and planning.
-    sparkSession.sharedState.cacheManager.useCachedData(analyzed.clone())
+    sparkSession.sharedState.cacheManager.useCachedData(analyzed)
   }
 
   lazy val optimizedPlan: LogicalPlan = tracker.measurePhase(QueryPlanningTracker.OPTIMIZATION) {
-    // clone the plan to avoid sharing the plan instance between different stages like analyzing,
-    // optimizing and planning.
-    sparkSession.sessionState.optimizer.executeAndTrack(withCachedData.clone(), tracker)
+    sparkSession.sessionState.optimizer.executeAndTrack(withCachedData, tracker)
   }
 
   lazy val sparkPlan: SparkPlan = tracker.measurePhase(QueryPlanningTracker.PLANNING) {
     SparkSession.setActiveSession(sparkSession)
+    // Runtime re-optimization requires a unique instance of every node in the logical plan.
+    val logicalPlan = if (sparkSession.sessionState.conf.adaptiveExecutionEnabled) {
+      optimizedPlan.clone()
+    } else {
+      optimizedPlan
+    }
     // TODO: We use next(), i.e. take the first plan returned by the planner, here for now,
     //       but we will implement to choose the best plan.
-    // Clone the logical plan here, in case the planner rules change the states of the logical plan.
-    planner.plan(ReturnAnswer(optimizedPlan.clone())).next()
+    planner.plan(ReturnAnswer(logicalPlan)).next()
   }
 
   // executedPlan should not be used to initialize any SparkPlan. It should be
   // only used for execution.
   lazy val executedPlan: SparkPlan = tracker.measurePhase(QueryPlanningTracker.PLANNING) {
-    // clone the plan to avoid sharing the plan instance between different stages like analyzing,
-    // optimizing and planning.
-    prepareForExecution(sparkPlan.clone())
+    prepareForExecution(sparkPlan)
   }
 
   /**
@@ -119,7 +116,7 @@ class QueryExecution(
   protected def preparations: Seq[Rule[SparkPlan]] = Seq(
     // `AdaptiveSparkPlanExec` is a leaf node. If inserted, all the following rules will be no-op
     // as the original plan is hidden behind `AdaptiveSparkPlanExec`.
-    InsertAdaptiveSparkPlan(sparkSession, this),
+    InsertAdaptiveSparkPlan(sparkSession),
     PlanSubqueries(sparkSession),
     EnsureRequirements(sparkSession.sessionState.conf),
     ApplyColumnarRulesAndInsertTransitions(sparkSession.sessionState.conf,
@@ -128,16 +125,10 @@ class QueryExecution(
     ReuseExchange(sparkSession.sessionState.conf),
     ReuseSubquery(sparkSession.sessionState.conf))
 
-  def simpleString: String = simpleString(false)
-
-  def simpleString(formatted: Boolean): String = withRedaction {
+  def simpleString: String = withRedaction {
     val concat = new PlanStringConcat()
     concat.append("== Physical Plan ==\n")
-    if (formatted) {
-      ExplainUtils.processPlan(executedPlan, concat.append)
-    } else {
-      QueryPlan.append(executedPlan, concat.append, verbose = false, addSuffix = false)
-    }
+    QueryPlan.append(executedPlan, concat.append, verbose = false, addSuffix = false)
     concat.append("\n")
     concat.toString
   }

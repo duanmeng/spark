@@ -22,7 +22,6 @@ import org.apache.spark.sql.catalyst.analysis.{AnalysisTest, UnresolvedAlias, Un
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans._
 import org.apache.spark.sql.catalyst.plans.logical._
-import org.apache.spark.sql.catalyst.plans.logical.sql.InsertIntoStatement
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.IntegerType
 
@@ -185,15 +184,13 @@ class PlanParserSuite extends AnalysisTest {
   }
 
   test("insert into") {
-    import org.apache.spark.sql.catalyst.dsl.expressions._
-    import org.apache.spark.sql.catalyst.dsl.plans._
     val sql = "select * from t"
     val plan = table("t").select(star())
     def insert(
         partition: Map[String, Option[String]],
         overwrite: Boolean = false,
         ifPartitionNotExists: Boolean = false): LogicalPlan =
-      InsertIntoStatement(table("s"), partition, plan, overwrite, ifPartitionNotExists)
+      InsertIntoTable(table("s"), partition, plan, overwrite, ifPartitionNotExists)
 
     // Single inserts
     assertEqual(s"insert overwrite table s $sql",
@@ -208,7 +205,17 @@ class PlanParserSuite extends AnalysisTest {
     // Multi insert
     val plan2 = table("t").where('x > 5).select(star())
     assertEqual("from t insert into s select * limit 1 insert into u select * where x > 5",
-      plan.limit(1).insertInto("s").union(plan2.insertInto("u")))
+      InsertIntoTable(
+        table("s"), Map.empty, plan.limit(1), false, ifPartitionNotExists = false).union(
+        InsertIntoTable(
+          table("u"), Map.empty, plan2, false, ifPartitionNotExists = false)))
+  }
+
+  test ("insert with if not exists") {
+    val sql = "select * from t"
+    intercept(s"insert overwrite table s partition (e = 1, x) if not exists $sql",
+      "Dynamic partitions do not support IF NOT EXISTS. Specified partitions with value: [x]")
+    intercept[ParseException](parsePlan(s"insert overwrite table s if not exists $sql"))
   }
 
   test("aggregation") {
@@ -612,7 +619,7 @@ class PlanParserSuite extends AnalysisTest {
     comparePlans(
       parsePlan(
         "INSERT INTO s SELECT /*+ REPARTITION(100), COALESCE(500), COALESCE(10) */ * FROM t"),
-      InsertIntoStatement(table("s"), Map.empty,
+      InsertIntoTable(table("s"), Map.empty,
         UnresolvedHint("REPARTITION", Seq(Literal(100)),
           UnresolvedHint("COALESCE", Seq(Literal(500)),
             UnresolvedHint("COALESCE", Seq(Literal(10)),

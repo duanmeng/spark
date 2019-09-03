@@ -21,7 +21,7 @@ import org.apache.spark.ml.linalg.{Vector, Vectors}
 import org.apache.spark.ml.param.ParamsSuite
 import org.apache.spark.ml.util.{DefaultReadWriteTest, MLTest, MLTestingUtils}
 import org.apache.spark.ml.util.TestingUtils._
-import org.apache.spark.sql.Row
+import org.apache.spark.sql.{DataFrame, Row}
 
 class StandardScalerSuite extends MLTest with DefaultReadWriteTest {
 
@@ -57,7 +57,7 @@ class StandardScalerSuite extends MLTest with DefaultReadWriteTest {
     )
   }
 
-  private def assertResult: Row => Unit = {
+  def assertResult: Row => Unit = {
     case Row(vector1: Vector, vector2: Vector) =>
       assert(vector1 ~== vector2 absTol 1E-5,
         "The vector value is not correct after standardization.")
