@@ -17,8 +17,8 @@
 
 package org.apache.spark.internal.io
 
-import java.text.NumberFormat
 import java.io.IOException
+import java.text.NumberFormat
 import java.util.{Date, UUID}
 
 import scala.collection.mutable
