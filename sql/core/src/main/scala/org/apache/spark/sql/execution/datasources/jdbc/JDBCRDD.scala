@@ -17,10 +17,9 @@
 
 package org.apache.spark.sql.execution.datasources.jdbc
 
-import java.sql.{Connection, PreparedStatement, ResultSet, SQLException}
+import java.sql.{Connection, PreparedStatement, ResultSet, SQLException, Statement}
 
 import scala.util.control.NonFatal
-
 import org.apache.spark.{InterruptibleIterator, Partition, SparkContext, TaskContext}
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -60,7 +59,9 @@ object JDBCRDD extends Logging {
         statement.setQueryTimeout(options.queryTimeout)
         val rs = statement.executeQuery()
         try {
-          JdbcUtils.getSchema(rs, dialect, alwaysNullable = true)
+          /* Start SuperSQL modification */
+          JdbcUtils.getSchema(rs, dialect, url, alwaysNullable = true)
+          /* End SuperSQL modification */
         } finally {
           rs.close()
         }
@@ -228,6 +229,9 @@ private[jdbc] class JDBCRDD(
   override def compute(thePart: Partition, context: TaskContext): Iterator[InternalRow] = {
     var closed = false
     var rs: ResultSet = null
+    /* Start SuperSQL modification */
+    var st: Statement = null
+    /* End SuperSQL modification */
     var stmt: PreparedStatement = null
     var conn: Connection = null
 
@@ -244,6 +248,11 @@ private[jdbc] class JDBCRDD(
         if (null != stmt) {
           stmt.close()
         }
+        /* Start SuperSQL modification */
+        if (null != st) {
+          st.close()
+        }
+        /* End SuperSQL modification */
       } catch {
         case e: Exception => logWarning("Exception closing statement", e)
       }
@@ -299,8 +308,34 @@ private[jdbc] class JDBCRDD(
     val sqlText = s"SELECT $columnList FROM ${options.tableOrQuery} $myWhereClause"
     stmt = conn.prepareStatement(sqlText,
         ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)
-    stmt.setFetchSize(options.fetchSize)
     stmt.setQueryTimeout(options.queryTimeout)
+
+    /* Start SuperSQL modification */
+    val isNoSql = JdbcUtils.isNoSql(url)
+    if (!isNoSql || options.fetchSize > 0) {
+      stmt.setFetchSize(options.fetchSize)
+    }
+    log.info(s"JDBC pushdown SQL: url=$url, sql=$sqlText")
+
+    import scala.collection.JavaConverters._
+    val bypassConfs = JdbcUtils.getBypassConfs(options)
+    if (!bypassConfs.isEmpty) {
+      st = conn.createStatement()
+      for ((key, value) <- bypassConfs.asScala) {
+        val setCmd = "set " + key + " = " + value
+        try {
+          st.execute(setCmd)
+        } catch {
+          case e: Exception =>
+            logWarning(s"Failed to bypass datasource conf: " +
+              s"url = $url, cmd = $setCmd, errMsg = ${e.toString}")
+        }
+      }
+      log.info(s"Bypass conf to datasource: " +
+        s"url=$url, setCmds=${JdbcUtils.hideSensitiveInfo(bypassConfs)}")
+    }
+    /* End SuperSQL modification */
+
     rs = stmt.executeQuery()
     val rowsIterator = JdbcUtils.resultSetToSparkInternalRows(rs, schema, inputMetrics)
 

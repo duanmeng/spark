@@ -268,7 +268,9 @@ object JdbcUtils extends Logging {
       val statement = conn.prepareStatement(dialect.getSchemaQuery(options.tableOrQuery))
       try {
         statement.setQueryTimeout(options.queryTimeout)
-        Some(getSchema(statement.executeQuery(), dialect))
+        /* Start SuperSQL modification */
+        Some(getSchema(statement.executeQuery(), dialect, options.url))
+        /* End SuperSQL modification */
       } catch {
         case _: SQLException => None
       } finally {
@@ -278,6 +280,82 @@ object JdbcUtils extends Logging {
       case _: SQLException => None
     }
   }
+
+  /* Start SuperSQL modification */
+  def handleSuperSqlUrl(url: String): String = {
+    if (url.trim.startsWith("jdbc:supersql:")) {
+      var start = url.indexOf("url='")
+      val c = url.charAt(start - 1)
+      if (start != -1 && (c == ':' || c == ';')) {
+        start += "url='".length
+        val end = url.indexOf("'", start)
+        if (end == url.length - 1 || url.charAt(end + 1) == ';') {
+          return url.substring(start, end)
+        }
+      }
+    }
+    url
+  }
+
+  def isNoSql(url: String): Boolean = {
+    if (url == null) {
+      return false
+    }
+    val newUrl = handleSuperSqlUrl(url)
+    newUrl.startsWith("jdbc:hive2:") ||
+      newUrl.startsWith("jdbc:phoenix:") ||
+      newUrl.startsWith("jdbc:hive:")
+  }
+
+  def hideSensitiveInfo(key: String, value: String): String = {
+    val keyStr = key.toLowerCase()
+    if (keyStr.contains("password") || keyStr.contains("passwd")
+      || keyStr.contains("secret")
+      || keyStr == "hive.bi.pwd"
+      || keyStr == "hadoop.job.ugi") {
+      "******"
+    }
+    else {
+      value
+    }
+  }
+
+  def hideSensitiveInfo(bypassConfs: java.util.List[(String, String)]):
+  java.util.List[(String, String)] = {
+    val result = new java.util.ArrayList[(String, String)] (bypassConfs.size())
+    import scala.collection.JavaConverters._
+    for (conf <- bypassConfs.asScala) {
+      result.add((conf._1, hideSensitiveInfo(conf._1, conf._2)))
+    }
+    result
+  }
+
+  def getBypassConfs(options: JDBCOptions): java.util.List[(String, String)] = {
+    val result = new java.util.ArrayList[(String, String)] ()
+    val dataSourceConf = options.asProperties.getProperty("dataSourceConf")
+    if (dataSourceConf != null) {
+      for (confEntry <- dataSourceConf.split(",")) {
+        var start = confEntry.indexOf("(")
+        var end = confEntry.lastIndexOf(")")
+        if (start != -1 && end != -1) {
+          val str = confEntry.substring(start, end);
+          start = str.indexOf("`")
+          end = str.indexOf("`=`", start)
+          if (start != -1 && end != -1) {
+            val key = str.substring(start + 1, end).trim
+            start = end + 3;
+            end = str.indexOf("`", start)
+            if (end != -1) {
+              val value = str.substring(start, end)
+              result.add((key, value))
+            }
+          }
+        }
+      }
+    }
+    result
+  }
+  /* End SuperSQL modification */
 
   /**
    * Takes a [[ResultSet]] and returns its Catalyst schema.
@@ -289,13 +367,25 @@ object JdbcUtils extends Logging {
   def getSchema(
       resultSet: ResultSet,
       dialect: JdbcDialect,
+      /* Start SuperSQL modification */
+      url: String,
+      /* End SuperSQL modification */
       alwaysNullable: Boolean = false): StructType = {
     val rsmd = resultSet.getMetaData
     val ncols = rsmd.getColumnCount
     val fields = new Array[StructField](ncols)
     var i = 0
     while (i < ncols) {
-      val columnName = rsmd.getColumnLabel(i + 1)
+      /* Start SuperSQL modification */
+      var columnName = rsmd.getColumnLabel(i + 1)
+      if (isNoSql(url)) {
+        val index = columnName.lastIndexOf(".")
+        if (index != -1) {
+          columnName = columnName.substring(index + 1)
+        }
+      }
+      /* End SuperSQL modification */
+
       val dataType = rsmd.getColumnType(i + 1)
       val typeName = rsmd.getColumnTypeName(i + 1)
       val fieldSize = rsmd.getPrecision(i + 1)
@@ -307,7 +397,11 @@ object JdbcUtils extends Logging {
           // Workaround for HIVE-14684:
           case e: SQLException if
           e.getMessage == "Method not supported" &&
-            rsmd.getClass.getName == "org.apache.hive.jdbc.HiveResultSetMetaData" => true
+          /* Start SuperSQL modification */
+            rsmd.getClass.getName == "org.apache.hive.jdbc.HiveResultSetMetaData"
+          || (e.getMessage.contains("not supported")
+            && rsmd.getClass.getName == "com.tencent.tdw.hive.jdbc.HiveResultSetMetaData") => true
+          /* End SuperSQL modification */
         }
       }
       val nullable = if (alwaysNullable) {

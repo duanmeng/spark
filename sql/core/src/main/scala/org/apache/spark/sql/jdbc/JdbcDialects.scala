@@ -22,6 +22,7 @@ import java.sql.{Connection, Date, Timestamp}
 import org.apache.commons.lang3.StringUtils
 
 import org.apache.spark.annotation.{DeveloperApi, Since}
+import org.apache.spark.sql.execution.datasources.jdbc.JdbcUtils
 import org.apache.spark.sql.types._
 
 /**
@@ -224,12 +225,19 @@ object JdbcDialects {
   registerDialect(DerbyDialect)
   registerDialect(OracleDialect)
   registerDialect(TeradataDialect)
+  /* Start SuperSQL modification */
+  registerDialect(HiveQLDialect)
+  /* End SuperSQL modification */
 
   /**
    * Fetch the JdbcDialect class corresponding to a given database url.
    */
   def get(url: String): JdbcDialect = {
-    val matchingDialects = dialects.filter(_.canHandle(url))
+    /* Start SuperSQL modification */
+    val newUrl = JdbcUtils.handleSuperSqlUrl(url)
+    val matchingDialects = dialects.filter(_.canHandle(newUrl))
+    /* End SuperSQL modification */
+
     matchingDialects.length match {
       case 0 => NoopDialect
       case 1 => matchingDialects.head
