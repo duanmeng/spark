@@ -85,7 +85,6 @@ class KafkaDelegationTokenSuite extends StreamTest with SharedSparkSession with 
         .format("kafka")
         .option("checkpointLocation", checkpointDir.getCanonicalPath)
         .option("kafka.bootstrap.servers", testUtils.brokerAddress)
-        .option("kafka.security.protocol", SASL_PLAINTEXT.name)
         .option("topic", topic)
         .start()
 
@@ -102,7 +101,6 @@ class KafkaDelegationTokenSuite extends StreamTest with SharedSparkSession with 
     val streamingDf = spark.readStream
       .format("kafka")
       .option("kafka.bootstrap.servers", testUtils.brokerAddress)
-      .option("kafka.security.protocol", SASL_PLAINTEXT.name)
       .option("startingOffsets", s"earliest")
       .option("subscribe", topic)
       .load()
