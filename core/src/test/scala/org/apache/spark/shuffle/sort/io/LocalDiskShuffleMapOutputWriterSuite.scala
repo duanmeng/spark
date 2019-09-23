@@ -118,7 +118,7 @@ class LocalDiskShuffleMapOutputWriterSuite extends SparkFunSuite with BeforeAndA
           assert(channelWrapper.channel().isInstanceOf[FileChannel],
             "Underlying channel should be a file channel")
           Utils.copyFileStreamNIO(
-            tempFileInput.getChannel, channelWrapper.channel(), 0L, data(p).length)
+            tempFileInput.getChannel, channelWrapper.channel(), 0L, data(p).length, Int.MaxValue)
         }
       }
     }
