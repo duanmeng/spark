@@ -59,7 +59,7 @@ private[spark] class ReplayListenerBus extends SparkListenerBus with Logging {
     codec.onMalformedInput(CodingErrorAction.REPLACE)
     codec.onUnmappableCharacter(CodingErrorAction.REPLACE)
 
-    val lines = Source.fromInputStream(logData).getLines()
+    val lines = Source.fromInputStream(logData)(Codec.UTF8).getLines()
     replay(lines, sourceName, maybeTruncated, eventsFilter)
   }
 

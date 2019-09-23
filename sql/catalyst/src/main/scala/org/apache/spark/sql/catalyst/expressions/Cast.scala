@@ -106,7 +106,7 @@ object Cast {
    * * Cast.castToTimestamp
    */
   def needsTimeZone(from: DataType, to: DataType): Boolean = (from, to) match {
-    case (StringType, TimestampType) => true
+    case (StringType, TimestampType | DateType) => true
     case (DateType, TimestampType) => true
     case (TimestampType, StringType) => true
     case (TimestampType, DateType) => true
@@ -287,9 +287,9 @@ case class Cast(child: Expression, dataType: DataType, timeZoneId: Option[String
   // [[func]] assumes the input is no longer null because eval already does the null check.
   @inline private[this] def buildCast[T](a: Any, func: T => Any): Any = func(a.asInstanceOf[T])
 
-  private lazy val dateFormatter = DateFormatter()
+  private lazy val dateFormatter = DateFormatter(zoneId)
   private lazy val timestampFormatter = TimestampFormatter.getFractionFormatter(zoneId)
-  private val failOnIntegralTypeOverflow = SQLConf.get.failOnIntegralTypeOverflow
+  private val failOnIntegralTypeOverflow = SQLConf.get.ansiEnabled
 
   // UDFToString
   private[this] def castToString(from: DataType): Any => Any = from match {
@@ -469,7 +469,7 @@ case class Cast(child: Expression, dataType: DataType, timeZoneId: Option[String
   // DateConverter
   private[this] def castToDate(from: DataType): Any => Any = from match {
     case StringType =>
-      buildCast[UTF8String](_, s => DateTimeUtils.stringToDate(s).orNull)
+      buildCast[UTF8String](_, s => DateTimeUtils.stringToDate(s, zoneId).orNull)
     case TimestampType =>
       // throw valid precision more than seconds, according to Hive.
       // Timestamp.nanos is in 0 to 999,999,999, no more than a second.
@@ -600,13 +600,13 @@ case class Cast(child: Expression, dataType: DataType, timeZoneId: Option[String
       b => x.numeric.asInstanceOf[Numeric[Any]].toInt(b).toByte
   }
 
-  private val nullOnOverflow = SQLConf.get.decimalOperationsNullOnOverflow
+  private val nullOnOverflow = !SQLConf.get.ansiEnabled
 
   /**
    * Change the precision / scale in a given decimal to those set in `decimalType` (if any),
    * modifying `value` in-place and returning it if successful. If an overflow occurs, it
    * either returns null or throws an exception according to the value set for
-   * `spark.sql.decimalOperations.nullOnOverflow`.
+   * `spark.sql.ansi.enabled`.
    *
    * NOTE: this modifies `value` in-place, so don't call it on external data.
    */
@@ -625,7 +625,7 @@ case class Cast(child: Expression, dataType: DataType, timeZoneId: Option[String
 
   /**
    * Create new `Decimal` with precision and scale given in `decimalType` (if any).
-   * If overflow occurs, if `spark.sql.decimalOperations.nullOnOverflow` is true, null is returned;
+   * If overflow occurs, if `spark.sql.ansi.enabled` is false, null is returned;
    * otherwise, an `ArithmeticException` is thrown.
    */
   private[this] def toPrecision(value: Decimal, decimalType: DecimalType): Decimal =
@@ -1056,28 +1056,35 @@ case class Cast(child: Expression, dataType: DataType, timeZoneId: Option[String
 
   private[this] def castToDateCode(
       from: DataType,
-      ctx: CodegenContext): CastFunction = from match {
-    case StringType =>
-      val intOpt = ctx.freshVariable("intOpt", classOf[Option[Integer]])
-      (c, evPrim, evNull) => code"""
-        scala.Option<Integer> $intOpt =
-          org.apache.spark.sql.catalyst.util.DateTimeUtils.stringToDate($c);
-        if ($intOpt.isDefined()) {
-          $evPrim = ((Integer) $intOpt.get()).intValue();
-        } else {
-          $evNull = true;
-        }
-       """
-    case TimestampType =>
+      ctx: CodegenContext): CastFunction = {
+    def getZoneId() = {
       val zoneIdClass = classOf[ZoneId]
-      val zid = JavaCode.global(
+      JavaCode.global(
         ctx.addReferenceObj("zoneId", zoneId, zoneIdClass.getName),
         zoneIdClass)
-      (c, evPrim, evNull) =>
-        code"""$evPrim =
-          org.apache.spark.sql.catalyst.util.DateTimeUtils.microsToEpochDays($c, $zid);"""
-    case _ =>
-      (c, evPrim, evNull) => code"$evNull = true;"
+    }
+    from match {
+      case StringType =>
+        val intOpt = ctx.freshVariable("intOpt", classOf[Option[Integer]])
+        val zid = getZoneId()
+        (c, evPrim, evNull) =>
+          code"""
+          scala.Option<Integer> $intOpt =
+            org.apache.spark.sql.catalyst.util.DateTimeUtils.stringToDate($c, $zid);
+          if ($intOpt.isDefined()) {
+            $evPrim = ((Integer) $intOpt.get()).intValue();
+          } else {
+            $evNull = true;
+          }
+         """
+      case TimestampType =>
+        val zid = getZoneId()
+        (c, evPrim, evNull) =>
+          code"""$evPrim =
+            org.apache.spark.sql.catalyst.util.DateTimeUtils.microsToEpochDays($c, $zid);"""
+      case _ =>
+        (c, evPrim, evNull) => code"$evNull = true;"
+    }
   }
 
   private[this] def changePrecision(d: ExprValue, decimalType: DecimalType,
