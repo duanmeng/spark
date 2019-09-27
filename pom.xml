@@ -3013,6 +3013,7 @@
     <profile>
       <id>hadoop-2.7.2-tdw</id>
       <properties>
+        <hadoop.version>2.7.2-tdw-1.3.0</hadoop.version>
         <hadoop.minikdc.version>2.7.2-tdw-1.3.0</hadoop.minikdc.version>
         <jets3t.version>0.7.1</jets3t.version>
       </properties>
