@@ -383,7 +383,7 @@ class HadoopRDD[K, V](
     locs.getOrElse(hsplit.getLocations.filter(_ != "localhost"))
   }
 
-  override def checkpoint() {
+  override def checkpoint(): Unit = {
     // Do nothing. Hadoop RDD should not be checkpointed.
   }
 
@@ -420,7 +420,7 @@ private[spark] object HadoopRDD extends Logging {
 
   /** Add Hadoop configuration specific to a single partition and attempt. */
   def addLocalConfiguration(jobTrackerId: String, jobId: Int, splitId: Int, attemptId: Int,
-                            conf: JobConf) {
+                            conf: JobConf): Unit = {
     val jobID = new JobID(jobTrackerId, jobId)
     val taId = new TaskAttemptID(new TaskID(jobID, TaskType.MAP, splitId), attemptId)
 
