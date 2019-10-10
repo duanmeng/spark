@@ -741,6 +741,11 @@ object SQLConf {
     .stringConf
     .createWithDefault("parquet")
 
+  val DEFAULT_DATABASE_NAME = buildConf("spark.sql.database.default")
+    .doc("The default database name to use")
+    .stringConf
+    .createWithDefault("default")
+
   val CONVERT_CTAS = buildConf("spark.sql.hive.convertCTAS")
     .internal()
     .doc("When true, a table created by a Hive CTAS statement (no USING clause) " +
@@ -2223,6 +2228,8 @@ class SQLConf extends Serializable with Logging {
   def datetimeJava8ApiEnabled: Boolean = getConf(DATETIME_JAVA8API_ENABLED)
 
   def utcTimestampFuncEnabled: Boolean = getConf(UTC_TIMESTAMP_FUNC_ENABLED)
+
+  def defaultDBName: String = getConf(DEFAULT_DATABASE_NAME)
 
   /**
    * Returns the [[Resolver]] for the current configuration, which can be used to determine if two

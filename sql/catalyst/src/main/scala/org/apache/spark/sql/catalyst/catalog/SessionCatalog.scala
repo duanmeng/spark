@@ -88,6 +88,7 @@ class SessionCatalog(
       new SQLConf().copy(SQLConf.CASE_SENSITIVE -> true))
   }
 
+  val defaultDatabase = conf.defaultDBName
   lazy val externalCatalog = externalCatalogBuilder()
   lazy val globalTempViewManager = globalTempViewManagerBuilder()
 
@@ -100,7 +101,7 @@ class SessionCatalog(
   // check whether the temporary view or function exists, then, if not, operate on
   // the corresponding item in the current database.
   @GuardedBy("this")
-  protected var currentDb: String = formatDatabaseName(DEFAULT_DATABASE)
+  protected var currentDb: String = formatDatabaseName(defaultDatabase)
 
   private val validNameFormat = "([\\w_]+)".r
 
@@ -216,7 +217,7 @@ class SessionCatalog(
 
   def dropDatabase(db: String, ignoreIfNotExists: Boolean, cascade: Boolean): Unit = {
     val dbName = formatDatabaseName(db)
-    if (dbName == DEFAULT_DATABASE) {
+    if (dbName == defaultDatabase) {
       throw new AnalysisException(s"Can not drop default database")
     }
     if (cascade && databaseExists(dbName)) {
@@ -1454,15 +1455,15 @@ class SessionCatalog(
    * This is mainly used for tests.
    */
   def reset(): Unit = synchronized {
-    setCurrentDatabase(DEFAULT_DATABASE)
-    externalCatalog.setCurrentDatabase(DEFAULT_DATABASE)
-    listDatabases().filter(_ != DEFAULT_DATABASE).foreach { db =>
+    setCurrentDatabase(defaultDatabase)
+    externalCatalog.setCurrentDatabase(defaultDatabase)
+    listDatabases().filter(_ != defaultDatabase).foreach { db =>
       dropDatabase(db, ignoreIfNotExists = false, cascade = true)
     }
-    listTables(DEFAULT_DATABASE).foreach { table =>
+    listTables(defaultDatabase).foreach { table =>
       dropTable(table, ignoreIfNotExists = false, purge = false)
     }
-    listFunctions(DEFAULT_DATABASE).map(_._1).foreach { func =>
+    listFunctions(defaultDatabase).map(_._1).foreach { func =>
       if (func.database.isDefined) {
         dropFunction(func, ignoreIfNotExists = false)
       } else {
