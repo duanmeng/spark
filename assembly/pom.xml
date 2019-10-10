@@ -95,7 +95,7 @@
     <dependency>
       <groupId>com.tencent.tdw</groupId>
       <artifactId>spark-toolkit_${scala.binary.version}</artifactId>
-      <version>${project.version}</version>
+      <version>3.12.2</version>
     </dependency>
 
   </dependencies>
