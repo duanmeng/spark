@@ -283,7 +283,7 @@ object JdbcUtils extends Logging {
 
   /* Start SuperSQL modification */
   def handleSuperSqlUrl(url: String): String = {
-    if (url.trim.startsWith("jdbc:supersql:")) {
+    if (url.trim.startsWith("jdbc:supersql:datasource:")) {
       var start = url.indexOf("url='")
       val c = url.charAt(start - 1)
       if (start != -1 && (c == ':' || c == ';')) {
