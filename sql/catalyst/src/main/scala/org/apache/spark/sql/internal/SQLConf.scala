@@ -89,11 +89,16 @@ object SQLConf {
   }
 
   def withExistingConf[T](conf: SQLConf)(f: => T): T = {
+    val old = existingConf.get()
     existingConf.set(conf)
     try {
       f
     } finally {
-      existingConf.remove()
+      if (old != null) {
+        existingConf.set(old)
+      } else {
+        existingConf.remove()
+      }
     }
   }
 
@@ -838,7 +843,7 @@ object SQLConf {
       .createWithDefault(10000)
 
   val IGNORE_DATA_LOCALITY =
-    buildConf("spark.sql.sources.ignore.datalocality")
+    buildConf("spark.sql.sources.ignoreDataLocality.enabled")
       .doc("If true, Spark will not fetch the block locations for each file on " +
         "listing files. This speeds up file listing, but the scheduler cannot " +
         "schedule tasks to take advantage of data locality. It can be particularly " +
@@ -1870,7 +1875,7 @@ object SQLConf {
     .doc("If it is set to true, size of null returns -1. This behavior was inherited from Hive. " +
       "The size function returns null for null input if the flag is disabled.")
     .booleanConf
-    .createWithDefault(true)
+    .createWithDefault(false)
 
   val LEGACY_REPLACE_DATABRICKS_SPARK_AVRO_ENABLED =
     buildConf("spark.sql.legacy.replaceDatabricksSparkAvro.enabled")
