@@ -56,7 +56,7 @@ object JDBCRDD extends Logging {
     try {
       val statement = conn.prepareStatement(dialect.getSchemaQuery(table))
       try {
-        statement.setQueryTimeout(options.queryTimeout)
+        JdbcUtils.setStatementQueryTimeout(statement, options.queryTimeout)
         val rs = statement.executeQuery()
         try {
           /* Start SuperSQL modification */
@@ -291,7 +291,7 @@ private[jdbc] class JDBCRDD(
         val statement = conn.prepareStatement(sql)
         logInfo(s"Executing sessionInitStatement: $sql")
         try {
-          statement.setQueryTimeout(options.queryTimeout)
+          JdbcUtils.setStatementQueryTimeout(statement, options.queryTimeout)
           statement.execute()
         } finally {
           statement.close()
@@ -308,7 +308,7 @@ private[jdbc] class JDBCRDD(
     val sqlText = s"SELECT $columnList FROM ${options.tableOrQuery} $myWhereClause"
     stmt = conn.prepareStatement(sqlText,
         ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)
-    stmt.setQueryTimeout(options.queryTimeout)
+    JdbcUtils.setStatementQueryTimeout(stmt, options.queryTimeout)
 
     /* Start SuperSQL modification */
     val isNoSql = JdbcUtils.isNoSql(url)

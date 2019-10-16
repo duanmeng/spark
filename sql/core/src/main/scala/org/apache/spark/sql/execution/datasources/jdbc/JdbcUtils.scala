@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.execution.datasources.jdbc
 
-import java.sql.{Connection, Driver, DriverManager, JDBCType, PreparedStatement, ResultSet, ResultSetMetaData, SQLException}
+import java.sql.{Connection, Driver, DriverManager, JDBCType, PreparedStatement, ResultSet, ResultSetMetaData, SQLException, Statement}
 import java.util.Locale
 
 import scala.collection.JavaConverters._
@@ -81,7 +81,7 @@ object JdbcUtils extends Logging {
     Try {
       val statement = conn.prepareStatement(dialect.getTableExistsQuery(options.table))
       try {
-        statement.setQueryTimeout(options.queryTimeout)
+        setStatementQueryTimeout(statement, options.queryTimeout)
         statement.executeQuery()
       } finally {
         statement.close()
@@ -95,7 +95,7 @@ object JdbcUtils extends Logging {
   def dropTable(conn: Connection, table: String, options: JDBCOptions): Unit = {
     val statement = conn.createStatement
     try {
-      statement.setQueryTimeout(options.queryTimeout)
+      setStatementQueryTimeout(statement, options.queryTimeout)
       statement.executeUpdate(s"DROP TABLE $table")
     } finally {
       statement.close()
@@ -109,7 +109,7 @@ object JdbcUtils extends Logging {
     val dialect = JdbcDialects.get(options.url)
     val statement = conn.createStatement
     try {
-      statement.setQueryTimeout(options.queryTimeout)
+      setStatementQueryTimeout(statement, options.queryTimeout)
       val truncateQuery = if (options.isCascadeTruncate.isDefined) {
         dialect.getTruncateQuery(options.table, options.isCascadeTruncate)
       } else {
@@ -267,7 +267,7 @@ object JdbcUtils extends Logging {
     try {
       val statement = conn.prepareStatement(dialect.getSchemaQuery(options.tableOrQuery))
       try {
-        statement.setQueryTimeout(options.queryTimeout)
+        setStatementQueryTimeout(statement, options.queryTimeout)
         /* Start SuperSQL modification */
         Some(getSchema(statement.executeQuery(), dialect, options.url))
         /* End SuperSQL modification */
@@ -751,7 +751,7 @@ object JdbcUtils extends Logging {
       try {
         var rowCount = 0
 
-        stmt.setQueryTimeout(options.queryTimeout)
+        setStatementQueryTimeout(stmt, options.queryTimeout)
 
         while (iterator.hasNext) {
           val row = iterator.next()
@@ -958,10 +958,22 @@ object JdbcUtils extends Logging {
     val sql = s"CREATE TABLE $table ($strSchema) $createTableOptions"
     val statement = conn.createStatement
     try {
-      statement.setQueryTimeout(options.queryTimeout)
+      setStatementQueryTimeout(statement, options.queryTimeout)
       statement.executeUpdate(sql)
     } finally {
       statement.close()
+    }
+  }
+
+  /**
+   * Set query timeout for specific statement, ignore the exception if the api is not supported.
+   */
+  def setStatementQueryTimeout(statement: Statement, timeout: Int): Unit = {
+    try {
+      statement.setQueryTimeout(timeout)
+    } catch {
+      case e: Exception => logDebug(s"${statement.getClass}" +
+        s" doesn't support setQueryTimeout: ${e.getMessage}")
     }
   }
 }
