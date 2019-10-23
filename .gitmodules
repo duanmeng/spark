@@ -1,4 +1,4 @@
 [submodule "tdw-spark-toolkit"]
 	path = tdw-spark-toolkit
 	url = http://git.code.oa.com/tdw/tdw-spark-toolkit.git
-        branch = develop
+        branch = branch-tencent-spark
