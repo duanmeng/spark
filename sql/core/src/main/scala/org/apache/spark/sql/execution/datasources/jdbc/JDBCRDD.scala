@@ -54,6 +54,15 @@ object JDBCRDD extends Logging {
     val dialect = JdbcDialects.get(url)
     val conn: Connection = JdbcUtils.createConnectionFactory(options)()
     try {
+      /* Start SuperSQL modification */
+      val st = conn.createStatement()
+      try {
+        JdbcUtils.setBypassConfs(options, st)
+      } finally {
+        st.close()
+      }
+      /* End SuperSQL modification */
+
       val statement = conn.prepareStatement(dialect.getSchemaQuery(table))
       try {
         JdbcUtils.setStatementQueryTimeout(statement, options.queryTimeout)
@@ -306,34 +315,21 @@ private[jdbc] class JDBCRDD(
     val myWhereClause = getWhereClause(part)
 
     val sqlText = s"SELECT $columnList FROM ${options.tableOrQuery} $myWhereClause"
+
+    /* Start SuperSQL modification */
+    st = conn.createStatement()
+    JdbcUtils.setBypassConfs(options, st)
+
     stmt = conn.prepareStatement(sqlText,
         ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)
     JdbcUtils.setStatementQueryTimeout(stmt, options.queryTimeout)
 
-    /* Start SuperSQL modification */
     val isNoSql = JdbcUtils.isNoSql(url)
     if (!isNoSql || options.fetchSize > 0) {
       stmt.setFetchSize(options.fetchSize)
     }
-    log.info(s"JDBC pushdown SQL: url=$url, sql=$sqlText")
 
-    import scala.collection.JavaConverters._
-    val bypassConfs = JdbcUtils.getBypassConfs(options)
-    if (!bypassConfs.isEmpty) {
-      st = conn.createStatement()
-      for ((key, value) <- bypassConfs.asScala) {
-        val setCmd = "set " + key + " = " + value
-        try {
-          st.execute(setCmd)
-        } catch {
-          case e: Exception =>
-            logWarning(s"Failed to bypass datasource conf: " +
-              s"url = $url, cmd = $setCmd, errMsg = ${e.toString}")
-        }
-      }
-      log.info(s"Bypass conf to datasource: " +
-        s"url=$url, setCmds=${JdbcUtils.hideSensitiveInfo(bypassConfs)}")
-    }
+    log.info(s"JDBC pushdown SQL: url=$url, sql=$sqlText")
     /* End SuperSQL modification */
 
     rs = stmt.executeQuery()

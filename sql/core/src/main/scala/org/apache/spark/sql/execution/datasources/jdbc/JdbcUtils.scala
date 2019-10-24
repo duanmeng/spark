@@ -23,7 +23,6 @@ import java.util.Locale
 import scala.collection.JavaConverters._
 import scala.util.Try
 import scala.util.control.NonFatal
-
 import org.apache.spark.TaskContext
 import org.apache.spark.executor.InputMetrics
 import org.apache.spark.internal.Logging
@@ -315,7 +314,7 @@ object JdbcUtils extends Logging {
       newUrl.startsWith("jdbc:hive:")
   }
 
-  def hideSensitiveInfo(key: String, value: String): String = {
+  private def hideSensitiveInfo(key: String, value: String): String = {
     val keyStr = key.toLowerCase()
     if (keyStr.contains("password") || keyStr.contains("passwd")
       || keyStr.contains("secret")
@@ -328,7 +327,7 @@ object JdbcUtils extends Logging {
     }
   }
 
-  def hideSensitiveInfo(bypassConfs: java.util.List[(String, String)]):
+  private def hideSensitiveInfo(bypassConfs: java.util.List[(String, String)]):
   java.util.List[(String, String)] = {
     val result = new java.util.ArrayList[(String, String)] (bypassConfs.size())
     import scala.collection.JavaConverters._
@@ -338,7 +337,7 @@ object JdbcUtils extends Logging {
     result
   }
 
-  def getBypassConfs(options: JDBCOptions): java.util.List[(String, String)] = {
+  private def getBypassConfs(options: JDBCOptions): java.util.List[(String, String)] = {
     val result = new java.util.ArrayList[(String, String)] ()
     val dataSourceConf = options.asProperties.getProperty("dataSourceConf")
     if (dataSourceConf != null) {
@@ -365,6 +364,25 @@ object JdbcUtils extends Logging {
       result.add(("supersql.lex", "ORACLE_NOCAST"))
     }
     result
+  }
+
+  def setBypassConfs(options: JDBCOptions, st: Statement): Unit = {
+    import scala.collection.JavaConverters._
+    val bypassConfs = getBypassConfs(options)
+    if (!bypassConfs.isEmpty) {
+      for ((key, value) <- bypassConfs.asScala) {
+        val setCmd = "set " + key + " = " + value
+        try {
+          st.execute(setCmd)
+        } catch {
+          case e: Exception =>
+            logWarning(s"Failed to bypass datasource conf: url = ${options.url}, " +
+              s"cmd = $setCmd, errMsg = ${e.toString}")
+        }
+      }
+      log.info(s"Bypass conf to datasource: url=${options.url}, " +
+        s"setCmds=${hideSensitiveInfo(bypassConfs)}")
+    }
   }
   /* End SuperSQL modification */
 
