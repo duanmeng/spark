@@ -180,6 +180,9 @@ private[hive] class IsolatedClientLoader(
     val barrierPrefixes: Seq[String] = Seq.empty)
   extends Logging {
 
+  private val actualIsolationOn =
+    sparkConf.getBoolean("spark.hive.client.loader.isolated", defaultValue = isolationOn)
+
   /** All jars used by the hive specific classloader. */
   protected def allJars = execJars.toArray
 
@@ -217,7 +220,7 @@ private[hive] class IsolatedClientLoader(
    */
   private[hive] val classLoader: MutableURLClassLoader = {
     val isolatedClassLoader =
-      if (isolationOn) {
+      if (actualIsolationOn) {
         if (allJars.isEmpty) {
           // See HiveUtils; this is the Java 9+ + builtin mode scenario
           baseClassLoader
@@ -285,7 +288,7 @@ private[hive] class IsolatedClientLoader(
   /** The isolated client interface to Hive. */
   private[hive] def createClient(): HiveClient = synchronized {
     val warehouseDir = Option(hadoopConf.get(ConfVars.METASTOREWAREHOUSE.varname))
-    if (!isolationOn) {
+    if (!actualIsolationOn) {
       return new HiveClientImpl(version, warehouseDir, sparkConf, hadoopConf, config,
         baseClassLoader, this)
     }
