@@ -297,6 +297,14 @@ object JdbcUtils extends Logging {
     url
   }
 
+  def isSuperSql(url: String): Boolean = {
+    if (url == null) {
+      return false
+    }
+    val newUrl = handleSuperSqlUrl(url)
+    newUrl.startsWith("jdbc:supersql:")
+  }
+
   def isNoSql(url: String): Boolean = {
     if (url == null) {
       return false
@@ -352,6 +360,9 @@ object JdbcUtils extends Logging {
           }
         }
       }
+    }
+    if (isSuperSql(options.url)) {
+      result.add(("supersql.lex", "ORACLE_NOCAST"))
     }
     result
   }
