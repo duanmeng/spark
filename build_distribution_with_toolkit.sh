@@ -10,4 +10,4 @@ mvn -DskipTests clean package install -U
 
 cd "${CUR_DIR}"
 # mvn -Pyarn -Phadoop-2.2-tdw -Dhadoop.version=2.2.0-tdw-0.2.270 -DskipTests clean package
-./dev/make-distribution.sh --name tspark --pip --tgz -Pmesos -Pyarn -Pkubernetes -Pspark-toolkit -Phive -Phive-thriftserver -Phadoop-2.7.2-tdw
+./dev/make-distribution.sh  --name tspark --pip --tgz  -Pmesos -Pyarn -Pkubernetes -Pspark-toolkit -Phadoop-2.7.2-tdw

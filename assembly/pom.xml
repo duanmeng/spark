@@ -92,12 +92,6 @@
       <scope>${hadoop.deps.scope}</scope>
     </dependency>
 
-    <dependency>
-      <groupId>com.tencent.tdw</groupId>
-      <artifactId>spark-toolkit_${scala.binary.version}</artifactId>
-      <version>3.12.2</version>
-    </dependency>
-
   </dependencies>
 
   <build>
@@ -280,6 +274,16 @@
           <groupId>org.eclipse.jetty</groupId>
           <artifactId>jetty-util</artifactId>
           <scope>${hadoop.deps.scope}</scope>
+        </dependency>
+      </dependencies>
+    </profile>
+    <profile>
+      <id>spark-toolkit</id>
+      <dependencies>
+        <dependency>
+          <groupId>com.tencent.tdw</groupId>
+          <artifactId>spark-toolkit_${scala.binary.version}</artifactId>
+          <version>3.12.2</version>
         </dependency>
       </dependencies>
     </profile>
