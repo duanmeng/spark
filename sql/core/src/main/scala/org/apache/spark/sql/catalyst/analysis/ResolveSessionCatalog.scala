@@ -24,8 +24,8 @@ import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.connector.catalog.{CatalogManager, CatalogPlugin, LookupCatalog, TableChange, V1Table}
 import org.apache.spark.sql.connector.expressions.Transform
-import org.apache.spark.sql.execution.command.{AlterTableAddColumnsCommand, AlterTableRecoverPartitionsCommand, AlterTableSetLocationCommand, AlterTableSetPropertiesCommand, AlterTableUnsetPropertiesCommand, AnalyzeColumnCommand, AnalyzePartitionCommand, AnalyzeTableCommand, DescribeColumnCommand, DescribeTableCommand, DropTableCommand, ShowTablesCommand}
-import org.apache.spark.sql.execution.datasources.{CreateTable, DataSource}
+import org.apache.spark.sql.execution.command._
+import org.apache.spark.sql.execution.datasources.{CreateTable, DataSource, RefreshTable}
 import org.apache.spark.sql.execution.datasources.v2.FileDataSourceV2
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{HIVE_TYPE_STRING, HiveStringType, MetadataBuilder, StructField, StructType}
@@ -118,11 +118,15 @@ class ResolveSessionCatalog(
       }
 
     case AlterTableSetLocationStatement(
-         nameParts @ SessionCatalog(catalog, tableName), newLoc) =>
+         nameParts @ SessionCatalog(catalog, tableName), partitionSpec, newLoc) =>
       loadTable(catalog, tableName.asIdentifier).collect {
         case v1Table: V1Table =>
-          AlterTableSetLocationCommand(tableName.asTableIdentifier, None, newLoc)
+          AlterTableSetLocationCommand(tableName.asTableIdentifier, partitionSpec, newLoc)
       }.getOrElse {
+        if (partitionSpec.nonEmpty) {
+          throw new AnalysisException(
+            "ALTER TABLE SET LOCATION does not support partition for v2 tables.")
+        }
         val changes = Seq(TableChange.setProperty("location", newLoc))
         createAlterTable(nameParts, catalog, tableName, changes)
       }
@@ -216,6 +220,9 @@ class ResolveSessionCatalog(
           ignoreIfExists = c.ifNotExists)
       }
 
+    case RefreshTableStatement(SessionCatalog(_, tableName)) =>
+      RefreshTable(tableName.asTableIdentifier)
+
     // For REPLACE TABLE [AS SELECT], we should fail if the catalog is resolved to the
     // session catalog and the table provider is not v2.
     case c @ ReplaceTableStatement(
@@ -255,6 +262,26 @@ class ResolveSessionCatalog(
     case DropViewStatement(SessionCatalog(catalog, viewName), ifExists) =>
       DropTableCommand(viewName.asTableIdentifier, ifExists, isView = true, purge = false)
 
+    case c @ CreateNamespaceStatement(SessionCatalog(catalog, nameParts), _, _) =>
+      if (nameParts.length != 1) {
+        throw new AnalysisException(
+          s"The database name is not valid: ${nameParts.quoted}")
+      }
+
+      val comment = c.properties.get(CreateNamespaceStatement.COMMENT_PROPERTY_KEY)
+      val location = c.properties.get(CreateNamespaceStatement.LOCATION_PROPERTY_KEY)
+      val newProperties = c.properties -
+        CreateNamespaceStatement.COMMENT_PROPERTY_KEY -
+        CreateNamespaceStatement.LOCATION_PROPERTY_KEY
+      CreateDatabaseCommand(nameParts.head, c.ifNotExists, location, comment, newProperties)
+
+    case d @ DropNamespaceStatement(SessionCatalog(_, nameParts), _, _) =>
+      if (nameParts.length != 1) {
+        throw new AnalysisException(
+          s"The database name is not valid: ${nameParts.quoted}")
+      }
+      DropDatabaseCommand(nameParts.head, d.ifExists, d.cascade)
+
     case ShowTablesStatement(Some(SessionCatalog(catalog, nameParts)), pattern) =>
       if (nameParts.length != 1) {
         throw new AnalysisException(
@@ -282,6 +309,82 @@ class ResolveSessionCatalog(
       AlterTableRecoverPartitionsCommand(
         v1TableName.asTableIdentifier,
         "MSCK REPAIR TABLE")
+
+    case LoadDataStatement(tableName, path, isLocal, isOverwrite, partition) =>
+      val v1TableName = parseV1Table(tableName, "LOAD DATA")
+      LoadDataCommand(
+        v1TableName.asTableIdentifier,
+        path,
+        isLocal,
+        isOverwrite,
+        partition)
+
+    case ShowCreateTableStatement(tableName) =>
+      val v1TableName = parseV1Table(tableName, "SHOW CREATE TABLE")
+      ShowCreateTableCommand(v1TableName.asTableIdentifier)
+
+    case CacheTableStatement(tableName, plan, isLazy, options) =>
+      val v1TableName = parseV1Table(tableName, "CACHE TABLE")
+      CacheTableCommand(v1TableName.asTableIdentifier, plan, isLazy, options)
+
+    case UncacheTableStatement(tableName, ifExists) =>
+      val v1TableName = parseV1Table(tableName, "UNCACHE TABLE")
+      UncacheTableCommand(v1TableName.asTableIdentifier, ifExists)
+
+    case TruncateTableStatement(tableName, partitionSpec) =>
+      val v1TableName = parseV1Table(tableName, "TRUNCATE TABLE")
+      TruncateTableCommand(
+        v1TableName.asTableIdentifier,
+        partitionSpec)
+
+    case ShowPartitionsStatement(tableName, partitionSpec) =>
+      val v1TableName = parseV1Table(tableName, "SHOW PARTITIONS")
+      ShowPartitionsCommand(
+        v1TableName.asTableIdentifier,
+        partitionSpec)
+
+    case ShowColumnsStatement(table, namespace) =>
+      val sql = "SHOW COLUMNS"
+      val v1TableName = parseV1Table(table, sql).asTableIdentifier
+      val resolver = conf.resolver
+      val db = namespace match {
+        case Some(db) if (v1TableName.database.exists(!resolver(_, db.head))) =>
+          throw new AnalysisException(
+            s"SHOW COLUMNS with conflicting databases: " +
+              s"'${db.head}' != '${v1TableName.database.get}'")
+        case _ => namespace.map(_.head)
+      }
+      if (namespace.isDefined && namespace.get.length > 1) {
+        throw new AnalysisException(
+          s"Namespace name should have only one part if specified: ${namespace.get.quoted}")
+      }
+      if (table.length > 2) {
+        throw new AnalysisException(
+          s"Table name should have at most two parts: ${table.quoted}")
+      }
+      ShowColumnsCommand(db, v1TableName)
+
+    case AlterTableRecoverPartitionsStatement(tableName) =>
+      val v1TableName = parseV1Table(tableName, "ALTER TABLE RECOVER PARTITIONS")
+      AlterTableRecoverPartitionsCommand(
+        v1TableName.asTableIdentifier,
+        "ALTER TABLE RECOVER PARTITIONS")
+
+    case AlterTableRenamePartitionStatement(tableName, from, to) =>
+      val v1TableName = parseV1Table(tableName, "ALTER TABLE RENAME PARTITION")
+      AlterTableRenamePartitionCommand(
+        v1TableName.asTableIdentifier,
+        from,
+        to)
+
+    case AlterTableDropPartitionStatement(tableName, specs, ifExists, purge, retainData) =>
+      val v1TableName = parseV1Table(tableName, "ALTER TABLE DROP PARTITION")
+      AlterTableDropPartitionCommand(
+        v1TableName.asTableIdentifier,
+        specs,
+        ifExists,
+        purge,
+        retainData)
   }
 
   private def parseV1Table(tableName: Seq[String], sql: String): Seq[String] = {
