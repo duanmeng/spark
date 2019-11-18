@@ -62,8 +62,28 @@ class ResolveSessionCatalog(
          nameParts @ SessionCatalog(catalog, tableName), colName, dataType, comment) =>
       loadTable(catalog, tableName.asIdentifier).collect {
         case v1Table: V1Table =>
-          // TODO(SPARK-29353): we should fallback to the v1 `AlterTableChangeColumnCommand`.
-          throw new AnalysisException("ALTER COLUMN is only supported with v2 tables.")
+          if (colName.length > 1) {
+            throw new AnalysisException(
+              "ALTER COLUMN with qualified column is only supported with v2 tables.")
+          }
+          if (dataType.isEmpty) {
+            throw new AnalysisException(
+              "ALTER COLUMN with v1 tables must specify new data type.")
+          }
+          val builder = new MetadataBuilder
+          // Add comment to metadata
+          comment.map(c => builder.putString("comment", c))
+          // Add Hive type string to metadata.
+          val cleanedDataType = HiveStringType.replaceCharType(dataType.get)
+          if (dataType.get != cleanedDataType) {
+            builder.putString(HIVE_TYPE_STRING, dataType.get.catalogString)
+          }
+          val newColumn = StructField(
+            colName(0),
+            cleanedDataType,
+            nullable = true,
+            builder.build())
+          AlterTableChangeColumnCommand(tableName.asTableIdentifier, colName(0), newColumn)
       }.getOrElse {
         val typeChange = dataType.map { newDataType =>
           TableChange.updateColumnType(colName.toArray, newDataType, true)
@@ -138,16 +158,19 @@ class ResolveSessionCatalog(
     case AlterViewUnsetPropertiesStatement(SessionCatalog(catalog, tableName), keys, ifExists) =>
       AlterTableUnsetPropertiesCommand(tableName.asTableIdentifier, keys, ifExists, isView = true)
 
-    case DeleteFromStatement(
-         nameParts @ SessionCatalog(catalog, tableName), tableAlias, condition) =>
-      loadTable(catalog, tableName.asIdentifier).collect {
-        case v1Table: V1Table =>
-          throw new AnalysisException("DELETE FROM is only supported with v2 tables.")
-      }.getOrElse {
-        val r = UnresolvedV2Relation(nameParts, catalog.asTableCatalog, tableName.asIdentifier)
-        val aliased = tableAlias.map(SubqueryAlias(_, r)).getOrElse(r)
-        DeleteFromTable(aliased, condition)
+    case d @ DescribeNamespaceStatement(SessionCatalog(_, nameParts), _) =>
+      if (nameParts.length != 1) {
+        throw new AnalysisException(
+          s"The database name is not valid: ${nameParts.quoted}")
       }
+      DescribeDatabaseCommand(nameParts.head, d.extended)
+
+    case AlterNamespaceSetPropertiesStatement(SessionCatalog(_, nameParts), properties) =>
+      if (nameParts.length != 1) {
+        throw new AnalysisException(
+          s"The database name is not valid: ${nameParts.quoted}")
+      }
+      AlterDatabasePropertiesCommand(nameParts.head, properties)
 
     case DescribeTableStatement(
          nameParts @ SessionCatalog(catalog, tableName), partitionSpec, isExtended) =>
@@ -292,6 +315,15 @@ class ResolveSessionCatalog(
     case ShowTablesStatement(None, pattern) if isSessionCatalog(currentCatalog) =>
       ShowTablesCommand(None, pattern)
 
+    case ShowTableStatement(namespace, pattern, partitionsSpec) =>
+      val db = namespace match {
+        case Some(namespace) if namespace.length != 1 =>
+          throw new AnalysisException(
+            s"The database name is not valid: ${namespace.quoted}")
+        case _ => namespace.map(_.head)
+      }
+      ShowTablesCommand(db, Some(pattern), true, partitionsSpec)
+
     case AnalyzeTableStatement(tableName, partitionSpec, noScan) =>
       val v1TableName = parseV1Table(tableName, "ANALYZE TABLE")
       if (partitionSpec.isEmpty) {
@@ -370,6 +402,13 @@ class ResolveSessionCatalog(
         v1TableName.asTableIdentifier,
         "ALTER TABLE RECOVER PARTITIONS")
 
+    case AlterTableAddPartitionStatement(tableName, partitionSpecsAndLocs, ifNotExists) =>
+      val v1TableName = parseV1Table(tableName, "ALTER TABLE ADD PARTITION")
+      AlterTableAddPartitionCommand(
+        v1TableName.asTableIdentifier,
+        partitionSpecsAndLocs,
+        ifNotExists)
+
     case AlterTableRenamePartitionStatement(tableName, from, to) =>
       val v1TableName = parseV1Table(tableName, "ALTER TABLE RENAME PARTITION")
       AlterTableRenamePartitionCommand(
@@ -385,6 +424,27 @@ class ResolveSessionCatalog(
         ifExists,
         purge,
         retainData)
+
+    case AlterTableSerDePropertiesStatement(
+      tableName, serdeClassName, serdeProperties, partitionSpec) =>
+      val v1TableName = parseV1Table(tableName, "ALTER TABLE SerDe Properties")
+      AlterTableSerDePropertiesCommand(
+        v1TableName.asTableIdentifier,
+        serdeClassName,
+        serdeProperties,
+        partitionSpec)
+
+    case AlterViewAsStatement(tableName, originalText, query) =>
+      val v1TableName = parseV1Table(tableName, "ALTER VIEW QUERY")
+      AlterViewAsCommand(
+        v1TableName.asTableIdentifier,
+        originalText,
+        query)
+
+    case ShowTablePropertiesStatement(SessionCatalog(_, tableName), propertyKey) =>
+      ShowTablePropertiesCommand(
+        tableName.asTableIdentifier,
+        propertyKey)
   }
 
   private def parseV1Table(tableName: Seq[String], sql: String): Seq[String] = {

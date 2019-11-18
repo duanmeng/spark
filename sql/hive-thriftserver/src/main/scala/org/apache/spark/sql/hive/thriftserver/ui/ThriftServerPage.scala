@@ -124,15 +124,18 @@ private[ui] class ThriftServerPage(parent: ThriftServerTab) extends WebUIPage(""
     } else {
       None
     }
-
     val content =
-      <h5 id="sqlstat">SQL Statistics ({numStatement})</h5> ++
-        <div>
-          <ul class="unstyled">
-            {table.getOrElse("No statistics have been generated yet.")}
-          </ul>
+      <span id="sqlstat" class="collapse-aggregated-sqlstat collapse-table"
+            onClick="collapseTable('collapse-aggregated-sqlstat',
+                'aggregated-sqlstat')">
+        <h4>
+          <span class="collapse-table-arrow arrow-open"></span>
+          <a>SQL Statistics ({numStatement})</a>
+        </h4>
+      </span> ++
+        <div class="aggregated-sqlstat collapsible-table">
+          {table.getOrElse("No statistics have been generated yet.")}
         </div>
-
     content
   }
 
@@ -191,11 +194,16 @@ private[ui] class ThriftServerPage(parent: ThriftServerTab) extends WebUIPage(""
     }
 
     val content =
-      <h5 id="sessionstat">Session Statistics ({numSessions})</h5> ++
-      <div>
-        <ul class="unstyled">
-          {table.getOrElse("No statistics have been generated yet.")}
-        </ul>
+    <span id="sessionstat" class="collapse-aggregated-sessionstat collapse-table"
+          onClick="collapseTable('collapse-aggregated-sessionstat',
+                'aggregated-sessionstat')">
+      <h4>
+        <span class="collapse-table-arrow arrow-open"></span>
+        <a>Session Statistics ({numSessions})</a>
+      </h4>
+    </span> ++
+      <div class="aggregated-sessionstat collapsible-table">
+        {table.getOrElse("No statistics have been generated yet.")}
       </div>
 
     content
@@ -347,7 +355,9 @@ private[ui] class SqlStatsPagedTable(
         {formatDurationVerbose(duration)}
       </td>
       <td>
-        {info.statement}
+        <span class="description-input">
+          {info.statement}
+        </span>
       </td>
       <td>
         {info.state}
@@ -433,10 +443,13 @@ private[ui] class SessionStatsPagedTable(
     val sessionTableHeaders =
       Seq("User", "IP", "Session ID", "Start Time", "Finish Time", "Duration", "Total Execute")
 
+    val tooltips = Seq(None, None, None, None, None, Some(THRIFT_SESSION_DURATION),
+      Some(THRIFT_SESSION_TOTAL_EXECUTE))
+    assert(sessionTableHeaders.length == tooltips.length)
     val colWidthAttr = s"${100.toDouble / sessionTableHeaders.size}%"
 
     val headerRow: Seq[Node] = {
-      sessionTableHeaders.map { header =>
+      sessionTableHeaders.zip(tooltips).map { case (header, tooltip) =>
         if (header == sortColumn) {
           val headerLink = Unparsed(
             parameterPath +
@@ -445,12 +458,22 @@ private[ui] class SessionStatsPagedTable(
               s"&$sessionStatsTableTag.pageSize=$pageSize" +
               s"#$sessionStatsTableTag")
           val arrow = if (desc) "&#x25BE;" else "&#x25B4;" // UP or DOWN
+            <th width={colWidthAttr}>
+              <a href={headerLink}>
+                {
+                  if (tooltip.nonEmpty) {
+                    <span data-toggle="tooltip" data-placement="top" title={tooltip.get}>
+                      {header}&nbsp;{Unparsed(arrow)}
+                    </span>
+                  } else {
+                    <span>
+                      {header}&nbsp;{Unparsed(arrow)}
+                    </span>
+                  }
+                }
+              </a>
+            </th>
 
-          <th width={colWidthAttr}>
-            <a href={headerLink}>
-              {header}&nbsp;{Unparsed(arrow)}
-            </a>
-          </th>
         } else {
           val headerLink = Unparsed(
             parameterPath +
@@ -458,11 +481,19 @@ private[ui] class SessionStatsPagedTable(
               s"&$sessionStatsTableTag.pageSize=$pageSize" +
               s"#$sessionStatsTableTag")
 
-          <th width={colWidthAttr}>
-            <a href={headerLink}>
-              {header}
-            </a>
-          </th>
+            <th width={colWidthAttr}>
+              <a href={headerLink}>
+                {
+                  if (tooltip.nonEmpty) {
+                    <span data-toggle="tooltip" data-placement="top" title={tooltip.get}>
+                      {header}
+                    </span>
+                  } else {
+                    {header}
+                  }
+                }
+              </a>
+            </th>
         }
       }
     }
