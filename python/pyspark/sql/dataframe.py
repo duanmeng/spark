@@ -899,11 +899,13 @@ class DataFrame(object):
                 raise ValueError("fractions must be a dict but got %r" % type(fractions))
             for k, v in fractions.items():
                 if not isinstance(k, (float, int, long, basestring)):
-                    raise ValueError("key must be float, int, long, or string, but got %r" % type(k))
+                    raise ValueError(
+                        "key must be float, int, long, or string, but got %r" % type(k))
                 fractions[k] = float(v)
             col = col._jc
             seed = seed if seed is not None else random.randint(0, sys.maxsize)
-            return DataFrame(self._jdf.stat().sampleBy(col, self._jmap(fractions), seed), self.sql_ctx)
+            return DataFrame(
+                self._jdf.stat().sampleBy(col, self._jmap(fractions), seed), self.sql_ctx)
 
     @since(1.4)
     def randomSplit(self, weights, seed=None):
@@ -1064,7 +1066,6 @@ class DataFrame(object):
                 assert isinstance(how, basestring), "how should be basestring"
                 jdf = self._jdf.join(other._jdf, on, how)
             return DataFrame(jdf, self.sql_ctx)
-
 
     @since(1.6)
     def sortWithinPartitions(self, *cols, **kwargs):

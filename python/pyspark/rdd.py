@@ -512,7 +512,8 @@ class RDD(object):
         """
         assert fraction >= 0.0, "Negative fraction value: %s" % fraction
         with SCCallSiteSync(self.context):
-            return self.mapPartitionsWithIndex(RDDSampler(withReplacement, fraction, seed).func, True)
+            return self.mapPartitionsWithIndex(
+                RDDSampler(withReplacement, fraction, seed).func, True)
 
     def randomSplit(self, weights, seed=None):
         """
@@ -712,7 +713,8 @@ class RDD(object):
 
             def sortPartition(iterator):
                 sort = ExternalSorter(memory * 0.9, serializer).sorted
-                return iter(sort(iterator, key=lambda k_v: keyfunc(k_v[0]), reverse=(not ascending)))
+                return iter(
+                    sort(iterator, key=lambda k_v: keyfunc(k_v[0]), reverse=(not ascending)))
 
             return self.partitionBy(numPartitions, partitionFunc).mapPartitions(sortPartition, True)
 
@@ -771,7 +773,8 @@ class RDD(object):
                 else:
                     return numPartitions - 1 - p
 
-            return self.partitionBy(numPartitions, rangePartitioner).mapPartitions(sortPartition, True)
+            return self.partitionBy(
+                numPartitions, rangePartitioner).mapPartitions(sortPartition, True)
 
     def sortBy(self, keyfunc, ascending=True, numPartitions=None):
         """
@@ -964,7 +967,8 @@ class RDD(object):
             if depth < 1:
                 raise ValueError("Depth cannot be smaller than 1 but got %d." % depth)
 
-            zeroValue = None, True  # Use the second entry to indicate whether this is a dummy value.
+            # Use the second entry to indicate whether this is a dummy value.
+            zeroValue = None, True
 
             def op(x, y):
                 if x[1]:
@@ -1687,7 +1691,8 @@ class RDD(object):
             keyed._bypass_serializer = True
             if compressionCodecClass:
                 compressionCodec = self.ctx._jvm.java.lang.Class.forName(compressionCodecClass)
-                keyed._jrdd.map(self.ctx._jvm.BytesToString()).saveAsTextFile(path, compressionCodec)
+                keyed._jrdd.map(
+                    self.ctx._jvm.BytesToString()).saveAsTextFile(path, compressionCodec)
             else:
                 keyed._jrdd.map(self.ctx._jvm.BytesToString()).saveAsTextFile(path)
 
@@ -2187,7 +2192,8 @@ class RDD(object):
             def filter_func(pair):
                 key, (val1, val2) = pair
                 return val1 and not val2
-            return self.cogroup(other, numPartitions).filter(filter_func).flatMapValues(lambda x: x[0])
+            return self.cogroup(
+                other, numPartitions).filter(filter_func).flatMapValues(lambda x: x[0])
 
     def subtract(self, other, numPartitions=None):
         """

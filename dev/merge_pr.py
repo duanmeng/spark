@@ -62,6 +62,7 @@ g_pr_source_repo_name = ""
 # Avoid SSL certification exception
 ssl._create_default_https_context = ssl._create_unverified_context
 
+
 def cleanup():
     if g_old_branch != "":
         run_cmd("git checkout %s --quiet" % g_old_branch)
@@ -78,9 +79,11 @@ def cleanup():
     if g_pr_source_repo_name != "":
         run_cmd("git remote remove " + g_pr_source_repo_name)
 
+
 def err_exit():
     cleanup()
     sys.exit(-1)
+
 
 def request_get(url):
     pr_heads = {
@@ -97,8 +100,9 @@ def request_get(url):
             err_exit()
         return json.load(response)
     except urllib2.HTTPError as e:
-        print("request_get url:" + url +" exception:" + str(e))
+        print("request_get url:" + url + " exception:" + str(e))
         err_exit()
+
 
 def request_put(url, put_data):
     pr_heads = {
@@ -116,20 +120,21 @@ def request_put(url, put_data):
             print(response)
             err_exit()
     except urllib2.HTTPError as e:
-        print("request_post url:" + url +" exception:" + str(e))
+        print("request_post url:" + url + " exception:" + str(e))
         err_exit()
 
+
 def run_cmd(cmd):
-    #print(cmd)
     if isinstance(cmd, list):
         return subprocess.check_output(cmd).strip()
     else:
         return subprocess.check_output(cmd.split(" ")).strip()
 
+
 def check_env_var():
     if not PRIVATE_TOKEN:
-        print("ERROR: The env-vars PRIVATE_TOKEN is not specified. You can find your token on" + \
-              "https://git.code.oa.com/profile/account.")
+        print("ERROR: The env-vars PRIVATE_TOKEN is not specified. You can find your token on"
+              + "https://git.code.oa.com/profile/account.")
         err_exit()
 
     if not PUSH_REMOTE_NAME:
@@ -137,13 +142,15 @@ def check_env_var():
         err_exit()
 
     if not TARGET_PROJECT_ID:
-        print("ERROR: The env-vars TARGET_PROJECT_ID is not specified. You can find it on" + \
-              "https://git.code.oa.com/spark/spark")
+        print("ERROR: The env-vars TARGET_PROJECT_ID is not specified. You can find it on"
+              + "https://git.code.oa.com/spark/spark")
         err_exit()
+
 
 def get_merge_request(pr_num):
     print("Retrieving merge request %s..." % pr_num)
-    merge_request_list = request_get(TARGET_REPO_REST_URL + TARGET_PROJECT_ID + "/merge_requests?iid=" + pr_num)
+    merge_request_list = request_get(TARGET_REPO_REST_URL + TARGET_PROJECT_ID
+                                     + "/merge_requests?iid=" + pr_num)
 
     if len(merge_request_list) == 0:
         print("ERROR: Cannot find the specified merge request.")
@@ -162,6 +169,7 @@ def get_merge_request(pr_num):
         err_exit()
 
     return merge_request
+
 
 def standardize_commit_msg(merge_request):
     title = merge_request["title"]
@@ -219,6 +227,7 @@ def standardize_commit_msg(merge_request):
 
     return title
 
+
 def create_source_branch(merge_request):
     global g_pr_source_repo_name
     global g_pr_local_source_branch
@@ -227,7 +236,7 @@ def create_source_branch(merge_request):
     source_project_id = str(merge_request["source_project_id"])
     source_branch = merge_request["source_branch"]
 
-    source_repo_rsp = request_get(TARGET_REPO_REST_URL + source_project_id )
+    source_repo_rsp = request_get(TARGET_REPO_REST_URL + source_project_id)
     source_repo_url = source_repo_rsp["http_url_to_repo"]
 
     g_pr_source_repo_name = "source_repo"
@@ -240,16 +249,18 @@ def create_source_branch(merge_request):
             source_repo_exist = True
 
     try:
-        if source_repo_exist == False:
+        if source_repo_exist is False:
             run_cmd("git remote add %s %s" % (g_pr_source_repo_name, source_repo_url))
 
         g_pr_local_source_branch = "source_branch_" + source_branch + "_pr_num_" + pr_num
         run_cmd("git fetch %s --quiet" % g_pr_source_repo_name)
         print("Creating source branch...")
-        run_cmd("git branch " + g_pr_local_source_branch + " " + g_pr_source_repo_name + "/" + source_branch + " --quiet")
+        run_cmd("git branch " + g_pr_local_source_branch + " "
+                + g_pr_source_repo_name + "/" + source_branch + " --quiet")
     except Exception as e:
         print(e)
         err_exit()
+
 
 def create_target_branch(merge_request):
     global g_pr_local_target_branch
@@ -267,38 +278,47 @@ def create_target_branch(merge_request):
 
     print("Creating target branch...")
     try:
-        run_cmd("git branch " + g_pr_local_target_branch + " " + PUSH_REMOTE_NAME + "/" + target_branch + " --quiet")
+        run_cmd("git branch " + g_pr_local_target_branch + " "
+                + PUSH_REMOTE_NAME + "/" + target_branch + " --quiet")
     except:
         print("ERROR: Could not create branch " + g_pr_local_target_branch)
         err_exit()
+
 
 def check_merge():
     try:
         run_cmd("git rev-parse --verify --quiet " + g_pr_local_source_branch)
     except:
-        print("ERROR: The source branch: %s does not exists in the repository." % g_pr_local_source_branch)
+        print("ERROR: The source branch: %s does not exists in the repository." %
+              g_pr_local_source_branch)
         err_exit()
 
     try:
         run_cmd("git rev-parse --verify --quiet " + g_pr_local_target_branch)
     except:
-        print("ERROR: The target branch %s does not exists in the repository." % g_pr_local_target_branch)
+        print("ERROR: The target branch %s does not exists in the repository." %
+              g_pr_local_target_branch)
         err_exit()
 
     try:
-        missing_commits = run_cmd("git rev-list %s ^%s" % (g_pr_local_target_branch, g_pr_local_source_branch))
+        missing_commits = run_cmd("git rev-list %s ^%s" %
+                                  (g_pr_local_target_branch, g_pr_local_source_branch))
         if len(missing_commits) > 0:
             print("ERROR: The source branch diverges from the target branch.")
             err_exit()
 
-        submitting_commits = run_cmd("git rev-list %s ^%s" % (g_pr_local_source_branch, g_pr_local_target_branch))
+        submitting_commits = run_cmd("git rev-list %s ^%s" %
+                                     (g_pr_local_source_branch, g_pr_local_target_branch))
         if len(submitting_commits) == 0:
             print("ERROR: There is not commit to merge.")
             err_exit()
 
         print("The following commit will be submitted:")
         for commit in submitting_commits.split("\n"):
-            print(run_cmd(['git', 'log', '--format="%n  %s%n  Author: %aN <%aE>%n  Date: %aD%n"', '-n', '1', commit]))
+            print(
+                run_cmd(
+                    ['git', 'log',
+                     '--format="%n %s%n Author: %aN <%aE>%n Date: %aD%n"', '-n', '1', commit]))
 
         continue_merge = input("Do you want to continue? (y/n): ")
         if continue_merge.lower() != "y":
@@ -307,6 +327,7 @@ def check_merge():
     except Exception as e:
         print(e)
         err_exit()
+
 
 def save_uncommitted_changes():
     global g_old_branch
@@ -322,6 +343,7 @@ def save_uncommitted_changes():
     except:
         print("ERROR: Could not save uncommitted changes in the working directory.")
         err_exit()
+
 
 def merge_pr(merge_request):
     author = merge_request["author"]["name"]
@@ -345,22 +367,25 @@ def merge_pr(merge_request):
 
     print("Committing the changes to submit...")
     try:
-        run_cmd(['git', 'commit', '--author=\"%s <%s@tencent.com>\"' % (author, author),  '-m %s' % title, '--quiet'])
+        run_cmd(['git', 'commit',
+                 '--author=\"%s <%s@tencent.com>\"' % (author, author), '-m %s' % title, '--quiet'])
     except:
         print("Could not commit squashed changes")
         err_exit()
 
     print("Pushing changes to the target branch...")
     try:
-        run_cmd("git push %s %s:%s --quiet" % (PUSH_REMOTE_NAME, g_pr_local_target_branch, target_branch))
+        run_cmd("git push %s %s:%s --quiet"
+                % (PUSH_REMOTE_NAME, g_pr_local_target_branch, target_branch))
     except:
         print("Cannot push changes to the target branch.")
         err_exit()
 
     # close pr
     url = TARGET_REPO_REST_URL + TARGET_PROJECT_ID + "/merge_request/" + mr_id
-    put_data = {"state_event" : "close"}
+    put_data = {"state_event": "close"}
     request_put(url, put_data)
+
 
 def main(pr_num):
     check_env_var()
@@ -382,4 +407,3 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("ERROR: The merge request number is not specified.")
     main(sys.argv[1])
-

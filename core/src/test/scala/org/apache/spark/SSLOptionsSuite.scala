@@ -22,7 +22,7 @@ import java.util.UUID
 import javax.net.ssl.SSLContext
 
 import org.apache.hadoop.conf.Configuration
-//import org.apache.hadoop.security.alias.{CredentialProvider, CredentialProviderFactory}
+// import org.apache.hadoop.security.alias.{CredentialProvider, CredentialProviderFactory}
 import org.scalatest.BeforeAndAfterAll
 
 import org.apache.spark.util.SparkConfWithEnv
@@ -194,7 +194,8 @@ class SSLOptionsSuite extends SparkFunSuite with BeforeAndAfterAll {
 //      Set("TLS_RSA_WITH_AES_128_CBC_SHA", "TLS_RSA_WITH_AES_256_CBC_SHA"))
 //  }
 
-//  private def createCredentialProvider(tmpPath: String, conf: Configuration): CredentialProvider = {
+//  private def createCredentialProvider(
+//      tmpPath: String, conf: Configuration): CredentialProvider = {
 //    conf.set(CredentialProviderFactory.CREDENTIAL_PROVIDER_PATH, tmpPath)
 //
 //    val provider = CredentialProviderFactory.getProviders(conf).get(0)
