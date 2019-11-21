@@ -1810,12 +1810,19 @@ class DataSourceV2SQLSuite
       assertAnalysisError(
         s"UPDATE $t SET name='abc' WHERE dummy=1",
         "cannot resolve")
+    }
+  }
 
-      // UPDATE is not implemented yet.
-      val e = intercept[UnsupportedOperationException] {
-        sql(s"UPDATE $t SET name='Robert', age=32 WHERE p=1")
-      }
-      assert(e.getMessage.contains("UPDATE TABLE is not supported temporarily"))
+  test("UPDATE TABLE(exec)") {
+    val t = "testcat.ns1.ns2.tbl"
+    withTable(t) {
+      sql(s"CREATE TABLE $t (s1 int, s2 int, s3 int) USING foo PARTITIONED BY (s1)")
+      sql(s"INSERT INTO $t VALUES (11, 12, 13), (21, 22, 23), (31, 32, 33)")
+      sql(s"UPDATE $t SET s2=220, s3=230 WHERE s1=21")
+      checkAnswer(spark.table(t), Seq(
+        Row(11, 12, 13),
+        Row(21, 220, 230),
+        Row(31, 32, 33)))
     }
   }
 

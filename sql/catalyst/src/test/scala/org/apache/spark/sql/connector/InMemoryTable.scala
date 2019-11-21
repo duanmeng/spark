@@ -18,6 +18,7 @@
 package org.apache.spark.sql.connector
 
 import java.util
+import java.util.Map
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -25,6 +26,7 @@ import scala.collection.mutable
 import org.scalatest.Assertions._
 
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.{Expression, Literal}
 import org.apache.spark.sql.connector.catalog._
 import org.apache.spark.sql.connector.expressions.{IdentityTransform, NamedReference, Transform}
 import org.apache.spark.sql.connector.read._
@@ -41,7 +43,7 @@ class InMemoryTable(
     val schema: StructType,
     override val partitioning: Array[Transform],
     override val properties: util.Map[String, String])
-  extends Table with SupportsRead with SupportsWrite with SupportsDelete {
+  extends Table with SupportsRead with SupportsWrite with SupportsDelete with SupportsUpdate {
 
   private val allowUnsupportedTransforms =
     properties.getOrDefault("allow-unsupported-transforms", "false").toBoolean
@@ -83,6 +85,8 @@ class InMemoryTable(
     }
     partCols.map(fieldNames => extractor(fieldNames, schema, row))
   }
+
+  private def getFieldIndex(fieldName: String): Int = schema.names.indexOf(fieldName)
 
   def withData(data: Array[BufferedRows]): InMemoryTable = dataMap.synchronized {
     data.foreach(_.rows.foreach { row =>
@@ -186,6 +190,21 @@ class InMemoryTable(
   override def deleteWhere(filters: Array[Filter]): Unit = dataMap.synchronized {
     import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.MultipartIdentifierHelper
     dataMap --= InMemoryTable.filtersToKeys(dataMap.keys, partCols.map(_.toSeq.quoted), filters)
+  }
+
+  override def update(
+      assignments: Map[String, Expression],
+      filters: Array[Filter]): Unit = dataMap.synchronized {
+    // The implementation is only target on if update process can work
+    dataMap.values.foreach(_.rows.foreach { row =>
+      val filter = filters(0)
+      val colIndex = getFieldIndex(filter.asInstanceOf[EqualTo].attribute)
+      if (row.getInt(colIndex) == filter.asInstanceOf[EqualTo].value.asInstanceOf[Int]) {
+        assignments.asScala.foreach(
+          assignment => row.setInt(getFieldIndex(assignment._1),
+            assignment._2.asInstanceOf[Literal].value.asInstanceOf[Int]))
+      }
+    })
   }
 }
 

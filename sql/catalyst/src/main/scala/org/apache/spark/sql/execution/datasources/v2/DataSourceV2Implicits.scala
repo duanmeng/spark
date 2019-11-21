@@ -21,6 +21,7 @@ import scala.collection.JavaConverters._
 
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.connector.catalog.{SupportsDelete, SupportsRead, SupportsWrite, Table, TableCapability}
+import org.apache.spark.sql.connector.write.SupportsUpdate
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
 object DataSourceV2Implicits {
@@ -49,6 +50,15 @@ object DataSourceV2Implicits {
           support
         case _ =>
           throw new AnalysisException(s"Table does not support deletes: ${table.name}")
+      }
+    }
+
+    def asUpdatable: SupportsUpdate = {
+      table match {
+        case support: SupportsUpdate =>
+          support
+        case _ =>
+          throw new AnalysisException(s"Table does not support updates: ${table.name}")
       }
     }
 
