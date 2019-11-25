@@ -576,6 +576,10 @@ class SessionCatalog(
     tempViews.get(formatTableName(name))
   }
 
+  def getTempViewNames(): Seq[String] = synchronized {
+    tempViews.keySet.toSeq
+  }
+
   /**
    * Return a global temporary view exactly as it was stored.
    */
@@ -761,6 +765,25 @@ class SessionCatalog(
       } else {
         SubqueryAlias(table, tempViews(table))
       }
+    }
+  }
+
+  def lookupTempView(table: String): Option[SubqueryAlias] = {
+    val formattedTable = formatTableName(table)
+    getTempView(formattedTable).map { view =>
+      SubqueryAlias(formattedTable, view)
+    }
+  }
+
+  def lookupGlobalTempView(db: String, table: String): Option[SubqueryAlias] = {
+    val formattedDB = formatDatabaseName(db)
+    if (formattedDB == globalTempViewManager.database) {
+      val formattedTable = formatTableName(table)
+      getGlobalTempView(formattedTable).map { view =>
+        SubqueryAlias(formattedTable, formattedDB, view)
+      }
+    } else {
+      None
     }
   }
 

@@ -1878,7 +1878,8 @@ class _NaiveBayesParams(_JavaPredictorParams, HasWeightCol):
     smoothing = Param(Params._dummy(), "smoothing", "The smoothing parameter, should be >= 0, " +
                       "default is 1.0", typeConverter=TypeConverters.toFloat)
     modelType = Param(Params._dummy(), "modelType", "The model type which is a string " +
-                      "(case-sensitive). Supported options: multinomial (default) and bernoulli.",
+                      "(case-sensitive). Supported options: multinomial (default), bernoulli " +
+                      "and gaussian.",
                       typeConverter=TypeConverters.toString)
 
     @since("1.5.0")
@@ -1907,7 +1908,15 @@ class NaiveBayes(JavaProbabilisticClassifier, _NaiveBayesParams, HasThresholds, 
     TF-IDF vectors, it can be used for document classification. By making every vector a
     binary (0/1) data, it can also be used as `Bernoulli NB
     <http://nlp.stanford.edu/IR-book/html/htmledition/the-bernoulli-model-1.html>`_.
-    The input feature values must be nonnegative.
+    The input feature values for Multinomial NB and Bernoulli NB must be nonnegative.
+    Since 3.0.0, it supports Complement NB which is an adaptation of the Multinomial NB.
+    Specifically, Complement NB uses statistics from the complement of each class to compute
+    the model's coefficients. The inventors of Complement NB show empirically that the parameter
+    estimates for CNB are more stable than those for Multinomial NB. Like Multinomial NB, the
+    input feature values for Complement NB must be nonnegative.
+    Since 3.0.0, it also supports Gaussian NB
+    <https://en.wikipedia.org/wiki/Naive_Bayes_classifier#Gaussian_naive_Bayes>`_.
+    which can handle continuous data.
 
     >>> from pyspark.sql import Row
     >>> from pyspark.ml.linalg import Vectors
@@ -1925,6 +1934,8 @@ class NaiveBayes(JavaProbabilisticClassifier, _NaiveBayesParams, HasThresholds, 
     DenseVector([-0.81..., -0.58...])
     >>> model.theta
     DenseMatrix(2, 2, [-0.91..., -0.51..., -0.40..., -1.09...], 1)
+    >>> model.sigma == None
+    True
     >>> test0 = sc.parallelize([Row(features=Vectors.dense([1.0, 0.0]))]).toDF()
     >>> model.predict(test0.head().features)
     1.0
@@ -1955,6 +1966,20 @@ class NaiveBayes(JavaProbabilisticClassifier, _NaiveBayesParams, HasThresholds, 
     >>> result = model3.transform(test0).head()
     >>> result.prediction
     0.0
+    >>> nb3 = NaiveBayes().setModelType("gaussian")
+    >>> model4 = nb3.fit(df)
+    >>> model4.getModelType()
+    'gaussian'
+    >>> model4.sigma
+    DenseMatrix(2, 2, [0.0, 0.25, 0.0, 0.0], 1)
+    >>> nb5 = NaiveBayes(smoothing=1.0, modelType="complement", weightCol="weight")
+    >>> model5 = nb5.fit(df)
+    >>> model5.getModelType()
+    'complement'
+    >>> model5.theta
+    DenseMatrix(2, 2, [...], 1)
+    >>> model5.sigma == None
+    True
 
     .. versionadded:: 1.5.0
     """
@@ -2036,6 +2061,14 @@ class NaiveBayesModel(JavaProbabilisticClassificationModel, _NaiveBayesParams, J
         log of class conditional probabilities.
         """
         return self._call_java("theta")
+
+    @property
+    @since("3.0.0")
+    def sigma(self):
+        """
+        variance of each feature.
+        """
+        return self._call_java("sigma")
 
 
 class _MultilayerPerceptronParams(_JavaProbabilisticClassifierParams, HasSeed, HasMaxIter,

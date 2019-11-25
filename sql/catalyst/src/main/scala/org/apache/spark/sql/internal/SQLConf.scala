@@ -393,8 +393,8 @@ object SQLConf {
         "must be a positive integer.")
       .createOptional
 
-  val OPTIMIZE_LOCAL_SHUFFLE_READER_ENABLED =
-    buildConf("spark.sql.adaptive.shuffle.optimizedLocalShuffleReader.enabled")
+  val LOCAL_SHUFFLE_READER_ENABLED =
+    buildConf("spark.sql.adaptive.shuffle.localShuffleReader.enabled")
     .doc("When true and adaptive execution is enabled, this enables the optimization of" +
       " converting the shuffle reader to local shuffle reader for the shuffle exchange" +
       " of the broadcast hash join in probe side.")
@@ -1401,6 +1401,12 @@ object SQLConf {
       .booleanConf
       .createWithDefault(false)
 
+  val PLAN_STATS_ENABLED =
+    buildConf("spark.sql.cbo.planStats.enabled")
+      .doc("When true, the logical plan will fetch row counts and column statistics from catalog.")
+      .booleanConf
+      .createWithDefault(false)
+
   val JOIN_REORDER_ENABLED =
     buildConf("spark.sql.cbo.joinReorder.enabled")
       .doc("Enables join reorder in CBO.")
@@ -1786,6 +1792,23 @@ object SQLConf {
       .transform(_.toUpperCase(Locale.ROOT))
       .checkValues(StoreAssignmentPolicy.values.map(_.toString))
       .createWithDefault(StoreAssignmentPolicy.ANSI.toString)
+
+  object IntervalStyle extends Enumeration {
+    type IntervalStyle = Value
+    val SQL_STANDARD, ISO_8601, MULTI_UNITS = Value
+  }
+
+  val INTERVAL_STYLE = buildConf("spark.sql.intervalOutputStyle")
+    .doc("When converting interval values to strings (i.e. for display), this config decides the" +
+      " interval string format. The value SQL_STANDARD will produce output matching SQL standard" +
+      " interval literals (i.e. '+3-2 +10 -00:00:01'). The value ISO_8601 will produce output" +
+      " matching the ISO 8601 standard (i.e. 'P3Y2M10DT-1S'). The value MULTI_UNITS (which is the" +
+      " default) will produce output in form of value unit pairs, (i.e. '3 year 2 months 10 days" +
+      " -1 seconds'")
+    .stringConf
+    .transform(_.toUpperCase(Locale.ROOT))
+    .checkValues(IntervalStyle.values.map(_.toString))
+    .createWithDefault(IntervalStyle.MULTI_UNITS.toString)
 
   val SORT_BEFORE_REPARTITION =
     buildConf("spark.sql.execution.sortBeforeRepartition")
@@ -2417,6 +2440,8 @@ class SQLConf extends Serializable with Logging {
 
   def cboEnabled: Boolean = getConf(SQLConf.CBO_ENABLED)
 
+  def planStatsEnabled: Boolean = getConf(SQLConf.PLAN_STATS_ENABLED)
+
   def autoSizeUpdateEnabled: Boolean = getConf(SQLConf.AUTO_SIZE_UPDATE_ENABLED)
 
   def joinReorderEnabled: Boolean = getConf(SQLConf.JOIN_REORDER_ENABLED)
@@ -2503,7 +2528,11 @@ class SQLConf extends Serializable with Logging {
   def storeAssignmentPolicy: StoreAssignmentPolicy.Value =
     StoreAssignmentPolicy.withName(getConf(STORE_ASSIGNMENT_POLICY))
 
-  def usePostgreSQLDialect: Boolean = getConf(DIALECT) == Dialect.POSTGRESQL.toString
+  def intervalOutputStyle: IntervalStyle.Value = IntervalStyle.withName(getConf(INTERVAL_STYLE))
+
+  def dialect: Dialect.Value = Dialect.withName(getConf(DIALECT))
+
+  def usePostgreSQLDialect: Boolean = dialect == Dialect.POSTGRESQL
 
   def dialectSparkAnsiEnabled: Boolean = getConf(DIALECT_SPARK_ANSI_ENABLED)
 
