@@ -32,8 +32,8 @@
   "id" : "application_1516285256255_0012",
   "name" : "Spark shell",
   "attempts" : [ {
-    "startTime" : "2018-01-18T18:30:35.119GMT",
-    "endTime" : "2018-01-18T18:38:27.938GMT",
+    "startTime" : "2018-01-19T02:30:35.119CST",
+    "endTime" : "2018-01-19T02:38:27.938CST",
     "lastUpdated" : "",
     "duration" : 472819,
     "sparkUser" : "attilapiros",
@@ -47,8 +47,8 @@
   "id" : "app-20180109111548-0000",
   "name" : "Spark shell",
   "attempts" : [ {
-    "startTime" : "2018-01-09T10:15:42.372GMT",
-    "endTime" : "2018-01-09T10:24:37.606GMT",
+    "startTime" : "2018-01-09T18:15:42.372CST",
+    "endTime" : "2018-01-09T18:24:37.606CST",
     "lastUpdated" : "",
     "duration" : 535234,
     "sparkUser" : "attilapiros",
@@ -62,8 +62,8 @@
   "id" : "app-20161116163331-0000",
   "name" : "Spark shell",
   "attempts" : [ {
-    "startTime" : "2016-11-16T22:33:29.916GMT",
-    "endTime" : "2016-11-16T22:33:40.587GMT",
+    "startTime" : "2016-11-17T06:33:29.916CST",
+    "endTime" : "2016-11-17T06:33:40.587CST",
     "lastUpdated" : "",
     "duration" : 10671,
     "sparkUser" : "jose",
@@ -77,8 +77,8 @@
   "id" : "app-20161115172038-0000",
   "name" : "Spark shell",
   "attempts" : [ {
-    "startTime" : "2016-11-15T23:20:37.079GMT",
-    "endTime" : "2016-11-15T23:22:18.874GMT",
+    "startTime" : "2016-11-16T07:20:37.079CST",
+    "endTime" : "2016-11-16T07:22:18.874CST",
     "lastUpdated" : "",
     "duration" : 101795,
     "sparkUser" : "jose",
@@ -92,8 +92,8 @@
   "id" : "local-1430917381534",
   "name" : "Spark shell",
   "attempts" : [ {
-    "startTime" : "2015-05-06T13:03:00.893GMT",
-    "endTime" : "2015-05-06T13:03:11.398GMT",
+    "startTime" : "2015-05-06T21:03:00.893CST",
+    "endTime" : "2015-05-06T21:03:11.398CST",
     "lastUpdated" : "",
     "duration" : 10505,
     "sparkUser" : "irashid",
@@ -108,8 +108,8 @@
   "name" : "Spark shell",
   "attempts" : [ {
     "attemptId" : "2",
-    "startTime" : "2015-05-06T13:03:00.893GMT",
-    "endTime" : "2015-05-06T13:03:00.950GMT",
+    "startTime" : "2015-05-06T21:03:00.893CST",
+    "endTime" : "2015-05-06T21:03:00.950CST",
     "lastUpdated" : "",
     "duration" : 57,
     "sparkUser" : "irashid",
@@ -120,8 +120,8 @@
     "endTimeEpoch" : 1430917380950
   }, {
     "attemptId" : "1",
-    "startTime" : "2015-05-06T13:03:00.880GMT",
-    "endTime" : "2015-05-06T13:03:00.890GMT",
+    "startTime" : "2015-05-06T21:03:00.880CST",
+    "endTime" : "2015-05-06T21:03:00.890CST",
     "lastUpdated" : "",
     "duration" : 10,
     "sparkUser" : "irashid",

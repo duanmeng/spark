@@ -2,8 +2,8 @@
   "id" : "application_1555004656427_0144",
   "name" : "Spark shell",
   "attempts" : [ {
-    "startTime" : "2019-07-02T21:02:17.180GMT",
-    "endTime" : "2019-07-02T21:02:35.974GMT",
+    "startTime" : "2019-07-03T05:02:17.180CST",
+    "endTime" : "2019-07-03T05:02:35.974CST",
     "lastUpdated" : "",
     "duration" : 18794,
     "sparkUser" : "tgraves",
@@ -17,8 +17,8 @@
   "id" : "application_1553914137147_0018",
   "name" : "LargeBlocks",
   "attempts" : [ {
-    "startTime" : "2019-04-08T20:39:44.286GMT",
-    "endTime" : "2019-04-08T20:40:46.454GMT",
+    "startTime" : "2019-04-09T04:39:44.286CST",
+    "endTime" : "2019-04-09T04:40:46.454CST",
     "lastUpdated" : "",
     "duration" : 62168,
     "sparkUser" : "systest",
@@ -32,8 +32,8 @@
   "id" : "application_1516285256255_0012",
   "name" : "Spark shell",
   "attempts" : [ {
-    "startTime" : "2018-01-18T18:30:35.119GMT",
-    "endTime" : "2018-01-18T18:38:27.938GMT",
+    "startTime" : "2018-01-19T02:30:35.119CST",
+    "endTime" : "2018-01-19T02:38:27.938CST",
     "lastUpdated" : "",
     "duration" : 472819,
     "sparkUser" : "attilapiros",
