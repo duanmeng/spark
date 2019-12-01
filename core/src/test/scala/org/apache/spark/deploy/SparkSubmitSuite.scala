@@ -18,6 +18,7 @@
 package org.apache.spark.deploy
 
 import java.io._
+import java.lang.reflect.UndeclaredThrowableException
 import java.net.{URI, URL}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
@@ -1299,11 +1300,9 @@ class SparkSubmitSuite
       "spark-internal",
       "hello")
 
-    val exception = intercept[SparkException] {
+    intercept[UndeclaredThrowableException] {
       submit.doSubmit(args)
     }
-
-    assert(exception.getMessage() === "hello")
   }
 
   test("support --py-files/spark.submit.pyFiles in non pyspark application") {
