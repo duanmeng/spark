@@ -25,6 +25,7 @@ import org.apache.spark.sql.catalyst.catalog.BucketSpec
 import org.apache.spark.sql.catalyst.expressions.{EqualTo, Literal}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.connector.expressions.{ApplyTransform, BucketTransform, DaysTransform, FieldReference, HoursTransform, IdentityTransform, LiteralValue, MonthsTransform, Transform, YearsTransform}
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{IntegerType, LongType, StringType, StructType, TimestampType}
 import org.apache.spark.unsafe.types.UTF8String
 
@@ -46,6 +47,26 @@ class DDLParserSuite extends AnalysisTest {
 
   private def parseCompare(sql: String, expected: LogicalPlan): Unit = {
     comparePlans(parsePlan(sql), expected, checkAnalysis = false)
+  }
+
+  test("SPARK-30098: create table without provider should " +
+    "use default data source under non-legacy mode") {
+    val createSql = "CREATE TABLE my_tab(a INT COMMENT 'test', b STRING)"
+    val defaultProvider = conf.defaultDataSourceName
+    val expectedPlan = CreateTableStatement(
+      Seq("my_tab"),
+      new StructType()
+        .add("a", IntegerType, nullable = true, "test")
+        .add("b", StringType),
+      Seq.empty[Transform],
+      None,
+      Map.empty[String, String],
+      defaultProvider,
+      Map.empty[String, String],
+      None,
+      None,
+      false)
+    parseCompare(createSql, expectedPlan)
   }
 
   test("create/replace table using - schema") {
@@ -1776,6 +1797,47 @@ class DDLParserSuite extends AnalysisTest {
     comparePlans(
       parsePlan("SHOW TBLPROPERTIES a.b.c('propKey1')"),
       ShowTablePropertiesStatement(Seq("a", "b", "c"), Some("propKey1")))
+  }
+
+  test("DESCRIBE FUNCTION") {
+    comparePlans(
+      parsePlan("DESC FUNCTION a"),
+      DescribeFunctionStatement(Seq("a"), false))
+    comparePlans(
+      parsePlan("DESCRIBE FUNCTION a"),
+      DescribeFunctionStatement(Seq("a"), false))
+    comparePlans(
+      parsePlan("DESCRIBE FUNCTION a.b.c"),
+      DescribeFunctionStatement(Seq("a", "b", "c"), false))
+    comparePlans(
+      parsePlan("DESCRIBE FUNCTION EXTENDED a.b.c"),
+      DescribeFunctionStatement(Seq("a", "b", "c"), true))
+  }
+
+  test("SHOW FUNCTIONS") {
+    comparePlans(
+      parsePlan("SHOW FUNCTIONS"),
+      ShowFunctionsStatement(true, true, None, None))
+    comparePlans(
+      parsePlan("SHOW USER FUNCTIONS"),
+      ShowFunctionsStatement(true, false, None, None))
+    comparePlans(
+      parsePlan("SHOW user FUNCTIONS"),
+      ShowFunctionsStatement(true, false, None, None))
+    comparePlans(
+      parsePlan("SHOW SYSTEM FUNCTIONS"),
+      ShowFunctionsStatement(false, true, None, None))
+    comparePlans(
+      parsePlan("SHOW ALL FUNCTIONS"),
+      ShowFunctionsStatement(true, true, None, None))
+    comparePlans(
+      parsePlan("SHOW FUNCTIONS LIKE 'funct*'"),
+      ShowFunctionsStatement(true, true, Some("funct*"), None))
+    comparePlans(
+      parsePlan("SHOW FUNCTIONS LIKE a.b.c"),
+      ShowFunctionsStatement(true, true, None, Some(Seq("a", "b", "c"))))
+    val sql = "SHOW other FUNCTIONS"
+    intercept(sql, s"$sql not supported")
   }
 
   private case class TableSpec(
