@@ -61,11 +61,24 @@ object JdbcUtils extends Logging {
         throw new IllegalStateException(
           s"Did not find registered driver with class $driverClass")
       }
+
+      /* Start SuperSQL modification */
       val connection: Connection = driver.connect(options.url, options.asConnectionProperties)
+
       require(connection != null,
         s"The driver could not open a JDBC connection. Check the URL: ${options.url}")
 
+      var st: Statement = null
+      try {
+        if (isSuperSql(connection.getMetaData.getURL)) {
+          st = connection.createStatement()
+          st.execute("set supersql.lex = ORACLE_NOCAST");
+        }
+      } catch {
+        case t: Throwable =>
+      }
       connection
+      /* End SuperSQL modification */
     }
   }
 
@@ -313,6 +326,14 @@ object JdbcUtils extends Logging {
     newUrl.startsWith("jdbc:hive2:") ||
       newUrl.startsWith("jdbc:phoenix:") ||
       newUrl.startsWith("jdbc:hive:")
+  }
+
+  def isSuperSql(url: String): Boolean = {
+    if (url == null) {
+      return false
+    }
+    val newUrl = handleSuperSqlUrl(url)
+    newUrl.startsWith("jdbc:supersql:")
   }
 
   private def hideSensitiveInfo(key: String, value: String): String = {
@@ -750,6 +771,14 @@ object JdbcUtils extends Logging {
     val outMetrics = TaskContext.get().taskMetrics().outputMetrics
 
     val conn = getConnection()
+    /* Start SuperSQL modification */
+    val url =
+      try {
+        conn.getMetaData.getURL
+      } catch {
+        case t: Throwable => null
+      }
+    /* End SuperSQL modification */
     var committed = false
 
     var finalIsolationLevel = Connection.TRANSACTION_NONE
@@ -769,7 +798,12 @@ object JdbcUtils extends Logging {
                 s"falling back to default isolation level $defaultIsolation")
           }
         } else {
-          logWarning(s"Requested isolation level $isolationLevel, but transactions are unsupported")
+          /* Start SuperSQL modification */
+          if (!isSuperSql(url)) {
+            logWarning(s"Requested isolation level $isolationLevel, "
+              + "but transactions are unsupported")
+          }
+          /* End SuperSQL modification */
         }
       } catch {
         case NonFatal(e) => logWarning("Exception while detecting transaction support", e)

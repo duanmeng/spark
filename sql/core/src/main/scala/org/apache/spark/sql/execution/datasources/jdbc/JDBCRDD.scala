@@ -53,25 +53,26 @@ object JDBCRDD extends Logging {
     val url = options.url
     val table = options.tableOrQuery
     val dialect = JdbcDialects.get(url)
+
+    /* Start SuperSQL modification */
     val conn: Connection = JdbcUtils.createConnectionFactory(options)()
+    if (conn == null) {
+      throw new IllegalStateException("Failed to get JDBC connection to resolve table")
+    }
     try {
-      /* Start SuperSQL modification */
       val st = conn.createStatement()
       try {
         JdbcUtils.setBypassConfs(options, st)
       } finally {
         st.close()
       }
-      /* End SuperSQL modification */
 
       val statement = conn.prepareStatement(dialect.getSchemaQuery(table))
       try {
         JdbcUtils.setStatementQueryTimeout(statement, options.queryTimeout)
         val rs = statement.executeQuery()
         try {
-          /* Start SuperSQL modification */
           JdbcUtils.getSchema(rs, dialect, url, alwaysNullable = true)
-          /* End SuperSQL modification */
         } finally {
           rs.close()
         }
@@ -81,6 +82,7 @@ object JDBCRDD extends Logging {
     } finally {
       conn.close()
     }
+    /* End SuperSQL modification */
   }
 
   /**
