@@ -126,6 +126,11 @@ case class AdaptiveSparkPlanExec(
 
   override def doCanonicalize(): SparkPlan = initialPlan.canonicalized
 
+  override def resetMetrics(): Unit = {
+    metrics.valuesIterator.foreach(_.reset())
+    executedPlan.resetMetrics()
+  }
+
   private def getFinalPhysicalPlan(): SparkPlan = lock.synchronized {
     if (!isFinalPlan) {
       // Subqueries do not have their own execution IDs and therefore rely on the main query to
@@ -209,8 +214,8 @@ case class AdaptiveSparkPlanExec(
 
       // Run the final plan when there's no more unfinished stages.
       currentPhysicalPlan = applyPhysicalRules(result.newPlan, queryStageOptimizerRules)
-      executionId.foreach(onUpdatePlan)
       isFinalPlan = true
+      executionId.foreach(onUpdatePlan)
       logDebug(s"Final plan: $currentPhysicalPlan")
     }
     currentPhysicalPlan
@@ -222,6 +227,10 @@ case class AdaptiveSparkPlanExec(
 
   override def executeTake(n: Int): Array[InternalRow] = {
     getFinalPhysicalPlan().executeTake(n)
+  }
+
+  override def executeTail(n: Int): Array[InternalRow] = {
+    getFinalPhysicalPlan().executeTail(n)
   }
 
   override def doExecute(): RDD[InternalRow] = {
