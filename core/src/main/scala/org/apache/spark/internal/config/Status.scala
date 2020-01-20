@@ -70,4 +70,8 @@ private[spark] object Status {
       .version("3.0.0")
       .booleanConf
       .createWithDefault(false)
+
+  val UI_FORCECLEAN_ENABLED = ConfigBuilder("spark.ui.forceClean.enable")
+    .booleanConf
+    .createWithDefault(false)
 }

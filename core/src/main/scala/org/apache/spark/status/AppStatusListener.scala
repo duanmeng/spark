@@ -66,14 +66,15 @@ private[spark] class AppStatusListener(
 
   private val maxTasksPerStage = conf.get(MAX_RETAINED_TASKS_PER_STAGE)
   private val maxGraphRootNodes = conf.get(MAX_RETAINED_ROOT_NODES)
+  private val isForceClean = conf.get(UI_FORCECLEAN_ENABLED)
 
   // Keep track of live entities, so that task metrics can be efficiently updated (without
   // causing too many writes to the underlying store, and other expensive operations).
   private val liveStages = new ConcurrentHashMap[(Int, Int), LiveStage]()
-  private val liveJobs = new HashMap[Int, LiveJob]()
+  private val liveJobs = new ConcurrentHashMap[Int, LiveJob]().asScala
   private[spark] val liveExecutors = new HashMap[String, LiveExecutor]()
   private val deadExecutors = new HashMap[String, LiveExecutor]()
-  private val liveTasks = new HashMap[Long, LiveTask]()
+  private val liveTasks = new ConcurrentHashMap[Long, LiveTask]().asScala
   private val liveRDDs = new HashMap[Int, LiveRDD]()
   private val pools = new HashMap[String, SchedulerPool]()
 
@@ -1122,11 +1123,16 @@ private[spark] class AppStatusListener(
       return
     }
 
-    val view = kvstore.view(classOf[JobDataWrapper]).index("completionTime").first(0L)
+    val view = kvstore.view(classOf[JobDataWrapper]).index("completionTime")
     val toDelete = KVUtils.viewToSeq(view, countToDelete.toInt) { j =>
-      j.info.status != JobExecutionStatus.RUNNING && j.info.status != JobExecutionStatus.UNKNOWN
+      isForceClean || (j.info.status != JobExecutionStatus.RUNNING && j.info.status != JobExecutionStatus.UNKNOWN)
     }
-    toDelete.foreach { j => kvstore.delete(j.getClass(), j.info.jobId) }
+    toDelete.foreach { j => {
+      if (isForceClean) {
+        liveJobs.remove(j.info.jobId)
+      }
+      kvstore.delete(j.getClass(), j.info.jobId)
+    }}
   }
 
   private def cleanupStages(count: Long): Unit = {
@@ -1140,11 +1146,14 @@ private[spark] class AppStatusListener(
     // UI.
     val view = kvstore.view(classOf[StageDataWrapper]).index("completionTime")
     val stages = KVUtils.viewToSeq(view, countToDelete.toInt) { s =>
-      s.info.status != v1.StageStatus.ACTIVE && s.info.status != v1.StageStatus.PENDING
+      isForceClean || (s.info.status != v1.StageStatus.ACTIVE && s.info.status != v1.StageStatus.PENDING)
     }
 
     val stageIds = stages.map { s =>
       val key = Array(s.info.stageId, s.info.attemptId)
+      if (isForceClean) {
+        liveStages.remove((s.info.stageId, s.info.attemptId))
+      }
       kvstore.delete(s.getClass(), key)
 
       // Check whether there are remaining attempts for the same stage. If there aren't, then
@@ -1176,6 +1185,24 @@ private[spark] class AppStatusListener(
 
     // Delete tasks for all stages in one pass, as deleting them for each stage individually is slow
     kvstore.removeAllByIndexValues(classOf[TaskDataWrapper], TaskIndexNames.STAGE, stageIds)
+
+    // Delete tasks which can not find the corresponding stage
+    if (isForceClean) {
+      kvstore.doAsync{
+        val tasks = kvstore.view(classOf[TaskDataWrapper]).asScala
+        val stages = kvstore.view(classOf[StageDataWrapper]).asScala
+        val keys = stages.map { s => (s.info.stageId, s.info.attemptId) }.toSet
+        var num = 0
+        tasks.foreach { t =>
+          if (!keys.contains((t.stageId, t.stageAttemptId))) {
+            liveTasks.remove(t.taskId)
+            kvstore.delete(t.getClass(), t.taskId)
+            num = num + 1
+          }
+        }
+        logInfo(s"Clean ${num} tasks when cleaning stages.")
+      }
+    }
   }
 
   private def cleanupTasks(stage: LiveStage): Unit = {
