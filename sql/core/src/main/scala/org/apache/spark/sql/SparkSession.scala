@@ -21,6 +21,9 @@ import java.io.Closeable
 import java.util.concurrent.TimeUnit._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 
+import com.tencent.tdw.security.authentication.{LocalKeyManager, ServiceTarget}
+import com.tencent.tdw.security.authentication.client.SecureClientFactory
+import org.apache.hadoop.security.UserGroupInformation
 import scala.collection.JavaConverters._
 import scala.reflect.runtime.universe.TypeTag
 import scala.util.control.NonFatal
@@ -603,7 +606,39 @@ class SparkSession private(
     val plan = tracker.measurePhase(QueryPlanningTracker.PARSING) {
       sessionState.sqlParser.parsePlan(sqlText)
     }
-    Dataset.ofRows(self, plan, tracker)
+
+    val sqlConf = sessionState.conf
+    // get user name for tauth, from ugi or conf
+    val userName = if ("".equals(sqlConf.tauthUserName)) {
+      UserGroupInformation.getCurrentUser.getShortUserName
+    } else {
+      sqlConf.tauthUserName
+    }
+
+    val secureClient = SecureClientFactory.generate(
+      userName, LocalKeyManager.generateByDefaultKey(sqlConf.tauthUserKey))
+    // authenticate user with TAuth for sparkSql
+    secureClient.getAuthentication(
+      ServiceTarget.valueOf(sqlConf.tauthServiceSparkSql))
+    try {
+      Dataset.ofRows(self, plan, tracker)
+    } catch {
+      case e: Exception if sqlConf.supersqlAutoRouterEnabled &&
+        e.getMessage.indexOf(sqlConf.supersqlAutoRouterDependentMessage) > -1 =>
+        logInfo("Unsupported query with spark sql, forward to SuperSQL")
+
+        // authenticate user with TAuth for superSql
+        val authentication = secureClient.getAuthentication(
+          ServiceTarget.valueOf(sqlConf.tauthServiceSuperSql))
+
+        read.format("jdbc").option("driver", sqlConf.supersqlAutoRouterConnectionDriver).
+          option("rawAuth", authentication.flat).
+          option("url", sqlConf.supersqlAutoRouterConnectionUrl).
+          option("fetchsize", sqlConf.supersqlAutoRouterConnectionFetchSize).
+          option("query", sqlText).load
+
+      case t: Throwable => throw t
+    }
   }
 
   /**

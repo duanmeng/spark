@@ -204,6 +204,8 @@
     <jpam.version>1.1</jpam.version>
     <selenium.version>2.52.0</selenium.version>
     <htmlunit.version>2.22</htmlunit.version>
+    <supersql.driver.version>1.16.0-SUPERSQL-SNAPSHOT</supersql.driver.version>
+    <tdw.security.common.version>0.3.2</tdw.security.common.version>
     <!--
     Managed up from older version from Avro; sync with jackson-module-paranamer dependency version
     -->
@@ -267,6 +269,17 @@
   </properties>
   <repositories>
     <repository>
+      <id>tencent_snapshot_repo</id>
+      <name>Tencent Snapshot Repository</name>
+      <url>https://mirrors.tencent.com/repository/maven/tencent_public_snapshots/</url>
+      <releases>
+        <enabled>false</enabled>
+      </releases>
+      <snapshots>
+        <enabled>true</enabled>
+      </snapshots>
+    </repository>
+    <repository>
       <id>tencent_repo</id>
       <!-- This should be at top, it makes maven try the tencent repo first and then others and hence faster dep resolution -->
       <name>Tencent Repository</name>
@@ -275,7 +288,7 @@
         <enabled>true</enabled>
       </releases>
       <snapshots>
-        <enabled>false</enabled>
+        <enabled>true</enabled>
       </snapshots>
     </repository>
     <repository>
@@ -2173,10 +2186,22 @@
         <scope>${parquet.test.deps.scope}</scope>
       </dependency>
       <dependency>
+        <groupId>org.apache.calcite.avatica</groupId>
+        <artifactId>avatica-core</artifactId>
+        <version>${supersql.driver.version}</version>
+        <classifier>shaded</classifier>
+      </dependency>
+      <dependency>
         <groupId>${hive.parquet.group}</groupId>
         <artifactId>parquet-hadoop-bundle</artifactId>
         <version>${hive.parquet.version}</version>
         <scope>${hive.parquet.scope}</scope>
+      </dependency>
+      <dependency>
+        <groupId>com.tencent.tdw</groupId>
+        <artifactId>security-common</artifactId>
+        <version>${tdw.security.common.version}</version>
+        <classifier>shaded</classifier>
       </dependency>
       <dependency>
         <groupId>org.codehaus.janino</groupId>

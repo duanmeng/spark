@@ -2635,6 +2635,51 @@ object SQLConf {
       .checkValue(_ > 0, "The timeout value must be positive")
       .createWithDefault(10L)
 
+  val TAUTH_USER_NAME =
+    buildConf("spark.sql.tauth.user.name")
+      .stringConf
+      .createWithDefault("")
+
+  val TAUTH_USER_KEY =
+    buildConf("spark.sql.tauth.user.key")
+      .stringConf
+      .createWithDefault("")
+
+  val TAUTH_SERVICE_SPARKSQL =
+    buildConf("spark.sql.tauth.service.sparksql")
+      .stringConf
+      .createWithDefault("sparksql")
+
+  val TAUTH_SERVICE_SUPERSQL =
+    buildConf("spark.sql.tauth.service.supersql")
+      .stringConf
+      .createWithDefault("supersql")
+
+  val SUPERSQL_AUTOROUTER_ENABLED =
+    buildConf("spark.sql.superSQL.autoRouter.enabled")
+      .booleanConf
+      .createWithDefault(true)
+
+  val SUPERSQL_AUTOROUTER_DEPENDENT_MESSAGE =
+    buildConf("spark.sql.superSQL.autoRouter.dependentMessage")
+      .stringConf
+      .createWithDefault("[OMS Internal Error]")
+
+  val SUPERSQL_AUTOROUTER_CONNECTION_DRIVER =
+    buildConf("spark.sql.superSQL.autoRouter.connection.driver")
+      .stringConf
+      .createWithDefault("com.tencent.supersql.jdbc.SuperSqlDriver")
+
+  val SUPERSQL_AUTOROUTER_CONNECTION_URL =
+    buildConf("spark.sql.superSQL.autoRouter.connection.url")
+      .stringConf
+      .createWithDefault("jdbc:supersql:url=http://9.22.37.151:8081")
+
+  val SUPERSQL_AUTOROUTER_CONNECTION_FETCHSIZE =
+    buildConf("spark.sql.superSQL.autoRouter.connection.fetchSize")
+      .stringConf
+      .createWithDefault("100")
+
   /**
    * Holds information about keys that have been deprecated.
    *
@@ -3228,6 +3273,27 @@ class SQLConf extends Serializable with Logging {
   def ignoreDataLocality: Boolean = getConf(SQLConf.IGNORE_DATA_LOCALITY)
 
   def csvFilterPushDown: Boolean = getConf(CSV_FILTER_PUSHDOWN_ENABLED)
+
+  def tauthUserName: String = getConf(SQLConf.TAUTH_USER_NAME)
+
+  def tauthUserKey: String = getConf(SQLConf.TAUTH_USER_KEY)
+
+  def tauthServiceSparkSql: String = getConf(SQLConf.TAUTH_SERVICE_SPARKSQL)
+
+  def tauthServiceSuperSql: String = getConf(SQLConf.TAUTH_SERVICE_SUPERSQL)
+
+  def supersqlAutoRouterEnabled: Boolean = getConf(SQLConf.SUPERSQL_AUTOROUTER_ENABLED)
+
+  def supersqlAutoRouterDependentMessage: String =
+    getConf(SQLConf.SUPERSQL_AUTOROUTER_DEPENDENT_MESSAGE)
+
+  def supersqlAutoRouterConnectionDriver: String =
+    getConf(SQLConf.SUPERSQL_AUTOROUTER_CONNECTION_DRIVER)
+
+  def supersqlAutoRouterConnectionUrl: String = getConf(SQLConf.SUPERSQL_AUTOROUTER_CONNECTION_URL)
+
+  def supersqlAutoRouterConnectionFetchSize: String =
+    getConf(SQLConf.SUPERSQL_AUTOROUTER_CONNECTION_FETCHSIZE)
 
   /** ********************** SQLConf functionality methods ************ */
 

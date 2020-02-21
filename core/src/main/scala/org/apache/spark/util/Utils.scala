@@ -2662,6 +2662,7 @@ private[spark] object Utils extends Logging {
       case (key: String, _) if key == "spark.tdw.metastore" ||
         key == "spark.hadoop.hadoop.job.ugi" ||
         key.startsWith("spark.redis.") ||
+        key.startsWith("spark.sql.tauth.") ||
         key == "spark.tdw.authentication" ||
         key == "sun.java.command" =>
         (key, REDACTION_REPLACEMENT_TEXT)
