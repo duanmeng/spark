@@ -310,14 +310,6 @@ object JdbcUtils extends Logging {
     url
   }
 
-  def isSuperSql(url: String): Boolean = {
-    if (url == null) {
-      return false
-    }
-    val newUrl = handleSuperSqlUrl(url)
-    newUrl.startsWith("jdbc:supersql:")
-  }
-
   def isNoSql(url: String): Boolean = {
     if (url == null) {
       return false
