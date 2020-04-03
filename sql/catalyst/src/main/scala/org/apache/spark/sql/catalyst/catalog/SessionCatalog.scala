@@ -36,7 +36,7 @@ import org.apache.spark.sql.catalyst.analysis._
 import org.apache.spark.sql.catalyst.analysis.FunctionRegistry.FunctionBuilder
 import org.apache.spark.sql.catalyst.expressions.{Expression, ExpressionInfo, ImplicitCastInputTypes}
 import org.apache.spark.sql.catalyst.parser.{CatalystSqlParser, ParserInterface}
-import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, SubqueryAlias, View}
+import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project, SubqueryAlias, View}
 import org.apache.spark.sql.catalyst.util.StringUtils
 import org.apache.spark.sql.connector.catalog.CatalogManager
 import org.apache.spark.sql.internal.SQLConf
@@ -1507,7 +1507,6 @@ class SessionCatalog(
     }.distinct
   }
 
-
   // -----------------
   // | Other methods |
   // -----------------
@@ -1579,5 +1578,31 @@ class SessionCatalog(
           s". The associated location('$newTableLocation') already exists.")
       }
     }
+  }
+
+  // This method is only used in MaterializedViewOptimizerBaseSuite for test purpose,
+  // and in-memory catalog will be the externalCatalog during the test.
+  // For Hive integration, materialized view can be created with SparkSQL as Hive's DDL,
+  // CREATE MATERIALIZED VIEW XXXXXX
+  def createMaterializedView(
+      db: String, viewName: String, viewSql: String, schemaStruct: StructType): Unit = {
+    val tableDefinition = new CatalogTable(identifier = TableIdentifier(viewName, Some(db)),
+      tableType = CatalogTableType.MATERIALIZED_VIEW,
+      schema = schemaStruct,
+      storage = CatalogStorageFormat(
+        locationUri = None,
+        inputFormat = None,
+        outputFormat = None,
+        serde = None,
+        compressed = false,
+        properties = Map.empty
+      ),
+      viewText = Some(viewSql)
+    )
+    externalCatalog.createTable(tableDefinition, false)
+  }
+
+  def getAllMaterializedViews(dbs: Seq[String]): Seq[CatalogTable] = {
+    externalCatalog.getAllMaterializedViews(dbs)
   }
 }

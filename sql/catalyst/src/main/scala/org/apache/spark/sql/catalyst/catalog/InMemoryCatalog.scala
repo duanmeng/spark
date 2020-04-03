@@ -31,7 +31,7 @@ import org.apache.spark.sql.catalyst.analysis._
 import org.apache.spark.sql.catalyst.catalog.ExternalCatalogUtils._
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.util.StringUtils
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{DecimalType, IntegerType, LongType, StringType, StructType}
 
 /**
  * An in-memory (ephemeral) implementation of the system catalog.
@@ -618,4 +618,13 @@ class InMemoryCatalog(
     StringUtils.filterPattern(catalog(db).functions.keysIterator.toSeq, pattern)
   }
 
+  override def getAllMaterializedViews(dbs: Seq[String]): Seq[CatalogTable] = {
+    var mvs = Seq.empty[CatalogTable]
+    dbs.foreach {
+      db => mvs ++= catalog(db).tables.values.filter(
+        desc => desc.table.tableType == CatalogTableType.MATERIALIZED_VIEW).
+        map(desc => desc.table).toSeq
+    }
+    mvs
+  }
 }

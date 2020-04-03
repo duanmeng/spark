@@ -22,6 +22,7 @@ import java.util.UUID
 
 import org.apache.hadoop.fs.Path
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.{InternalRow, QueryPlanningTracker}
@@ -35,6 +36,7 @@ import org.apache.spark.sql.catalyst.util.truncatedString
 import org.apache.spark.sql.execution.adaptive.{AdaptiveExecutionContext, InsertAdaptiveSparkPlan}
 import org.apache.spark.sql.execution.dynamicpruning.PlanDynamicPruningFilters
 import org.apache.spark.sql.execution.exchange.{EnsureRequirements, ReuseExchange}
+import org.apache.spark.sql.execution.mv.MaterializedViewOptimizer
 import org.apache.spark.sql.execution.streaming.{IncrementalExecution, OffsetSeqMetadata}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.streaming.OutputMode
@@ -50,7 +52,7 @@ import org.apache.spark.util.Utils
 class QueryExecution(
     val sparkSession: SparkSession,
     val logical: LogicalPlan,
-    val tracker: QueryPlanningTracker = new QueryPlanningTracker) {
+    val tracker: QueryPlanningTracker = new QueryPlanningTracker) extends Logging {
 
   // TODO: Move the planner an optimizer into here from SessionState.
   protected def planner = sparkSession.sessionState.planner
@@ -68,12 +70,22 @@ class QueryExecution(
     sparkSession.sessionState.analyzer.executeAndCheck(logical, tracker)
   }
 
+  lazy val materialized: LogicalPlan = executePhase(QueryPlanningTracker.MATERIALIZED) {
+    if (sparkSession.sessionState.conf.isMaterializedViewEnabled) {
+      assertAnalyzed()
+      val mvOptimizer = new MaterializedViewOptimizer(sparkSession.sessionState.analyzer)
+      mvOptimizer.execute(analyzed.clone)
+    } else {
+      analyzed
+    }
+  }
+
   lazy val withCachedData: LogicalPlan = sparkSession.withActive {
     assertAnalyzed()
     assertSupported()
     // clone the plan to avoid sharing the plan instance between different stages like analyzing,
     // optimizing and planning.
-    sparkSession.sharedState.cacheManager.useCachedData(analyzed.clone())
+    sparkSession.sharedState.cacheManager.useCachedData(materialized.clone())
   }
 
   lazy val optimizedPlan: LogicalPlan = executePhase(QueryPlanningTracker.OPTIMIZATION) {
@@ -193,6 +205,10 @@ class QueryExecution(
       )
       append("\n")
       QueryPlan.append(analyzed, append, verbose, addSuffix, maxFields)
+      if (sparkSession.sessionState.conf.isMaterializedViewEnabled) {
+        append("\n== Materialized Logical Plan ==\n")
+        QueryPlan.append(materialized, append, verbose, addSuffix, maxFields)
+      }
       append("\n== Optimized Logical Plan ==\n")
       QueryPlan.append(optimizedPlan, append, verbose, addSuffix, maxFields)
       append("\n== Physical Plan ==\n")

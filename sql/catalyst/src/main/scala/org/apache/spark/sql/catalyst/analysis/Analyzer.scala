@@ -164,6 +164,10 @@ class Analyzer(
     }
   }
 
+  def getCatalogManager: CatalogManager = catalogManager
+
+  def getSqlConf: SQLConf = conf
+
   override def execute(plan: LogicalPlan): LogicalPlan = {
     AnalysisContext.reset()
     try {

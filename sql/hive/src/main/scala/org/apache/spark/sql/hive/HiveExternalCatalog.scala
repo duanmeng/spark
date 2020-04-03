@@ -1330,6 +1330,10 @@ private[spark] class HiveExternalCatalog(conf: SparkConf, hadoopConf: Configurat
     client.listFunctions(db, pattern)
   }
 
+  override def getAllMaterializedViews(dbs: Seq[String]): Seq[CatalogTable] = {
+    throw new AnalysisException("unsupported yet")
+  }
+
 }
 
 object HiveExternalCatalog {

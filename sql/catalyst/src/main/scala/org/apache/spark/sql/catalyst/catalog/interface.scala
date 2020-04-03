@@ -247,7 +247,8 @@ case class CatalogTable(
     tracksPartitionsInCatalog: Boolean = false,
     schemaPreservesCase: Boolean = true,
     ignoredProperties: Map[String, String] = Map.empty,
-    viewOriginalText: Option[String] = None) {
+    viewOriginalText: Option[String] = None,
+    enableRewrite: Boolean = false) {
 
   import CatalogTable._
 
@@ -608,8 +609,9 @@ object CatalogTableType {
   val EXTERNAL = new CatalogTableType("EXTERNAL")
   val MANAGED = new CatalogTableType("MANAGED")
   val VIEW = new CatalogTableType("VIEW")
+  val MATERIALIZED_VIEW = new CatalogTableType("MATERIALIZED_VIEW")
 
-  val tableTypes = Seq(EXTERNAL, MANAGED, VIEW)
+  val tableTypes = Seq(EXTERNAL, MANAGED, VIEW, MATERIALIZED_VIEW)
 }
 
 

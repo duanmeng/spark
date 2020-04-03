@@ -38,6 +38,7 @@ object QueryPlanningTracker {
   // Define a list of common phases here.
   val PARSING = "parsing"
   val ANALYSIS = "analysis"
+  val MATERIALIZED = "materialized"
   val OPTIMIZATION = "optimization"
   val PLANNING = "planning"
 
