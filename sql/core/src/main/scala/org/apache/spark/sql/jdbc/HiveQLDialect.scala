@@ -20,7 +20,10 @@ package org.apache.spark.sql.jdbc
 private case object HiveQLDialect extends JdbcDialect {
 
   override def canHandle(url : String): Boolean = {
-    url.startsWith("jdbc:hive2") || url.startsWith("jdbc:hive")
+    val isHive = url.startsWith("jdbc:hive2") || url.startsWith("jdbc:hive")
+    val isClickHouse = url.startsWith("jdbc:clickhouse")
+    val isHermes = url.startsWith("jdbc:hermes")
+    isHive || isClickHouse || isHermes
   }
 
   override def quoteIdentifier(colName: String): String = {
