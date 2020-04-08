@@ -185,7 +185,11 @@ class NewHadoopRDD[K, V](
       // creating RecordReader, because RecordReader's constructor might read some bytes
       private val getBytesReadCallback: Option[() => Long] =
         split.serializableHadoopSplit.value match {
-          case _: FileSplit | _: CombineFileSplit =>
+          // This function is used for tracing input size during task is runing.
+          // Get HDFS read bytes for every implementation of InputSplit,
+          // actually, some of them won't read HDFS file, eg, DBInputFormat
+          // but it's won't cause problem, just get 0 before finish.
+          case _: InputSplit =>
             SparkHadoopUtil.get.getFSBytesReadOnThreadCallback()
           case _ => None
         }
@@ -235,6 +239,7 @@ class NewHadoopRDD[K, V](
         // Update the bytesRead before closing is to make sure lingering bytesRead statistics in
         // this thread get correctly added.
         updateBytesRead()
+        correctBytesReadIfNecessary()
         close()
       }
 
@@ -268,6 +273,24 @@ class NewHadoopRDD[K, V](
         !finished
       }
 
+      // updateBytesRead can be used for real time track if possible.
+      // When the task is finished, the input size should not less than
+      // the size of InputSplit, it maybe caused by can't get correct result
+      // from FileSystem.Statistics or doesn't read HDFS file.
+      // The implementation of InputSplit which won't read HDFS also can be evaluated inputSize
+      // correctly with this method according to the implementation of getLength().
+      private def correctBytesReadIfNecessary(): Unit = {
+        try {
+          val splitSize = split.serializableHadoopSplit.value.getLength
+          if (splitSize > inputMetrics.bytesRead) {
+            inputMetrics.setBytesRead(splitSize)
+          }
+        } catch {
+          case e: Exception =>
+            logWarning("Unable to get input size to set InputMetrics for task", e)
+        }
+      }
+
       override def next(): (K, V) = {
         if (!hasNext) {
           throw new java.util.NoSuchElementException("End of stream")
@@ -297,8 +320,7 @@ class NewHadoopRDD[K, V](
           }
           if (getBytesReadCallback.isDefined) {
             updateBytesRead()
-          } else if (split.serializableHadoopSplit.value.isInstanceOf[FileSplit] ||
-                     split.serializableHadoopSplit.value.isInstanceOf[CombineFileSplit]) {
+          } else if (split.serializableHadoopSplit.value.isInstanceOf[InputSplit]) {
             // If we can't get the bytes read from the FS stats, fall back to the split size,
             // which may be inaccurate.
             try {
@@ -308,6 +330,7 @@ class NewHadoopRDD[K, V](
                 logWarning("Unable to get input size to set InputMetrics for task", e)
             }
           }
+          correctBytesReadIfNecessary()
         }
       }
     }

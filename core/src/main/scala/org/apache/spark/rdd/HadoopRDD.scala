@@ -256,7 +256,13 @@ class HadoopRDD[K, V](
       // Find a function that will return the FileSystem bytes read by this thread. Do this before
       // creating RecordReader, because RecordReader's constructor might read some bytes
       private val getBytesReadCallback: Option[() => Long] = split.inputSplit.value match {
-        case _: FileSplit | _: CombineFileSplit =>
+        // This function is used for tracing input size during task is runing.
+        // Get HDFS read bytes for every implementation of InputSplit,
+        // actually, some of them won't read HDFS file, eg, DBInputFormat
+        // but it's won't cause problem, just get 0 before finish.
+        // BTW, the InputSplit used in TDW is shaded as:
+        // com.tencent.spark.StorageEngineClient.CombineFileSplit
+        case _: InputSplit =>
           SparkHadoopUtil.get.getFSBytesReadOnThreadCallback()
         case _ => None
       }
@@ -297,11 +303,30 @@ class HadoopRDD[K, V](
         // Update the bytes read before closing is to make sure lingering bytesRead statistics in
         // this thread get correctly added.
         updateBytesRead()
+        correctBytesReadIfNecessary()
         closeIfNeeded()
       }
 
       private val key: K = if (reader == null) null.asInstanceOf[K] else reader.createKey()
       private val value: V = if (reader == null) null.asInstanceOf[V] else reader.createValue()
+
+      // updateBytesRead can be used for real time track if possible.
+      // When the task is finished, the input size should not less than
+      // the size of InputSplit, it maybe caused by can't get correct result
+      // from FileSystem.Statistics or doesn't read HDFS file.
+      // The implementation of InputSplit which won't read HDFS also can be evaluated inputSize
+      // correctly with this method according to the implementation of getLength().
+      private def correctBytesReadIfNecessary(): Unit = {
+        try {
+          val splitSize = split.inputSplit.value.getLength
+          if (splitSize > inputMetrics.bytesRead) {
+            inputMetrics.setBytesRead(splitSize)
+          }
+        } catch {
+          case e: Exception =>
+            logWarning("Unable to get input size to set InputMetrics for task", e)
+        }
+      }
 
       override def getNext(): (K, V) = {
         try {
@@ -340,8 +365,7 @@ class HadoopRDD[K, V](
           }
           if (getBytesReadCallback.isDefined) {
             updateBytesRead()
-          } else if (split.inputSplit.value.isInstanceOf[FileSplit] ||
-                     split.inputSplit.value.isInstanceOf[CombineFileSplit]) {
+          } else if (split.inputSplit.value.isInstanceOf[InputSplit]) {
             // If we can't get the bytes read from the FS stats, fall back to the split size,
             // which may be inaccurate.
             try {
@@ -351,6 +375,7 @@ class HadoopRDD[K, V](
                 logWarning("Unable to get input size to set InputMetrics for task", e)
             }
           }
+          correctBytesReadIfNecessary()
         }
       }
     }
