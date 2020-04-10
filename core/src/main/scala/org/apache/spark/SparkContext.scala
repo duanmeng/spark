@@ -1088,8 +1088,16 @@ class SparkContext(config: SparkConf) extends Logging {
     // See SPARK-11227 for details.
     FileSystem.getLocal(hadoopConfiguration)
 
-    // A Hadoop configuration can be about 10 KiB, which is pretty big, so broadcast it.
-    val confBroadcast = broadcast(new SerializableConfiguration(hadoopConfiguration))
+    // A Hadoop configuration can be about 10 KB, which is pretty big, so broadcast it.
+    // Serialize the configuration with the copy to make sure have the same value for
+    // driver and executor, the following code will cause the different value:
+    // sc.hadoopConfiguration.set("xxxx", "v1")
+    // val textFile1 = sc.textFile("hdfs://xxxx")
+    // sc.hadoopConfiguration.set("xxxx", "v2")
+    // val counts1 = textFile1.flatMap(
+    // line => line.split(" ")).map(word => (word, 1)).reduceByKey(_ + _)
+    val confBroadcast = broadcast(
+      new SerializableConfiguration(new Configuration(hadoopConfiguration)))
     val setInputPathsFunc = (jobConf: JobConf) => FileInputFormat.setInputPaths(jobConf, path)
     new HadoopRDD(
       this,
