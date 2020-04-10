@@ -34,7 +34,7 @@ import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.internal.{HiveSerDe, SQLConf, VariableSubstitution}
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{StructField, StructType}
 
 /**
  * Concrete parser for Spark SQL statements.
@@ -443,6 +443,111 @@ class SparkSqlAstBuilder(conf: SQLConf) extends AstBuilder(conf) {
         }
 
         CreateTable(tableDesc, mode, None)
+    }
+  }
+
+  /**
+   * Create a Hive materialized view, returning a [[CreateTable]] logical plan.
+   *
+   * Expected format:
+   * {{{
+   *   CREATE MATERIALIZED VIEW [IF NOT EXISTS] [db_name.]table_name
+   *   create_table_clauses
+   *   [AS select_statement];
+   *
+   *   create_table_clauses (order insensitive):
+   *     [COMMENT table_comment]
+   *     [PARTITIONED BY (col2[:] data_type [COMMENT col_comment], ...)]
+   *     [ROW FORMAT row_format]
+   *     [STORED AS file_format]
+   *     [TBLPROPERTIES (property_name=property_value, ...)]
+   * }}}
+   */
+  override def visitCreateHiveMaterializedView(
+      ctx: CreateHiveMaterializedViewContext): LogicalPlan = withOrigin(ctx) {
+    val name = visitTableIdentifier(ctx.tableIdentifier)
+    val ifNotExists = ctx.EXISTS != null
+    val queryPlan = Option(ctx.query).map(plan)
+
+    checkDuplicateClauses(ctx.TBLPROPERTIES, "TBLPROPERTIES", ctx)
+    checkDuplicateClauses(ctx.PARTITIONED, "PARTITIONED BY", ctx)
+    checkDuplicateClauses(ctx.COMMENT, "COMMENT", ctx)
+    checkDuplicateClauses(ctx.bucketSpec(), "CLUSTERED BY", ctx)
+    checkDuplicateClauses(ctx.createFileFormat, "STORED AS/BY", ctx)
+    checkDuplicateClauses(ctx.rowFormat, "ROW FORMAT", ctx)
+
+    val properties = Option(ctx.tableProps).map(visitPropertyKeyValues).getOrElse(Map.empty)
+    val bucketSpec = ctx.bucketSpec().asScala.headOption.map(visitBucketSpec)
+
+    // Storage format
+    val defaultStorage = HiveSerDe.getDefaultStorage(conf)
+    validateRowFormatFileFormat(ctx.rowFormat.asScala, ctx.createFileFormat.asScala, ctx)
+    val fileStorage = ctx.createFileFormat.asScala.headOption.map(visitCreateFileFormat)
+      .getOrElse(CatalogStorageFormat.empty)
+    val rowStorage = ctx.rowFormat.asScala.headOption.map(visitRowFormat)
+      .getOrElse(CatalogStorageFormat.empty)
+
+    val storage = CatalogStorageFormat(
+      locationUri = None,
+      inputFormat = fileStorage.inputFormat.orElse(defaultStorage.inputFormat),
+      outputFormat = fileStorage.outputFormat.orElse(defaultStorage.outputFormat),
+      serde = rowStorage.serde.orElse(fileStorage.serde).orElse(defaultStorage.serde),
+      compressed = false,
+      properties = rowStorage.properties ++ fileStorage.properties)
+    val tableType = CatalogTableType.MATERIALIZED_VIEW
+
+    val tableDesc = CatalogTable(
+      identifier = name,
+      tableType = tableType,
+      storage = storage,
+      schema = StructType(Seq.empty[StructField]),
+      bucketSpec = bucketSpec,
+      provider = Some(DDLUtils.HIVE_PROVIDER),
+      properties = properties,
+      comment = Option(ctx.comment).map(string),
+      viewText = Option(source(ctx.query)),
+      enableRewrite = true)
+
+    val mode = if (ifNotExists) SaveMode.Ignore else SaveMode.ErrorIfExists
+
+    queryPlan match {
+      case Some(q) =>
+        // The workflow of create MV is the same as Hive CTAS and
+        // supports dynamic partition by specifying partition column names.
+        val partitionColumnNames =
+          Option(ctx.partitionColumnNames)
+            .map(visitIdentifierList(_).toArray)
+            .getOrElse(Array.empty[String])
+
+        val tableDescWithPartitionColNames =
+          tableDesc.copy(partitionColumnNames = partitionColumnNames)
+
+        CreateTable(tableDescWithPartitionColNames, mode, Some(q))
+      case None =>
+        val errorMessage = "Must specify a query while creating materialized view."
+        operationNotAllowed(errorMessage, ctx)
+    }
+  }
+
+  /**
+   * Create a [[DropTableCommand]] command.
+   */
+  override def visitDropMaterializedView(
+      ctx: DropMaterializedViewContext): LogicalPlan = withOrigin(ctx) {
+    DropTableCommand(
+      visitTableIdentifier(ctx.tableIdentifier), false, false, true, true)
+  }
+
+  /**
+   * Create a [[AlterMaterializedXXXXCommand]] command for rewrite/rebuild.
+   */
+  override def visitAlterMaterializedView(
+      ctx: AlterMaterializedViewContext): LogicalPlan = withOrigin(ctx) {
+    val tableIdentifier = visitTableIdentifier(ctx.tableIdentifier)
+    if (ctx.REWRITE != null) {
+      AlterMaterializedRewriteCommand(tableIdentifier, ctx.ENABLE != null)
+    } else {
+      AlterMaterializedRebuildCommand(tableIdentifier)
     }
   }
 

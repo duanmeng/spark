@@ -30,7 +30,8 @@ import org.apache.hadoop.fs.Path
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hadoop.hive.metastore.IMetaStoreClient
 import org.apache.hadoop.hive.metastore.TableType
-import org.apache.hadoop.hive.metastore.api.{Database, EnvironmentContext, Function => HiveFunction, FunctionType, MetaException, PrincipalType, ResourceType, ResourceUri}
+import org.apache.hadoop.hive.metastore.api.{EnvironmentContext, Function => HiveFunction, FunctionType}
+import org.apache.hadoop.hive.metastore.api.{Database, MetaException, PrincipalType, ResourceType, ResourceUri}
 import org.apache.hadoop.hive.ql.Driver
 import org.apache.hadoop.hive.ql.io.AcidUtils
 import org.apache.hadoop.hive.ql.metadata.{Hive, HiveException, Partition, Table}
@@ -44,7 +45,7 @@ import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.FunctionIdentifier
 import org.apache.spark.sql.catalyst.analysis.NoSuchPermanentFunctionException
-import org.apache.spark.sql.catalyst.catalog.{CatalogFunction, CatalogTablePartition, CatalogUtils, FunctionResource, FunctionResourceType}
+import org.apache.spark.sql.catalyst.catalog.{CatalogFunction, CatalogTablePartition, CatalogTableType, CatalogUtils, FunctionResource, FunctionResourceType}
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{AtomicType, IntegralType, StringType}
@@ -163,6 +164,14 @@ private[client] sealed abstract class Shim {
   def getDatabaseOwnerName(db: Database): String
 
   def setDatabaseOwnerName(db: Database, owner: String): Unit
+
+  def getAllTableObjects(hive: Hive, db: String): Seq[Table]
+
+  def isRewriteEnabled(table: Table): Boolean
+
+  def setRewriteEnabled(table: Table, rewritable: Boolean): Unit
+
+  def setMVTableType(table: Table): Unit
 
   protected def findStaticMethod(klass: Class[_], name: String, args: Class[_]*): Method = {
     val method = findMethod(klass, name, args: _*)
@@ -479,6 +488,21 @@ private[client] class Shim_v0_12 extends Shim with Logging {
   override def getDatabaseOwnerName(db: Database): String = ""
 
   override def setDatabaseOwnerName(db: Database, owner: String): Unit = {}
+
+  def getAllTableObjects(hive: Hive, db: String): Seq[Table] = {
+    throw new AnalysisException("getAllTableObjects is only supported in Hive 2.3 client")
+  }
+
+  def isRewriteEnabled(table: Table): Boolean = {
+    false
+  }
+
+  def setRewriteEnabled(table: Table, rewritable: Boolean): Unit = {
+  }
+
+  def setMVTableType(table: Table): Unit = {
+    throw new AnalysisException("setMVTableType is only supported in Hive 2.3 client")
+  }
 }
 
 private[client] class Shim_v0_13 extends Shim_v0_12 {
@@ -1253,6 +1277,39 @@ private[client] class Shim_v2_3 extends Shim_v2_1 {
       tableType: TableType): Seq[String] = {
     getTablesByTypeMethod.invoke(hive, dbName, pattern, tableType)
       .asInstanceOf[JList[String]].asScala
+  }
+
+  private lazy val getAllTableObjects =
+    findMethod(
+      classOf[Hive],
+      "getAllTableObjects",
+      classOf[String])
+
+  private lazy val isRewriteEnabled =
+    findMethod(
+      classOf[Table],
+      "isRewriteEnabled")
+
+  private lazy val setRewriteEnabled =
+    findMethod(
+      classOf[Table],
+      "setRewriteEnabled",
+      classOf[Boolean])
+
+  override def getAllTableObjects(hive: Hive, db: String): Seq[Table] = {
+    getAllTableObjects.invoke(hive, db).asInstanceOf[JList[Table]].asScala
+  }
+
+  override def isRewriteEnabled(table: Table): Boolean = {
+    isRewriteEnabled.invoke(table).asInstanceOf[Boolean]
+  }
+
+  override def setRewriteEnabled(table: Table, rewritable: Boolean): Unit = {
+    setRewriteEnabled.invoke(table, rewritable: JBoolean)
+  }
+
+  override def setMVTableType(table: Table): Unit = {
+    table.setTableType(TableType.valueOf("MATERIALIZED_VIEW"))
   }
 }
 

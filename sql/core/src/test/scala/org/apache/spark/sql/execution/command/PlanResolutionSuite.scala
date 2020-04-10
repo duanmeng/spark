@@ -636,17 +636,23 @@ class PlanResolutionSuite extends AnalysisTest {
     val tableIdent2 = TableIdentifier("tab", Some("default"))
 
     parseResolveCompare(s"DROP TABLE $tableName1",
-      DropTableCommand(tableIdent1, ifExists = false, isView = false, purge = false))
+      DropTableCommand(tableIdent1, ifExists = false, isView = false,
+        purge = false, isMaterializedView = false))
     parseResolveCompare(s"DROP TABLE IF EXISTS $tableName1",
-      DropTableCommand(tableIdent1, ifExists = true, isView = false, purge = false))
+      DropTableCommand(tableIdent1, ifExists = true, isView = false,
+        purge = false, isMaterializedView = false))
     parseResolveCompare(s"DROP TABLE $tableName2",
-      DropTableCommand(tableIdent2, ifExists = false, isView = false, purge = false))
+      DropTableCommand(tableIdent2, ifExists = false, isView = false,
+        purge = false, isMaterializedView = false))
     parseResolveCompare(s"DROP TABLE IF EXISTS $tableName2",
-      DropTableCommand(tableIdent2, ifExists = true, isView = false, purge = false))
+      DropTableCommand(tableIdent2, ifExists = true, isView = false,
+        purge = false, isMaterializedView = false))
     parseResolveCompare(s"DROP TABLE $tableName2 PURGE",
-      DropTableCommand(tableIdent2, ifExists = false, isView = false, purge = true))
+      DropTableCommand(tableIdent2, ifExists = false, isView = false,
+        purge = true, isMaterializedView = false))
     parseResolveCompare(s"DROP TABLE IF EXISTS $tableName2 PURGE",
-      DropTableCommand(tableIdent2, ifExists = true, isView = false, purge = true))
+      DropTableCommand(tableIdent2, ifExists = true, isView = false,
+        purge = true, isMaterializedView = false))
   }
 
   test("drop table in v2 catalog") {
@@ -672,13 +678,17 @@ class PlanResolutionSuite extends AnalysisTest {
     val viewIdent2 = TableIdentifier("view", Option("default"))
 
     parseResolveCompare(s"DROP VIEW $viewName1",
-      DropTableCommand(viewIdent1, ifExists = false, isView = true, purge = false))
+      DropTableCommand(viewIdent1, ifExists = false, isView = true,
+        purge = false, isMaterializedView = false))
     parseResolveCompare(s"DROP VIEW IF EXISTS $viewName1",
-      DropTableCommand(viewIdent1, ifExists = true, isView = true, purge = false))
+      DropTableCommand(viewIdent1, ifExists = true, isView = true,
+        purge = false, isMaterializedView = false))
     parseResolveCompare(s"DROP VIEW $viewName2",
-      DropTableCommand(viewIdent2, ifExists = false, isView = true, purge = false))
+      DropTableCommand(viewIdent2, ifExists = false, isView = true,
+        purge = false, isMaterializedView = false))
     parseResolveCompare(s"DROP VIEW IF EXISTS $viewName2",
-      DropTableCommand(viewIdent2, ifExists = true, isView = true, purge = false))
+      DropTableCommand(viewIdent2, ifExists = true, isView = true,
+        purge = false, isMaterializedView = false))
   }
 
   test("drop view in v2 catalog") {

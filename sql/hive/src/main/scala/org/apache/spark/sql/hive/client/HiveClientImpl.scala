@@ -118,6 +118,8 @@ private[hive] class HiveClientImpl(
     case hive.v3_1 => new Shim_v3_1()
   }
 
+  private val HIVE_TABLE_TYPE_NAME_MV = "MATERIALIZED_VIEW"
+
   // Create an internal session state for this HiveClientImpl.
   val state: SessionState = {
     val original = Thread.currentThread().getContextClassLoader
@@ -393,6 +395,34 @@ private[hive] class HiveClientImpl(
     client.getDatabasesByPattern(pattern).asScala
   }
 
+  def getMaterializedViews(dbName: String): Seq[CatalogTable] = withHiveState {
+    val tables = shim.getAllTableObjects(client, dbName)
+    var mvs = Seq.empty[CatalogTable]
+    tables.foreach(
+      table => {
+        if (table.getTableType.name == HIVE_TABLE_TYPE_NAME_MV
+          && shim.isRewriteEnabled(table)) {
+          val catalogTable = new CatalogTable(
+            identifier = TableIdentifier(table.getTableName, Some(table.getDbName)),
+            tableType = CatalogTableType.MATERIALIZED_VIEW,
+            storage = CatalogStorageFormat(
+              locationUri = None,
+              inputFormat = None,
+              outputFormat = None,
+              serde = None,
+              compressed = false,
+              properties = Map.empty
+            ),
+            schema = new StructType()
+              .add("fake", IntegerType, nullable = false),
+            viewText = Some(table.getViewOriginalText)
+          )
+          mvs :+= catalogTable
+        }
+      })
+    mvs
+  }
+
   private def getRawTableOption(dbName: String, tableName: String): Option[HiveTable] = {
     Option(client.getTable(dbName, tableName, false /* do not throw exception */))
   }
@@ -490,13 +520,19 @@ private[hive] class HiveClientImpl(
       case (key, _) => excludedTableProperties.contains(key)
     }
     val comment = properties.get("comment")
+    // in Hive 2.3, the sql for materialized view is stored in ViewOriginalText
+    val viewText = h.getTableType.name match {
+      case HIVE_TABLE_TYPE_NAME_MV => h.getViewOriginalText
+      case _ => h.getViewExpandedText
+    }
 
     CatalogTable(
       identifier = TableIdentifier(h.getTableName, Option(h.getDbName)),
-      tableType = h.getTableType match {
-        case HiveTableType.EXTERNAL_TABLE => CatalogTableType.EXTERNAL
-        case HiveTableType.MANAGED_TABLE => CatalogTableType.MANAGED
-        case HiveTableType.VIRTUAL_VIEW => CatalogTableType.VIEW
+      tableType = h.getTableType.name match {
+        case "EXTERNAL_TABLE" => CatalogTableType.EXTERNAL
+        case "MANAGED_TABLE" => CatalogTableType.MANAGED
+        case "VIRTUAL_VIEW" => CatalogTableType.VIEW
+        case HIVE_TABLE_TYPE_NAME_MV => CatalogTableType.MATERIALIZED_VIEW
         case unsupportedType =>
           val tableTypeStr = unsupportedType.toString.toLowerCase(Locale.ROOT).replace("_", " ")
           throw new AnalysisException(s"Hive $tableTypeStr is not supported.")
@@ -537,15 +573,16 @@ private[hive] class HiveClientImpl(
       // We get `viewExpandedText` as viewText, and also get `viewOriginalText` in order to
       // display the original view text in `DESC [EXTENDED|FORMATTED] table` command for views
       // that created by older versions of Spark.
-      viewOriginalText = Option(h.getViewOriginalText),
+      viewOriginalText = Option(viewText),
       viewText = Option(h.getViewExpandedText),
       unsupportedFeatures = unsupportedFeatures,
-      ignoredProperties = ignoredProperties.toMap)
+      ignoredProperties = ignoredProperties.toMap,
+      enableRewrite = shim.isRewriteEnabled(h))
   }
 
   override def createTable(table: CatalogTable, ignoreIfExists: Boolean): Unit = withHiveState {
     verifyColumnDataType(table.dataSchema)
-    client.createTable(toHiveTable(table, Some(userName)), ignoreIfExists)
+    client.createTable(toHiveTableWrapper(table, Some(userName)), ignoreIfExists)
   }
 
   override def dropTable(
@@ -565,8 +602,9 @@ private[hive] class HiveClientImpl(
     // If users explicitly alter these Hive-specific properties through ALTER TABLE DDL, we respect
     // these user-specified values.
     verifyColumnDataType(table.dataSchema)
-    val hiveTable = toHiveTable(
+    val hiveTable = toHiveTableWrapper(
       table.copy(properties = table.ignoredProperties ++ table.properties), Some(userName))
+    shim.setRewriteEnabled(hiveTable, table.enableRewrite)
     // Do not use `table.qualifiedName` here because this may be a rename
     val qualifiedTableName = s"$dbName.$tableName"
     shim.alterTable(client, qualifiedTableName, hiveTable)
@@ -663,7 +701,7 @@ private[hive] class HiveClientImpl(
       newSpecs: Seq[TablePartitionSpec]): Unit = withHiveState {
     require(specs.size == newSpecs.size, "number of old and new partition specs differ")
     val catalogTable = getTable(db, table)
-    val hiveTable = toHiveTable(catalogTable, Some(userName))
+    val hiveTable = toHiveTableWrapper(catalogTable, Some(userName))
     specs.zip(newSpecs).foreach { case (oldSpec, newSpec) =>
       val hivePart = getPartitionOption(catalogTable, oldSpec)
         .map { p => toHivePartition(p.copy(spec = newSpec), hiveTable) }
@@ -683,7 +721,7 @@ private[hive] class HiveClientImpl(
     val original = state.getCurrentDatabase
     try {
       setCurrentDatabaseRaw(db)
-      val hiveTable = toHiveTable(getTable(db, table), Some(userName))
+      val hiveTable = toHiveTableWrapper(getTable(db, table), Some(userName))
       shim.alterPartitions(client, table, newParts.map { toHivePartition(_, hiveTable) }.asJava)
     } finally {
       state.setCurrentDatabase(original)
@@ -714,7 +752,7 @@ private[hive] class HiveClientImpl(
   override def getPartitionOption(
       table: CatalogTable,
       spec: TablePartitionSpec): Option[CatalogTablePartition] = withHiveState {
-    val hiveTable = toHiveTable(table, Some(userName))
+    val hiveTable = toHiveTableWrapper(table, Some(userName))
     val hivePartition = client.getPartition(hiveTable, spec.asJava, false)
     Option(hivePartition).map(fromHivePartition)
   }
@@ -726,7 +764,7 @@ private[hive] class HiveClientImpl(
   override def getPartitions(
       table: CatalogTable,
       spec: Option[TablePartitionSpec]): Seq[CatalogTablePartition] = withHiveState {
-    val hiveTable = toHiveTable(table, Some(userName))
+    val hiveTable = toHiveTableWrapper(table, Some(userName))
     val partSpec = spec match {
       case None => CatalogTypes.emptyTablePartitionSpec
       case Some(s) =>
@@ -741,7 +779,7 @@ private[hive] class HiveClientImpl(
   override def getPartitionsByFilter(
       table: CatalogTable,
       predicates: Seq[Expression]): Seq[CatalogTablePartition] = withHiveState {
-    val hiveTable = toHiveTable(table, Some(userName))
+    val hiveTable = toHiveTableWrapper(table, Some(userName))
     val parts = shim.getPartitionsByFilter(client, hiveTable, predicates).map(fromHivePartition)
     HiveCatalogMetrics.incrementFetchedPartitions(parts.length)
     parts
@@ -978,6 +1016,18 @@ private[hive] class HiveClientImpl(
       client.dropDatabase(db, true, false, true)
     }
   }
+
+  def toHiveTableWrapper(
+      table: CatalogTable,
+      userName: Option[String] = None): HiveTable = {
+    val hiveTable = toHiveTable(table, userName)
+    // update table type for materialized for mv with shim
+    table.tableType match {
+      case CatalogTableType.MATERIALIZED_VIEW => shim.setMVTableType(hiveTable)
+      case _ =>
+    }
+    hiveTable
+  }
 }
 
 private[hive] object HiveClientImpl extends Logging {
@@ -1034,6 +1084,9 @@ private[hive] object HiveClientImpl extends Logging {
       case CatalogTableType.EXTERNAL => HiveTableType.EXTERNAL_TABLE
       case CatalogTableType.MANAGED => HiveTableType.MANAGED_TABLE
       case CatalogTableType.VIEW => HiveTableType.VIRTUAL_VIEW
+      case CatalogTableType.MATERIALIZED_VIEW =>
+        // This is for backward-compatible, for MV, tableType will be updated with HiveShim
+        HiveTableType.MANAGED_TABLE
       case t =>
         throw new IllegalArgumentException(
           s"Unknown table type is found at toHiveTableType: $t")

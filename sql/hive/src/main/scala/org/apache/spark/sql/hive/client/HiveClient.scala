@@ -90,6 +90,8 @@ private[hive] trait HiveClient {
     getTableOption(dbName, tableName).getOrElse(throw new NoSuchTableException(dbName, tableName))
   }
 
+  def getMaterializedViews(dbName: String): Seq[CatalogTable]
+
   /** Returns the metadata for the specified table or None if it doesn't exist. */
   def getTableOption(dbName: String, tableName: String): Option[CatalogTable]
 

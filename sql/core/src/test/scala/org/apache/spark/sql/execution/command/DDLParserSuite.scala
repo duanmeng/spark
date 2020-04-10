@@ -23,7 +23,6 @@ import java.util.Locale
 import scala.reflect.{classTag, ClassTag}
 
 import org.apache.spark.sql.{AnalysisException, SaveMode}
-import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{AnalysisTest, UnresolvedAttribute}
 import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.dsl.expressions._
@@ -32,12 +31,11 @@ import org.apache.spark.sql.catalyst.dsl.plans.DslLogicalPlan
 import org.apache.spark.sql.catalyst.expressions.JsonTuple
 import org.apache.spark.sql.catalyst.parser.ParseException
 import org.apache.spark.sql.catalyst.plans.logical._
-import org.apache.spark.sql.connector.expressions.{FieldReference, IdentityTransform}
 import org.apache.spark.sql.execution.SparkSqlParser
 import org.apache.spark.sql.execution.datasources.CreateTable
 import org.apache.spark.sql.internal.{HiveSerDe, SQLConf}
 import org.apache.spark.sql.test.SharedSparkSession
-import org.apache.spark.sql.types.{IntegerType, StructField, StructType}
+import org.apache.spark.sql.types.StructType
 
 class DDLParserSuite extends AnalysisTest with SharedSparkSession {
   private lazy val parser = new SparkSqlParser(new SQLConf)
@@ -929,5 +927,90 @@ class DDLParserSuite extends AnalysisTest with SharedSparkSession {
     assert(source6.table == "table2")
     assert(fileFormat6.locationUri.isEmpty)
     assert(provider6 == Some("ORC"))
+  }
+
+  test("create materialized view") {
+    val v1 = "create materialized view mv_db.mv1 as select c1 from db1.t1 where c2 > 0 group by c1"
+    val (tableDesc, saveMode) = parser.parsePlan(v1).collect {
+      case CreateTable(tableDesc, saveMode, _) => (tableDesc, saveMode)
+    }.head
+    assert(saveMode == SaveMode.ErrorIfExists)
+    assert(tableDesc.identifier.unquotedString == "mv_db.mv1")
+    assert(tableDesc.tableType == CatalogTableType.MATERIALIZED_VIEW)
+    assert(tableDesc.bucketSpec.isEmpty)
+    assert(tableDesc.viewText.get == "select c1 from db1.t1 where c2 > 0 group by c1")
+    assert(tableDesc.schema.isEmpty)
+    assert(tableDesc.storage.inputFormat.get == "org.apache.hadoop.mapred.TextInputFormat")
+    assert(tableDesc.storage.outputFormat.get ==
+      "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat")
+    assert(tableDesc.storage.serde.get == "org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe")
+
+    val v2 = "create materialized view if not exists mv_db.mv1 " +
+      "partitioned by (c1) CLUSTERED BY (c2) SORTED BY (c3) INTO 20 BUCKETS STORED AS orcfile " +
+      "as select c1 from db1.t1 where c2 > 0 group by c1"
+    val (tableDesc2, saveMode2) = parser.parsePlan(v2).collect {
+      case CreateTable(tableDesc, saveMode, _) => (tableDesc, saveMode)
+    }.head
+    assert(saveMode2 == SaveMode.Ignore)
+    assert(tableDesc2.identifier.unquotedString == "mv_db.mv1")
+    assert(tableDesc2.tableType == CatalogTableType.MATERIALIZED_VIEW)
+    assert(tableDesc2.bucketSpec.get.bucketColumnNames.contains("c2"))
+    assert(tableDesc2.bucketSpec.get.sortColumnNames.contains("c3"))
+    assert(tableDesc2.bucketSpec.get.numBuckets == 20)
+    assert(tableDesc2.viewText.get == "select c1 from db1.t1 where c2 > 0 group by c1")
+    assert(tableDesc2.schema.isEmpty)
+    assert(tableDesc2.storage.inputFormat.get == "org.apache.hadoop.hive.ql.io.orc.OrcInputFormat")
+    assert(tableDesc2.storage.outputFormat.get ==
+      "org.apache.hadoop.hive.ql.io.orc.OrcOutputFormat")
+    assert(tableDesc2.storage.serde.get == "org.apache.hadoop.hive.ql.io.orc.OrcSerde")
+  }
+
+  test("drop materialized view") {
+    val v1 = "drop materialized view mv_db.mv1"
+    val dtc = parser.parsePlan(v1).collect {
+      case dtc: DropTableCommand => dtc
+    }.head
+    assert(dtc.tableName.unquotedString == "mv_db.mv1")
+    assert(dtc.isMaterializedView)
+    assert(!dtc.isView)
+    assert(!dtc.ifExists)
+  }
+
+  test("alter materialized view") {
+    val v1 = "alter materialized view mv_db.mv1 enable rewrite"
+    val (tableName, enabled) = parser.parsePlan(v1).collect {
+      case AlterMaterializedRewriteCommand(tableName, enabled) => (tableName, enabled)
+    }.head
+    assert(tableName.unquotedString == "mv_db.mv1")
+    assert(enabled == true)
+
+    val v2 = "alter materialized view mv_db.mv1 disable rewrite"
+    val (tableName2, enabled2) = parser.parsePlan(v2).collect {
+      case AlterMaterializedRewriteCommand(tableName, enabled) => (tableName, enabled)
+    }.head
+    assert(tableName2.unquotedString == "mv_db.mv1")
+    assert(enabled2 == false)
+
+    val v3 = "alter materialized view mv_db.mv1 rebuild"
+    val tableName3 = parser.parsePlan(v3).collect {
+      case AlterMaterializedRebuildCommand(tableName) => tableName
+    }.head
+    assert(tableName3.unquotedString == "mv_db.mv1")
+
+    intercept[AnalysisException] {
+      parser.parsePlan("alter view mv_db.mv1 enable rewrite")
+    }
+
+    intercept[AnalysisException] {
+      parser.parsePlan("alter materialized view mv_db.mv1 enable")
+    }
+
+    intercept[AnalysisException] {
+      parser.parsePlan("alter materialized view mv_db.mv1 rewrite")
+    }
+
+    intercept[AnalysisException] {
+      parser.parsePlan("alter materialized view mv_db.mv1")
+    }
   }
 }

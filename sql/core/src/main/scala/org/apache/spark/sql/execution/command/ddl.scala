@@ -30,7 +30,7 @@ import org.apache.hadoop.fs._
 import org.apache.hadoop.mapred.{FileInputFormat, JobConf}
 
 import org.apache.spark.internal.config.RDD_PARALLEL_LISTING_THRESHOLD
-import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
+import org.apache.spark.sql.{AnalysisException, Dataset, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog._
@@ -39,7 +39,7 @@ import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.connector.catalog.{CatalogV2Util, TableCatalog}
 import org.apache.spark.sql.connector.catalog.SupportsNamespaces._
-import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation, PartitioningUtils}
+import org.apache.spark.sql.execution.datasources.{CreateTable, HadoopFsRelation, LogicalRelation, PartitioningUtils}
 import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.ParquetSchemaConverter
 import org.apache.spark.sql.internal.{HiveSerDe, SQLConf}
@@ -214,7 +214,8 @@ case class DropTableCommand(
     tableName: TableIdentifier,
     ifExists: Boolean,
     isView: Boolean,
-    purge: Boolean) extends RunnableCommand {
+    purge: Boolean,
+    isMaterializedView: Boolean) extends RunnableCommand {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val catalog = sparkSession.sessionState.catalog
@@ -224,12 +225,18 @@ case class DropTableCommand(
       // If the command DROP VIEW is to drop a table or DROP TABLE is to drop a view
       // issue an exception.
       catalog.getTableMetadata(tableName).tableType match {
+        case CatalogTableType.MATERIALIZED_VIEW if !isMaterializedView =>
+          throw new AnalysisException(
+            "Please use DROP MATERIALIZED VIEW to drop materialized view.")
         case CatalogTableType.VIEW if !isView =>
           throw new AnalysisException(
-            "Cannot drop a view with DROP TABLE. Please use DROP VIEW instead")
-        case o if o != CatalogTableType.VIEW && isView =>
+            "Please use DROP VIEW to drop a view.")
+        case CatalogTableType.EXTERNAL if isView || isMaterializedView =>
           throw new AnalysisException(
-            s"Cannot drop a table with DROP VIEW. Please use DROP TABLE instead")
+            "Please use DROP TABLE to drop an external table.")
+        case CatalogTableType.MANAGED if isView || isMaterializedView =>
+          throw new AnalysisException(
+            "Please use DROP TABLE to drop a manage table.")
         case _ =>
       }
     }
@@ -835,6 +842,90 @@ case class AlterTableSetLocationCommand(
   }
 }
 
+/**
+ * A command that enable/disable materialized view.
+ *
+ * The syntax of this command is:
+ * {{{
+ *   ALTER MATERIALIZED VIEW tableIdentifier (ENABLE|DISABLE) REWRITE
+ * }}}
+ */
+case class AlterMaterializedRewriteCommand(
+    tableName: TableIdentifier,
+    enabled: Boolean) extends RunnableCommand {
+
+  override def run(sparkSession: SparkSession): Seq[Row] = {
+    val catalog = sparkSession.sessionState.catalog
+    val table = catalog.getTableMetadata(tableName)
+    table.tableType match {
+      case CatalogTableType.MATERIALIZED_VIEW =>
+      case _ =>
+        throw new AnalysisException(
+          "Cannot alter a table/view with ALTER MATERIALIZED VIEW." +
+            " Please use ALTER TABLE/VIEW instead")
+    }
+
+    if (table.enableRewrite != enabled) {
+      val newTable = table.copy(enableRewrite = enabled)
+      catalog.alterTable(newTable)
+    }
+
+    Seq.empty[Row]
+  }
+}
+
+/**
+ * A command that rebuild materialized view.
+ *
+ * Split the rebuild action into 2 steps:
+ *   1. drop old materialized view
+ *   2. create it as create materialized view
+ *
+ * There is no ACID guarantee for the whole process.
+ * When rebuild the materialized view, it is suppossed that old data is invalid,
+ * so, if step 2 is failed, the result of real query won't be changed.
+ * For user, they need create MV instead of rebuild if step 2 is failed.
+ *
+ * The syntax of this command is:
+ * {{{
+ *   ALTER MATERIALIZED VIEW tableIdentifier REBUILD
+ * }}}
+ */
+case class AlterMaterializedRebuildCommand(tableName: TableIdentifier) extends RunnableCommand {
+
+  override def run(sparkSession: SparkSession): Seq[Row] = {
+    val catalog = sparkSession.sessionState.catalog
+    val table = catalog.getTableMetadata(tableName)
+    table.tableType match {
+      case CatalogTableType.MATERIALIZED_VIEW =>
+      case _ =>
+        throw new AnalysisException(
+          "Cannot alter a table/view with ALTER MATERIALIZED VIEW." +
+            " Please use ALTER TABLE/VIEW instead")
+    }
+
+    val viewText = table.viewText
+    if (viewText.isDefined) {
+      logInfo("Rebuild materialized view: start drop process")
+      DropTableCommand(
+        tableName, false, false, true, true).run(sparkSession)
+      logInfo("Rebuild materialized view: drop success")
+
+      logInfo("Rebuild materialized view: start create materialized view")
+      val viewPlan = sparkSession.sessionState.sqlParser.parsePlan(viewText.get)
+      Dataset.ofRows(sparkSession,
+        CreateTable(table.copy(provider = Some(DDLUtils.HIVE_PROVIDER),
+          schema = StructType(Seq.empty[StructField])),
+          SaveMode.ErrorIfExists, Some(viewPlan)))
+      logInfo("Rebuild materialized view: create materialized view success")
+    } else {
+      throw new AnalysisException(
+        s"Cannot find view text in ${tableName.unquotedString}, " +
+          "materialized rebuild failed.")
+    }
+    Seq.empty[Row]
+  }
+}
 
 object DDLUtils {
   val HIVE_PROVIDER = "hive"

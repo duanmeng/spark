@@ -656,7 +656,8 @@ private[spark] class HiveExternalCatalog(conf: SparkConf, hadoopConf: Configurat
         partitionColumnNames = oldTableDef.partitionColumnNames,
         bucketSpec = oldTableDef.bucketSpec,
         properties = newTableProps,
-        owner = owner)
+        owner = owner,
+        enableRewrite = tableDefinition.enableRewrite)
 
       client.alterTable(newDef)
     }
@@ -1331,9 +1332,12 @@ private[spark] class HiveExternalCatalog(conf: SparkConf, hadoopConf: Configurat
   }
 
   override def getAllMaterializedViews(dbs: Seq[String]): Seq[CatalogTable] = {
-    throw new AnalysisException("unsupported yet")
+    var mvs = Seq.empty[CatalogTable]
+    dbs.foreach {
+      db => mvs ++= client.getMaterializedViews(db)
+    }
+    mvs
   }
-
 }
 
 object HiveExternalCatalog {

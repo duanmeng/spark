@@ -297,6 +297,106 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
     }
   }
 
+  test("testGroupBy13") {
+    withMaterializedView("testmv",
+      mvSchema = new StructType()
+        .add("deptno", IntegerType, nullable = false),
+      mvQuery =
+        """
+          |select e.deptno
+          |from db1.emps e join db2.depts d on e.deptno = d.deptno
+          |group by e.deptno, d.name
+          |""".stripMargin,
+      sql =
+        """
+          |select d.deptno
+          |from  db2.depts d join db1.emps e on e.deptno = d.deptno
+          |group by d.deptno
+          |""".stripMargin) {
+      materialized =>
+
+        assert(
+          """
+            |select mv_db.testmv.`deptno` AS `deptno`
+            |from mv_db.testmv
+            |group by mv_db.testmv.`deptno`
+            |""".stripMargin.equals(getSql(materialized)))
+    }
+  }
+
+  test("testGroupBy14") {
+    withMaterializedView("testmv",
+      mvSchema = new StructType()
+        .add("deptno", IntegerType, nullable = false),
+      mvQuery =
+        """
+          |select e.deptno
+          |from db1.emps e join db2.depts d on e.deptno = d.deptno
+          |group by e.deptno, d.name
+          |""".stripMargin,
+      sql =
+        """
+          |select deptno
+          |from (
+          |select d.deptno
+          |from  db2.depts d join db1.emps e on e.deptno = d.deptno
+          |where d.deptno = 1
+          |group by d.deptno) t
+          |group by deptno
+          |""".stripMargin) {
+      materialized =>
+
+        assert(
+          """
+            |select t.`deptno`
+            |from (
+            |select mv_db.testmv.`deptno` AS `deptno`
+            |from mv_db.testmv
+            |where (mv_db.testmv.`deptno` = 1)
+            |group by mv_db.testmv.`deptno`
+            |) as `t`
+            |group by t.`deptno`
+            |""".stripMargin.equals(getSql(materialized)))
+    }
+  }
+
+  test("testWith1") {
+    withMaterializedView("testmv",
+      mvSchema = new StructType()
+        .add("deptno", IntegerType, nullable = false),
+      mvQuery =
+        """
+          |select e.deptno
+          |from db1.emps e join db2.depts d on e.deptno = d.deptno
+          |group by e.deptno, d.name
+          |""".stripMargin,
+      sql =
+        """
+          |with t as
+          |(select d.deptno
+          |from  db2.depts d join db1.emps e on e.deptno = d.deptno
+          |where d.deptno = 1
+          |group by d.deptno)
+          |select deptno
+          |from t
+          |group by deptno
+          |""".stripMargin) {
+      materialized =>
+
+        assert(
+          """
+            |select t.`deptno`
+            |from (
+            |select mv_db.testmv.`deptno` AS `deptno`
+            |from mv_db.testmv
+            |where (mv_db.testmv.`deptno` = 1)
+            |group by mv_db.testmv.`deptno`
+            |) as `t`
+            |group by t.`deptno`
+            |""".stripMargin.equals(getSql(materialized)))
+    }
+  }
+
   test("testGroupByAggregateFunCount1") {
     withMaterializedView("testmv",
       mvSchema = new StructType()
@@ -2424,6 +2524,45 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
             |from mv_db.testmv
             |""".stripMargin.equals(getSql(materialized)))
     }
+  }
+
+  test("invalidMaterializedView1") {
+    withUnSatisfiedMV("testmv",
+      mvSchema = new StructType()
+        .add("deptno", IntegerType, nullable = false)
+        .add("c", LongType, nullable = false),
+      mvQuery =
+        """
+          |select deptno, count(*)
+          |from db1.emps
+          |group by deptno
+          |""".stripMargin,
+      sql =
+        """
+          |select deptno
+          |from db1.emps
+          |group by deptno
+          |""".stripMargin)
+  }
+
+  test("invalidMaterializedView2") {
+    withUnSatisfiedMV("testmv",
+      mvSchema = new StructType()
+        .add("deptno", IntegerType, nullable = false)
+        .add("c", LongType, nullable = false),
+      mvQuery =
+        """
+          |select deptno, count(*) as c
+          |from db1.emps
+          |group by deptno
+          |order by deptno
+          |""".stripMargin,
+      sql =
+        """
+          |select deptno
+          |from db1.emps
+          |group by deptno
+          |""".stripMargin)
   }
   // scalastyle:on
 }

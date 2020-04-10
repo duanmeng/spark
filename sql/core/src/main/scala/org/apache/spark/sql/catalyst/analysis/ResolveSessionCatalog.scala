@@ -329,11 +329,13 @@ class ResolveSessionCatalog(
 
     // v1 DROP TABLE supports temp view.
     case DropTableStatement(TempViewOrV1Table(name), ifExists, purge) =>
-      DropTableCommand(name.asTableIdentifier, ifExists, isView = false, purge = purge)
+      DropTableCommand(name.asTableIdentifier, ifExists, isView = false,
+        purge = purge, isMaterializedView = false)
 
     // v1 DROP TABLE supports temp view.
     case DropViewStatement(TempViewOrV1Table(name), ifExists) =>
-      DropTableCommand(name.asTableIdentifier, ifExists, isView = true, purge = false)
+      DropTableCommand(name.asTableIdentifier, ifExists, isView = true, purge = false,
+        isMaterializedView = false)
 
     case c @ CreateNamespaceStatement(CatalogAndNamespace(catalog, ns), _, _)
         if isSessionCatalog(catalog) =>
