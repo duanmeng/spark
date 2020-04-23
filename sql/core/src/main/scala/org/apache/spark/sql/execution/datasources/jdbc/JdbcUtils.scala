@@ -92,7 +92,14 @@ object JdbcUtils extends Logging {
     // SQL database systems using JDBC meta data calls, considering "table" could also include
     // the database name. Query used to find table exists can be overridden by the dialects.
     Try {
-      val statement = conn.prepareStatement(dialect.getTableExistsQuery(options.table))
+      /* Start SuperSQL modification */
+      val tableExistsQuery = if (isTdw(options.url)) {
+        getTdwSchemaQuery(options.table)
+      } else {
+        dialect.getTableExistsQuery(options.table)
+      }
+      val statement = conn.prepareStatement(tableExistsQuery)
+      /* End SuperSQL modification */
       try {
         setStatementQueryTimeout(statement, options.queryTimeout)
         statement.executeQuery()
@@ -105,34 +112,62 @@ object JdbcUtils extends Logging {
   /**
    * Drops a table from the JDBC database.
    */
-  def dropTable(conn: Connection, table: String, options: JDBCOptions): Unit = {
+  /* Start SuperSQL modification */
+  def dropTable(conn: Connection, options: JdbcOptionsInWrite): Unit = {
+    var table = options.table
     val statement = conn.createStatement
     try {
       setStatementQueryTimeout(statement, options.queryTimeout)
+      val isTdw = JdbcUtils.isTdw(options.url)
+      if (isTdw) {
+        val index = table.indexOf("::")
+        if (index != -1) {
+          val db = table.substring(0, index).trim
+          table = table.substring(index + 2).trim
+          statement.execute(s"USE $db")
+        }
+      }
       statement.executeUpdate(s"DROP TABLE $table")
     } finally {
       statement.close()
     }
   }
+  /* End SuperSQL modification */
 
   /**
    * Truncates a table from the JDBC database without side effects.
    */
+  /* Start SuperSQL modification */
   def truncateTable(conn: Connection, options: JdbcOptionsInWrite): Unit = {
     val dialect = JdbcDialects.get(options.url)
+    var table = options.table
     val statement = conn.createStatement
     try {
       setStatementQueryTimeout(statement, options.queryTimeout)
-      val truncateQuery = if (options.isCascadeTruncate.isDefined) {
-        dialect.getTruncateQuery(options.table, options.isCascadeTruncate)
-      } else {
-        dialect.getTruncateQuery(options.table)
+      val isTdw = JdbcUtils.isTdw(options.url)
+      if (isTdw) {
+        val index = table.indexOf("::")
+        if (index != -1) {
+          val db = table.substring(0, index).trim
+          table = table.substring(index + 2).trim
+          statement.execute(s"USE $db")
+        }
       }
-      statement.executeUpdate(truncateQuery)
+      val truncateQuery = if (options.isCascadeTruncate.isDefined) {
+        dialect.getTruncateQuery(table, options.isCascadeTruncate)
+      } else {
+        dialect.getTruncateQuery(table)
+      }
+      if (!isTdw) {
+        statement.executeUpdate(truncateQuery)
+      } else {
+        statement.execute(truncateQuery)
+      }
     } finally {
       statement.close()
     }
   }
+  /* End SuperSQL modification */
 
   def isCascadingTruncateTable(url: String): Option[Boolean] = {
     JdbcDialects.get(url).isCascadingTruncateTable()
@@ -141,14 +176,18 @@ object JdbcUtils extends Logging {
   /**
    * Returns an Insert SQL statement for inserting a row into the target table via JDBC conn.
    */
+  /* Start SuperSQL modification */
   def getInsertStatement(
+      url: String,
       table: String,
       rddSchema: StructType,
       tableSchema: Option[StructType],
       isCaseSensitive: Boolean,
       dialect: JdbcDialect): String = {
+    val insertTdw = isTdw(url)
     val columns = if (tableSchema.isEmpty) {
-      rddSchema.fields.map(x => dialect.quoteIdentifier(x.name)).mkString(",")
+      rddSchema.fields.map(x =>
+        if (insertTdw) x.name else dialect.quoteIdentifier(x.name)).mkString(",")
     } else {
       val columnNameEquality = if (isCaseSensitive) {
         org.apache.spark.sql.catalyst.analysis.caseSensitiveResolution
@@ -164,12 +203,13 @@ object JdbcUtils extends Logging {
         val normalizedName = tableColumnNames.find(f => columnNameEquality(f, col.name)).getOrElse {
           throw new AnalysisException(s"""Column "${col.name}" not found in schema $tableSchema""")
         }
-        dialect.quoteIdentifier(normalizedName)
+        if (insertTdw) normalizedName else dialect.quoteIdentifier(normalizedName)
       }.mkString(",")
     }
     val placeholders = rddSchema.fields.map(_ => "?").mkString(",")
     s"INSERT INTO $table ($columns) VALUES ($placeholders)"
   }
+  /* End SuperSQL modification */
 
   /**
    * Retrieve standard jdbc types.
@@ -271,19 +311,24 @@ object JdbcUtils extends Logging {
     answer
   }
 
+  /* Start SuperSQL modification */
   /**
    * Returns the schema if the table already exists in the JDBC database.
    */
   def getSchemaOption(conn: Connection, options: JDBCOptions): Option[StructType] = {
-    val dialect = JdbcDialects.get(options.url)
-
+    val url = options.url
+    val dialect = JdbcDialects.get(url)
     try {
-      val statement = conn.prepareStatement(dialect.getSchemaQuery(options.tableOrQuery))
+      val table = options.tableOrQuery
+      val schemaQuery = if (isTdw(url)) {
+        getTdwSchemaQuery(table)
+      } else {
+        dialect.getSchemaQuery(table)
+      }
+      val statement = conn.prepareStatement(schemaQuery)
       try {
         setStatementQueryTimeout(statement, options.queryTimeout)
-        /* Start SuperSQL modification */
-        Some(getSchema(statement.executeQuery(), dialect, options.url))
-        /* End SuperSQL modification */
+        Some(getSchema(statement.executeQuery(), dialect, url))
       } catch {
         case _: SQLException => None
       } finally {
@@ -294,7 +339,10 @@ object JdbcUtils extends Logging {
     }
   }
 
-  /* Start SuperSQL modification */
+  def getTdwSchemaQuery(table: String): String = {
+    s"SELECT * FROM $table LIMIT 1"
+  }
+
   def handleSuperSqlUrl(url: String): String = {
     if (url.trim.startsWith("jdbc:supersql:datasource:")) {
       var start = url.indexOf("url='")
@@ -308,6 +356,22 @@ object JdbcUtils extends Logging {
       }
     }
     url
+  }
+
+  def isTdw(url: String): Boolean = {
+    if (url == null) {
+      return false
+    }
+    val newUrl = handleSuperSqlUrl(url)
+    newUrl.startsWith("jdbc:hive:")
+  }
+
+  def isHive(url: String): Boolean = {
+    if (url == null) {
+      return false
+    }
+    val newUrl = handleSuperSqlUrl(url)
+    newUrl.startsWith("jdbc:hive2:")
   }
 
   def isNoSql(url: String): Boolean = {
@@ -751,9 +815,10 @@ object JdbcUtils extends Logging {
    * updated even with error if it doesn't support transaction, as there're dirty outputs.
    */
   def savePartition(
+      /* Start SuperSQL modification */
       getConnection: () => Connection,
-      table: String,
       iterator: Iterator[Row],
+      /* End SuperSQL modification */
       rddSchema: StructType,
       insertStmt: String,
       batchSize: Int,
@@ -763,14 +828,6 @@ object JdbcUtils extends Logging {
     val outMetrics = TaskContext.get().taskMetrics().outputMetrics
 
     val conn = getConnection()
-    /* Start SuperSQL modification */
-    val url =
-      try {
-        conn.getMetaData.getURL
-      } catch {
-        case t: Throwable => null
-      }
-    /* End SuperSQL modification */
     var committed = false
 
     var finalIsolationLevel = Connection.TRANSACTION_NONE
@@ -791,7 +848,7 @@ object JdbcUtils extends Logging {
           }
         } else {
           /* Start SuperSQL modification */
-          if (!isSuperSql(url)) {
+          if (!isSuperSql(options.url)) {
             logWarning(s"Requested isolation level $isolationLevel, "
               + "but transactions are unsupported")
           }
@@ -891,6 +948,107 @@ object JdbcUtils extends Logging {
     }
   }
 
+  /* Start SuperSQL modification */
+  /**
+   * Saves a partition of a DataFrame to the Hive/tHive JDBC database.
+   * Cannot use the above savePartition() method because certain
+   * PreparedStatement methods are not supported in Hive/tHive JDBC driver.
+   */
+  def savePartitionForHive(
+      getConnection: () => Connection,
+      iterator: Iterator[Row],
+      rddSchema: StructType,
+      insertStmt: String,
+      batchSize: Int): Iterator[Byte] = {
+    val conn = getConnection()
+    try {
+      val stmt = conn.createStatement()
+      val index = insertStmt.indexOf(" VALUES ")
+      val cmdPrefix = insertStmt.substring(0, index + " VALUES ".length)
+      val numFields = rddSchema.fields.length
+
+      var insertSql = cmdPrefix
+      var seqNo = 1
+      try {
+        var rowCount = 0
+        while (iterator.hasNext) {
+          val row = iterator.next()
+          val sb = new StringBuilder("(")
+          var i = 0
+          while (i < numFields) {
+            if (row.isNullAt(i)) {
+              sb.append("null")
+            } else {
+              var toQuote = false
+              rddSchema.fields(i).dataType match {
+                case StringType => toQuote = true
+                case DateType => toQuote = true
+                case TimestampType => toQuote = true
+                case BinaryType => toQuote = true
+                case _ => toQuote = false
+              }
+              if (toQuote) {
+                sb.append("'").append(row.get(i)).append("'")
+              } else {
+                sb.append(row.get(i))
+              }
+            }
+            if (i != numFields - 1) {
+              sb.append(",")
+            }
+            i = i + 1
+          }
+          sb.append("),")
+          insertSql += sb.toString
+          rowCount += 1
+          if (rowCount % batchSize == 0) {
+            insertSql = insertSql.substring(0, insertSql.length - 1)
+            log.info(s"Batch insert sql #$seqNo: $insertSql")
+            stmt.execute(insertSql)
+            seqNo = seqNo + 1
+            rowCount = 0
+          }
+        }
+        if (rowCount > 0) {
+          insertSql = insertSql.substring(0, insertSql.length - 1)
+          log.info(s"Batch insert sql #$seqNo: $insertSql")
+          stmt.execute(insertSql)
+          seqNo = seqNo + 1
+        }
+      } finally {
+        stmt.close()
+      }
+      Iterator.empty
+    } catch {
+      case e: SQLException =>
+        val cause = e.getNextException
+        if (cause != null && e.getCause != cause) {
+          // If there is no cause already, set 'next exception' as cause. If cause is null,
+          // it *may* be because no cause was set yet
+          if (e.getCause == null) {
+            try {
+              e.initCause(cause)
+            } catch {
+              // Or it may be null because the cause *was* explicitly initialized, to *null*,
+              // in which case this fails. There is no other way to detect it.
+              // addSuppressed in this case as well.
+              case _: IllegalStateException => e.addSuppressed(cause)
+            }
+          } else {
+            e.addSuppressed(cause)
+          }
+        }
+        throw e
+    } finally {
+      try {
+        conn.close()
+      } catch {
+        case e: Exception => logWarning("Insert data succeeded, but closing failed", e)
+      }
+    }
+  }
+  /* End SuperSQL modification */
+
   /**
    * Compute the schema string for this RDD.
    */
@@ -982,6 +1140,7 @@ object JdbcUtils extends Logging {
   /**
    * Saves the RDD to the database in a single transaction.
    */
+  /* Start SuperSQL modification */
   def saveTable(
       df: DataFrame,
       tableSchema: Option[StructType],
@@ -995,7 +1154,8 @@ object JdbcUtils extends Logging {
     val batchSize = options.batchSize
     val isolationLevel = options.isolationLevel
 
-    val insertStmt = getInsertStatement(table, rddSchema, tableSchema, isCaseSensitive, dialect)
+    val insertStmt = getInsertStatement(
+      url, table, rddSchema, tableSchema, isCaseSensitive, dialect)
     val repartitionedDF = options.numPartitions match {
       case Some(n) if n <= 0 => throw new IllegalArgumentException(
         s"Invalid value `$n` for parameter `${JDBCOptions.JDBC_NUM_PARTITIONS}` in table writing " +
@@ -1003,11 +1163,20 @@ object JdbcUtils extends Logging {
       case Some(n) if n < df.rdd.getNumPartitions => df.coalesce(n)
       case _ => df
     }
-    repartitionedDF.rdd.foreachPartition { iterator => savePartition(
-      getConnection, table, iterator, rddSchema, insertStmt, batchSize, dialect, isolationLevel,
-      options)
+
+    val isTdw = JdbcUtils.isTdw(url)
+    val isHive = JdbcUtils.isHive(url)
+    if (isTdw || isHive) {
+      repartitionedDF.rdd.foreachPartition(iterator => savePartitionForHive(
+        getConnection, iterator, rddSchema, insertStmt, batchSize)
+      )
+    } else {
+      repartitionedDF.rdd.foreachPartition(iterator => savePartition(
+        getConnection, iterator, rddSchema, insertStmt, batchSize, dialect, isolationLevel, options)
+      )
     }
   }
+  /* End SuperSQL modification */
 
   /**
    * Creates a table with a given schema.

@@ -67,7 +67,12 @@ object JDBCRDD extends Logging {
         st.close()
       }
 
-      val statement = conn.prepareStatement(dialect.getSchemaQuery(table))
+      val schemaQuery = if (JdbcUtils.isTdw(url)) {
+        JdbcUtils.getTdwSchemaQuery(table)
+      } else {
+        dialect.getSchemaQuery(table)
+      }
+      val statement = conn.prepareStatement(schemaQuery)
       try {
         JdbcUtils.setStatementQueryTimeout(statement, options.queryTimeout)
         val rs = statement.executeQuery()
