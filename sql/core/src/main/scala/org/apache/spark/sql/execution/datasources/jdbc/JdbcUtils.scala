@@ -988,7 +988,8 @@ object JdbcUtils extends Logging {
                 case _ => toQuote = false
               }
               if (toQuote) {
-                sb.append("'").append(row.get(i)).append("'")
+                val colValue = String.valueOf(row.get(i)).replaceAllLiterally("'", "\\'")
+                sb.append("'").append(colValue).append("'")
               } else {
                 sb.append(row.get(i))
               }
@@ -1007,6 +1008,7 @@ object JdbcUtils extends Logging {
             stmt.execute(insertSql)
             seqNo = seqNo + 1
             rowCount = 0
+            insertSql = cmdPrefix
           }
         }
         if (rowCount > 0) {
@@ -1014,6 +1016,8 @@ object JdbcUtils extends Logging {
           log.info(s"Batch insert sql #$seqNo: $insertSql")
           stmt.execute(insertSql)
           seqNo = seqNo + 1
+          rowCount = 0
+          insertSql = cmdPrefix
         }
       } finally {
         stmt.close()
