@@ -582,7 +582,9 @@ private[hive] class HiveClientImpl(
 
   override def createTable(table: CatalogTable, ignoreIfExists: Boolean): Unit = withHiveState {
     verifyColumnDataType(table.dataSchema)
-    client.createTable(toHiveTableWrapper(table, Some(userName)), ignoreIfExists)
+    val hiveTable = toHiveTableWrapper(table, Some(userName))
+    shim.setRewriteEnabled(hiveTable, table.enableRewrite)
+    client.createTable(hiveTable, ignoreIfExists)
   }
 
   override def dropTable(
