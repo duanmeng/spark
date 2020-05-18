@@ -34,7 +34,7 @@ import org.apache.hadoop.hive.ql.session.SessionState
 import org.apache.hadoop.util.VersionInfo
 import org.apache.hive.common.util.HiveVersionInfo
 
-import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.{SparkConf, SparkContext, SparkEnv}
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql._
@@ -397,9 +397,38 @@ private[spark] object HiveUtils extends Logging {
         barrierPrefixes = hiveMetastoreBarrierPrefixes,
         sharedPrefixes = hiveMetastoreSharedPrefixes)
     } else {
+      val localJarsPath = {
+        // Support local file & HDFS file for dependency
+        Utils.resolveURI(hiveMetastoreJars).getScheme match {
+          case "hdfs" =>
+            val localDir = new File(Utils.getLocalDir(conf), "hive_dep_jars")
+            logInfo("Start to download hive dependency from" +
+              s" $hiveMetastoreJars to ${localDir.getAbsolutePath}")
+            // doFetchFile doesn't support reg expr in src path,
+            // if all jars are located in hdfs://host/dir
+            // correct: set spark.sql.hive.metastore.jars=hdfs://host/dir
+            // INCORRECT: set spark.sql.hive.metastore.jars=hdfs://host/dir/*.jar
+            val targetPath = Utils.doFetchFile(
+              hiveMetastoreJars,
+              localDir,
+              "",
+              conf,
+              SparkEnv.get.securityManager,
+              SparkHadoopUtil.newConfiguration(conf))
+            logInfo(s"Finish download hive dependency to ${localDir.getAbsolutePath}")
+            // for local jar path, it should include * in the path
+            // eg, /tmp/hive_dep_jars/*
+            (new File(targetPath, "*")).getAbsolutePath
+          case "file" => hiveMetastoreJars
+          case s@_ => throw new IllegalArgumentException(
+            s"$hiveMetastoreJars with scheme $s is not supported, " +
+              "we only support Hive Metastore jars stored on HDFS or local FS.")
+        }
+      }
+
       // Convert to files and expand any directories.
       val jars =
-        hiveMetastoreJars
+        localJarsPath
           .split(File.pathSeparator)
           .flatMap {
           case path if new File(path).getName == "*" =>
