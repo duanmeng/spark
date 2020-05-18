@@ -149,7 +149,7 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
 
         assert(
           """
-            |select count(mv_db.testmv.`c`) AS `c`, mv_db.testmv.`subn` AS `subn`
+            |select mv_db.testmv.`subn` AS `subn`, sum(mv_db.testmv.`c`) AS `c`
             |from mv_db.testmv
             |group by mv_db.testmv.`subn`
             |""".stripMargin.equals(getSql(materialized)))
@@ -289,7 +289,7 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
 
         assert(
           """
-            |select count(mv_db.testmv.`c`) AS `count(name)`, mv_db.testmv.`deptno` AS `deptno`
+            |select mv_db.testmv.`deptno` AS `deptno`, sum(mv_db.testmv.`c`) AS `count(name)`
             |from db2.dependents, mv_db.testmv
             |where (mv_db.testmv.`name` = db2.dependents.`name`)
             |group by mv_db.testmv.`deptno`
@@ -446,7 +446,7 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
 
         assert(
           """
-            |select count(mv_db.testmv.`c`) AS `c`, mv_db.testmv.`name` AS `name`
+            |select mv_db.testmv.`name` AS `name`, sum(mv_db.testmv.`c`) AS `c`
             |from mv_db.testmv
             |group by mv_db.testmv.`name`
             |""".stripMargin.equals(getSql(materialized)))
@@ -467,7 +467,7 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
           |""".stripMargin,
       sql =
         """
-          |select name, count(name, deptno) as c
+          |select name, count(deptno) as c
           |from db1.emps
           |group by name
           |""".stripMargin) {
@@ -475,7 +475,7 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
 
         assert(
           """
-            |select count(mv_db.testmv.`name`, mv_db.testmv.`deptno`) AS `c`, mv_db.testmv.`name` AS `name`
+            |select count(mv_db.testmv.`deptno`) AS `c`, mv_db.testmv.`name` AS `name`
             |from mv_db.testmv
             |group by mv_db.testmv.`name`
             |""".stripMargin.equals(getSql(materialized)))
@@ -531,6 +531,62 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
           |""".stripMargin)
   }
 
+  test("testGroupByAggregateFunCount6") {
+    withMaterializedView("testmv",
+      mvSchema = new StructType()
+        .add("deptno", IntegerType, nullable = false)
+        .add("c", LongType),
+      mvQuery =
+        """
+          |select deptno, count(commission, salary) as c
+          |from db1.emps
+          |group by deptno
+          |""".stripMargin,
+      sql =
+        """
+          |select deptno, count(commission, salary) as c1
+          |from db1.emps
+          |group by deptno
+          |""".stripMargin) {
+      materialized =>
+
+        assert(
+          """
+            |select mv_db.testmv.`c` AS `c1`, mv_db.testmv.`deptno` AS `deptno`
+            |from mv_db.testmv
+            |""".stripMargin.equals(getSql(materialized)))
+    }
+  }
+
+  test("testGroupByAggregateFunCount7") {
+    withMaterializedView("testmv",
+      mvSchema = new StructType()
+        .add("deptno", IntegerType, nullable = false)
+        .add("name", StringType, nullable = false)
+        .add("c", LongType),
+      mvQuery =
+        """
+          |select deptno, name, count(commission, salary) as c
+          |from db1.emps
+          |group by deptno, name
+          |""".stripMargin,
+      sql =
+        """
+          |select name, count(commission, salary) as c
+          |from db1.emps
+          |group by name
+          |""".stripMargin) {
+      materialized =>
+
+        assert(
+          """
+            |select mv_db.testmv.`name` AS `name`, sum(mv_db.testmv.`c`) AS `c`
+            |from mv_db.testmv
+            |group by mv_db.testmv.`name`
+            |""".stripMargin.equals(getSql(materialized)))
+    }
+  }
+
   test("testGroupByAggregateFunSum1") {
     withMaterializedView("testmv",
       mvSchema = new StructType()
@@ -538,13 +594,13 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
         .add("c", LongType),
       mvQuery =
         """
-          |select deptno, sum(deptno) as c
+          |select deptno, sum(salary) as c
           |from db1.emps
           |group by deptno
           |""".stripMargin,
       sql =
         """
-          |select deptno, sum(deptno) as c1
+          |select deptno, sum(salary) as c1
           |from db1.emps
           |group by deptno
           |""".stripMargin) {
@@ -566,13 +622,13 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
         .add("c", LongType),
       mvQuery =
         """
-          |select deptno, name, sum(deptno) as c
+          |select deptno, name, sum(salary) as c
           |from db1.emps
           |group by deptno, name
           |""".stripMargin,
       sql =
         """
-          |select name, sum(deptno) as c
+          |select name, sum(salary) as c
           |from db1.emps
           |group by name
           |""".stripMargin) {
@@ -594,13 +650,13 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
         .add("c", LongType),
       mvQuery =
         """
-          |select deptno, min(deptno) as c
+          |select deptno, min(salary) as c
           |from db1.emps
           |group by deptno
           |""".stripMargin,
       sql =
         """
-          |select deptno, min(deptno) as c1
+          |select deptno, min(salary) as c1
           |from db1.emps
           |group by deptno
           |""".stripMargin) {
@@ -622,13 +678,13 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
         .add("c", LongType),
       mvQuery =
         """
-          |select deptno, name, min(deptno) as c
+          |select deptno, name, min(salary) as c
           |from db1.emps
           |group by deptno, name
           |""".stripMargin,
       sql =
         """
-          |select name, min(deptno) as c
+          |select name, min(salary) as c
           |from db1.emps
           |group by name
           |""".stripMargin) {
@@ -650,13 +706,13 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
         .add("c", LongType),
       mvQuery =
         """
-          |select deptno, max(deptno) as c
+          |select deptno, max(salary) as c
           |from db1.emps
           |group by deptno
           |""".stripMargin,
       sql =
         """
-          |select deptno, max(deptno) as c1
+          |select deptno, max(salary) as c1
           |from db1.emps
           |group by deptno
           |""".stripMargin) {
@@ -678,13 +734,13 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
         .add("c", LongType),
       mvQuery =
         """
-          |select deptno, name, max(deptno) as c
+          |select deptno, name, max(salary) as c
           |from db1.emps
           |group by deptno, name
           |""".stripMargin,
       sql =
         """
-          |select name, max(deptno) as c
+          |select name, max(salary) as c
           |from db1.emps
           |group by name
           |""".stripMargin) {
@@ -706,13 +762,13 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
         .add("c", LongType),
       mvQuery =
         """
-          |select deptno, avg(deptno) as c
+          |select deptno, avg(salary) as c
           |from db1.emps
           |group by deptno
           |""".stripMargin,
       sql =
         """
-          |select deptno, avg(deptno) as c1
+          |select deptno, avg(salary) as c1
           |from db1.emps
           |group by deptno
           |""".stripMargin) {
@@ -727,32 +783,23 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
   }
 
   test("testGroupByAggregateFunAvg2") {
-    withMaterializedView("testmv",
+    withUnSatisfiedMV("testmv",
       mvSchema = new StructType()
         .add("deptno", IntegerType, nullable = false)
         .add("name", StringType, nullable = false)
         .add("c", LongType),
       mvQuery =
         """
-          |select deptno, name, avg(deptno) as c
+          |select deptno, name, avg(salary) as c
           |from db1.emps
           |group by deptno, name
           |""".stripMargin,
       sql =
         """
-          |select name, avg(deptno) as c
+          |select name, avg(salary) as c
           |from db1.emps
           |group by name
-          |""".stripMargin) {
-      materialized =>
-
-        assert(
-          """
-            |select avg(mv_db.testmv.`c`) AS `c`, mv_db.testmv.`name` AS `name`
-            |from mv_db.testmv
-            |group by mv_db.testmv.`name`
-            |""".stripMargin.equals(getSql(materialized)))
-    }
+          |""".stripMargin)
   }
 
   test("testGroupByAggregateFunVarsamp1") {
@@ -762,13 +809,13 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
         .add("c", LongType),
       mvQuery =
         """
-          |select deptno, var_samp(deptno) as c
+          |select deptno, var_samp(salary) as c
           |from db1.emps
           |group by deptno
           |""".stripMargin,
       sql =
         """
-          |select deptno, var_samp(deptno) as c1
+          |select deptno, var_samp(salary) as c1
           |from db1.emps
           |group by deptno
           |""".stripMargin) {
@@ -783,32 +830,23 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
   }
 
   test("testGroupByAggregateVarsamp2") {
-    withMaterializedView("testmv",
+    withUnSatisfiedMV("testmv",
       mvSchema = new StructType()
         .add("deptno", IntegerType, nullable = false)
         .add("name", StringType, nullable = false)
         .add("c", LongType),
       mvQuery =
         """
-          |select deptno, name, var_samp(deptno) as c
+          |select deptno, name, var_samp(salary) as c
           |from db1.emps
           |group by deptno, name
           |""".stripMargin,
       sql =
         """
-          |select name, var_samp(deptno) as c
+          |select name, var_samp(salary) as c
           |from db1.emps
           |group by name
-          |""".stripMargin) {
-      materialized =>
-
-        assert(
-          """
-            |select mv_db.testmv.`name` AS `name`, var_samp(CAST(mv_db.testmv.`c` AS DOUBLE)) AS `c`
-            |from mv_db.testmv
-            |group by mv_db.testmv.`name`
-            |""".stripMargin.equals(getSql(materialized)))
-    }
+          |""".stripMargin)
   }
 
   test("testGroupByAggregateFunStdevpop1") {
@@ -818,13 +856,13 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
         .add("c", LongType),
       mvQuery =
         """
-          |select deptno, stddev_pop(deptno) as c
+          |select deptno, stddev_pop(salary) as c
           |from db1.emps
           |group by deptno
           |""".stripMargin,
       sql =
         """
-          |select deptno, stddev_pop(deptno) as c1
+          |select deptno, stddev_pop(salary) as c1
           |from db1.emps
           |group by deptno
           |""".stripMargin) {
@@ -839,32 +877,23 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
   }
 
   test("testGroupByAggregateStdevpop2") {
-    withMaterializedView("testmv",
+    withUnSatisfiedMV("testmv",
       mvSchema = new StructType()
         .add("deptno", IntegerType, nullable = false)
         .add("name", StringType, nullable = false)
         .add("c", LongType),
       mvQuery =
         """
-          |select deptno, name, stddev_pop(deptno) as c
+          |select deptno, name, stddev_pop(salary) as c
           |from db1.emps
           |group by deptno, name
           |""".stripMargin,
       sql =
         """
-          |select name, stddev_pop(deptno) as c
+          |select name, stddev_pop(salary) as c
           |from db1.emps
           |group by name
-          |""".stripMargin) {
-      materialized =>
-
-        assert(
-          """
-            |select mv_db.testmv.`name` AS `name`, stddev_pop(CAST(mv_db.testmv.`c` AS DOUBLE)) AS `c`
-            |from mv_db.testmv
-            |group by mv_db.testmv.`name`
-            |""".stripMargin.equals(getSql(materialized)))
-    }
+          |""".stripMargin)
   }
 
   test("testGroupByAggregateFunVariancePop1") {
@@ -874,13 +903,13 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
         .add("c", LongType),
       mvQuery =
         """
-          |select deptno, var_pop(deptno) as c
+          |select deptno, var_pop(salary) as c
           |from db1.emps
           |group by deptno
           |""".stripMargin,
       sql =
         """
-          |select deptno, var_pop(deptno) as c1
+          |select deptno, var_pop(salary) as c1
           |from db1.emps
           |group by deptno
           |""".stripMargin) {
@@ -895,32 +924,23 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
   }
 
   test("testGroupByAggregateVariancePop2") {
-    withMaterializedView("testmv",
+    withUnSatisfiedMV("testmv",
       mvSchema = new StructType()
         .add("deptno", IntegerType, nullable = false)
         .add("name", StringType, nullable = false)
         .add("c", LongType),
       mvQuery =
         """
-          |select deptno, name, var_pop(deptno) as c
+          |select deptno, name, var_pop(salary) as c
           |from db1.emps
           |group by deptno, name
           |""".stripMargin,
       sql =
         """
-          |select name, var_pop(deptno) as c
+          |select name, var_pop(salary) as c
           |from db1.emps
           |group by name
-          |""".stripMargin) {
-      materialized =>
-
-        assert(
-          """
-            |select mv_db.testmv.`name` AS `name`, var_pop(CAST(mv_db.testmv.`c` AS DOUBLE)) AS `c`
-            |from mv_db.testmv
-            |group by mv_db.testmv.`name`
-            |""".stripMargin.equals(getSql(materialized)))
-    }
+          |""".stripMargin)
   }
 
   test("testGroupByAggregateFunSkewness1") {
@@ -930,13 +950,13 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
         .add("c", LongType),
       mvQuery =
         """
-          |select deptno, skewness(deptno) as c
+          |select deptno, skewness(salary) as c
           |from db1.emps
           |group by deptno
           |""".stripMargin,
       sql =
         """
-          |select deptno, skewness(deptno) as c1
+          |select deptno, skewness(salary) as c1
           |from db1.emps
           |group by deptno
           |""".stripMargin) {
@@ -951,32 +971,23 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
   }
 
   test("testGroupByAggregateSkewness2") {
-    withMaterializedView("testmv",
+    withUnSatisfiedMV("testmv",
       mvSchema = new StructType()
         .add("deptno", IntegerType, nullable = false)
         .add("name", StringType, nullable = false)
         .add("c", LongType),
       mvQuery =
         """
-          |select deptno, name, skewness(deptno) as c
+          |select deptno, name, skewness(salary) as c
           |from db1.emps
           |group by deptno, name
           |""".stripMargin,
       sql =
         """
-          |select name, skewness(deptno) as c
+          |select name, skewness(salary) as c
           |from db1.emps
           |group by name
-          |""".stripMargin) {
-      materialized =>
-
-        assert(
-          """
-            |select mv_db.testmv.`name` AS `name`, skewness(CAST(mv_db.testmv.`c` AS DOUBLE)) AS `c`
-            |from mv_db.testmv
-            |group by mv_db.testmv.`name`
-            |""".stripMargin.equals(getSql(materialized)))
-    }
+          |""".stripMargin)
   }
 
   test("testGroupByAggregateFunStddevSamp1") {
@@ -986,13 +997,13 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
         .add("c", LongType),
       mvQuery =
         """
-          |select deptno, stddev_samp(deptno) as c
+          |select deptno, stddev_samp(salary) as c
           |from db1.emps
           |group by deptno
           |""".stripMargin,
       sql =
         """
-          |select deptno, stddev_samp(deptno) as c1
+          |select deptno, stddev_samp(salary) as c1
           |from db1.emps
           |group by deptno
           |""".stripMargin) {
@@ -1007,32 +1018,23 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
   }
 
   test("testGroupByAggregateStddevSamp2") {
-    withMaterializedView("testmv",
+    withUnSatisfiedMV("testmv",
       mvSchema = new StructType()
         .add("deptno", IntegerType, nullable = false)
         .add("name", StringType, nullable = false)
         .add("c", LongType),
       mvQuery =
         """
-          |select deptno, name, stddev_samp(deptno) as c
+          |select deptno, name, stddev_samp(salary) as c
           |from db1.emps
           |group by deptno, name
           |""".stripMargin,
       sql =
         """
-          |select name, stddev_samp(deptno) as c
+          |select name, stddev_samp(salary) as c
           |from db1.emps
           |group by name
-          |""".stripMargin) {
-      materialized =>
-
-        assert(
-          """
-            |select mv_db.testmv.`name` AS `name`, stddev_samp(CAST(mv_db.testmv.`c` AS DOUBLE)) AS `c`
-            |from mv_db.testmv
-            |group by mv_db.testmv.`name`
-            |""".stripMargin.equals(getSql(materialized)))
-    }
+          |""".stripMargin)
   }
 
   test("testGroupByAggregateFunKurtosis1") {
@@ -1042,13 +1044,13 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
         .add("c", LongType),
       mvQuery =
         """
-          |select deptno, kurtosis(deptno) as c
+          |select deptno, kurtosis(salary) as c
           |from db1.emps
           |group by deptno
           |""".stripMargin,
       sql =
         """
-          |select deptno, kurtosis(deptno) as c1
+          |select deptno, kurtosis(salary) as c1
           |from db1.emps
           |group by deptno
           |""".stripMargin) {
@@ -1063,32 +1065,23 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
   }
 
   test("testGroupByAggregateKurtosis2") {
-    withMaterializedView("testmv",
+    withUnSatisfiedMV("testmv",
       mvSchema = new StructType()
         .add("deptno", IntegerType, nullable = false)
         .add("name", StringType, nullable = false)
         .add("c", LongType),
       mvQuery =
         """
-          |select deptno, name, kurtosis(deptno) as c
+          |select deptno, name, kurtosis(salary) as c
           |from db1.emps
           |group by deptno, name
           |""".stripMargin,
       sql =
         """
-          |select name, kurtosis(deptno) as c
+          |select name, kurtosis(salary) as c
           |from db1.emps
           |group by name
-          |""".stripMargin) {
-      materialized =>
-
-        assert(
-          """
-            |select kurtosis(CAST(mv_db.testmv.`c` AS DOUBLE)) AS `c`, mv_db.testmv.`name` AS `name`
-            |from mv_db.testmv
-            |group by mv_db.testmv.`name`
-            |""".stripMargin.equals(getSql(materialized)))
-    }
+          |""".stripMargin)
   }
 
   test("testDistinct1") {

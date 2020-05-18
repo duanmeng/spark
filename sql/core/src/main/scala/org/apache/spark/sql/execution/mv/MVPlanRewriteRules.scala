@@ -292,7 +292,7 @@ object MVPlanRewriteRules {
           // Deal with the situation:
           // in mv: select count(a) as c ........ group by c1, c2
           // in query: select count(a) .......... group by c1
-          //   result: select count(c) .......... group by c1
+          //   result: select sum(mv.c) .......... group by c1
           // note: distinct is not supported in mv, eg:
           // in mv: select count(distinct a) as c ........ group by c1, c2
           // in query: select count(distinct a) .......... group by c1
@@ -332,13 +332,13 @@ object MVPlanRewriteRules {
     newExpr
   }
 
+  // currently support count, sum, min, max
   private def transformAggrExpression(
       expr: AggregateExpression,
       newAttRef: AttributeReference): Expression = {
     expr match {
       case AggregateExpression(s@Count(_), _, isDistinct, _, _) =>
-        val newCount = s.makeCopy(Array(Seq(newAttRef)))
-        AggregateExpression(newCount.asInstanceOf[Count], Complete, isDistinct)
+        AggregateExpression(Sum(newAttRef), Complete, isDistinct)
       case AggregateExpression(s@Sum(_), _, isDistinct, _, _) =>
         val newSum = s.makeCopy(Array(newAttRef))
         AggregateExpression(newSum.asInstanceOf[Sum], Complete, isDistinct)
@@ -348,27 +348,6 @@ object MVPlanRewriteRules {
       case AggregateExpression(s@Max(_), _, isDistinct, _, _) =>
         val newMax = s.makeCopy(Array(newAttRef))
         AggregateExpression(newMax.asInstanceOf[Max], Complete, isDistinct)
-      case AggregateExpression(s@Average(_), _, isDistinct, _, _) =>
-        val newAverage = s.makeCopy(Array(newAttRef))
-        AggregateExpression(newAverage.asInstanceOf[Average], Complete, isDistinct)
-      case AggregateExpression(s@VarianceSamp(_), _, isDistinct, _, _) =>
-        val newVarianceSamp = s.makeCopy(Array(newAttRef))
-        AggregateExpression(newVarianceSamp.asInstanceOf[VarianceSamp], Complete, isDistinct)
-      case AggregateExpression(s@StddevPop(_), _, isDistinct, _, _) =>
-        val newStddevPop = s.makeCopy(Array(newAttRef))
-        AggregateExpression(newStddevPop.asInstanceOf[StddevPop], Complete, isDistinct)
-      case AggregateExpression(s@VariancePop(_), _, isDistinct, _, _) =>
-        val newVariancePop = s.makeCopy(Array(newAttRef))
-        AggregateExpression(newVariancePop.asInstanceOf[VariancePop], Complete, isDistinct)
-      case AggregateExpression(s@Skewness(_), _, isDistinct, _, _) =>
-        val newSkewness = s.makeCopy(Array(newAttRef))
-        AggregateExpression(newSkewness.asInstanceOf[Skewness], Complete, isDistinct)
-      case AggregateExpression(s@StddevSamp(_), _, isDistinct, _, _) =>
-        val newStddevSamp = s.makeCopy(Array(newAttRef))
-        AggregateExpression(newStddevSamp.asInstanceOf[StddevSamp], Complete, isDistinct)
-      case AggregateExpression(s@Kurtosis(_), _, isDistinct, _, _) =>
-        val newKurtosis = s.makeCopy(Array(newAttRef))
-        AggregateExpression(newKurtosis.asInstanceOf[Kurtosis], Complete, isDistinct)
       case _ => expr
     }
   }

@@ -819,7 +819,7 @@ class MaterializedViewOptimizerSub1Suite extends MaterializedViewOptimizerBaseSu
       materialized =>
         assert(
           """
-            |select (count(mv_db.testmv.`c`) + CAST(1 AS BIGINT)) AS `c`, mv_db.testmv.`deptno` AS `deptno`
+            |select (sum(mv_db.testmv.`c`) + CAST(1 AS BIGINT)) AS `c`, mv_db.testmv.`deptno` AS `deptno`
             |from mv_db.testmv
             |group by mv_db.testmv.`deptno`
             |""".stripMargin.equals(getSql(materialized)))
@@ -878,7 +878,7 @@ class MaterializedViewOptimizerSub1Suite extends MaterializedViewOptimizerBaseSu
 
         assert(
           """
-            |select count(mv_db.testmv.`c`) AS `count(1)`, mv_db.testmv.`empid` AS `empid`, mv_db.testmv.`name` AS `name`
+            |select mv_db.testmv.`empid` AS `empid`, mv_db.testmv.`name` AS `name`, sum(mv_db.testmv.`c`) AS `count(1)`
             |from mv_db.testmv
             |group by mv_db.testmv.`empid`, mv_db.testmv.`name`
             |""".stripMargin.equals(getSql(materialized)))
@@ -1209,7 +1209,7 @@ class MaterializedViewOptimizerSub1Suite extends MaterializedViewOptimizerBaseSu
 
         assert(
           """
-            |select count(mv_db.testmv.`c`) AS `x`, mv_db.testmv.`the_month` AS `the_month`
+            |select mv_db.testmv.`the_month` AS `the_month`, sum(mv_db.testmv.`c`) AS `x`
             |from mv_db.testmv
             |where (mv_db.testmv.`the_year` = 1997)
             |group by mv_db.testmv.`the_month`, mv_db.testmv.`the_year`
@@ -1710,7 +1710,7 @@ class MaterializedViewOptimizerSub1Suite extends MaterializedViewOptimizerBaseSu
 
         assert(
           """
-            |select count(mv_db.testmv.`c`) AS `c`, mv_db.testmv.`deptno` AS `deptno`, sum(mv_db.testmv.`s`) AS `s`
+            |select mv_db.testmv.`deptno` AS `deptno`, sum(mv_db.testmv.`c`) AS `c`, sum(mv_db.testmv.`s`) AS `s`
             |from mv_db.testmv
             |group by mv_db.testmv.`deptno`
             |""".stripMargin.equals(getSql(materialized)))
@@ -2237,7 +2237,7 @@ class MaterializedViewOptimizerSub1Suite extends MaterializedViewOptimizerBaseSu
 
         assert(
           """
-            |select count(mv_db.testmv.`c`) AS `c`, mv_db.testmv.`deptno` AS `deptno`, sum(mv_db.testmv.`s`) AS `s`
+            |select mv_db.testmv.`deptno` AS `deptno`, sum(mv_db.testmv.`c`) AS `c`, sum(mv_db.testmv.`s`) AS `s`
             |from mv_db.testmv
             |group by mv_db.testmv.`deptno`
             |""".stripMargin.equals(getSql(materialized)))
