@@ -2635,6 +2635,11 @@ object SQLConf {
       .checkValue(_ > 0, "The timeout value must be positive")
       .createWithDefault(10L)
 
+  val TAUTH_ENABLED =
+    buildConf("spark.sql.tauth.enabled")
+      .booleanConf
+      .createWithDefault(false)
+
   val TAUTH_USER_NAME =
     buildConf("spark.sql.tauth.user.name")
       .stringConf
@@ -3273,6 +3278,8 @@ class SQLConf extends Serializable with Logging {
   def ignoreDataLocality: Boolean = getConf(SQLConf.IGNORE_DATA_LOCALITY)
 
   def csvFilterPushDown: Boolean = getConf(CSV_FILTER_PUSHDOWN_ENABLED)
+
+  def tauthEnabled: Boolean = getConf(SQLConf.TAUTH_ENABLED)
 
   def tauthUserName: String = getConf(SQLConf.TAUTH_USER_NAME)
 
