@@ -3788,6 +3788,40 @@ object functions {
   def posexplode_outer(e: Column): Column = withExpr { GeneratorOuter(PosExplode(e.expr)) }
 
   /**
+   * Expand nested data into a tiled structure and use Cartesian products for different
+   * columns in the expansion process.
+   */
+  def unnest(e: Column*): Column = withExpr { Unnest(e.map(_.expr)) }
+
+  /**
+   * Determine whether the values of each base type within the nested data are eligible.
+   */
+  def recordEvery(e: Column, symbol: String, value: Any): Column = withExpr {
+    RecordEvery(e.expr, lit(symbol).expr, lit(value).expr)
+  }
+
+  /**
+   * Determine if there are eligible values within the nested data.
+   */
+  def recordSome(e: Column, symbol: String, value: Any): Column = withExpr {
+    RecordSome(e.expr, lit(symbol).expr, lit(value).expr)
+  }
+
+  /**
+   * Counting the internal values of nested data.
+   */
+  def recordCount(e: Column): Column = withExpr {
+    RecordCount(e.expr)
+  }
+
+  /**
+   * Compute the count of values within nested data nodes.
+   */
+  def nodeCount(c: Column, nest: Column): Column = withExpr {
+    NodeCount(c.expr, nest.expr)
+  }
+
+  /**
    * Extracts json object from a json string based on json path specified, and returns json string
    * of the extracted json object. It will return null if the input json string is invalid.
    *

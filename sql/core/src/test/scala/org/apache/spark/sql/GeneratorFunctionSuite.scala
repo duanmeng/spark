@@ -356,6 +356,63 @@ class GeneratorFunctionSuite extends QueryTest with SharedSparkSession {
     val df = Seq(1, 2, 3).toDF("v")
     checkAnswer(df.select(explode(array(min($"v"), max($"v")))), Row(1) :: Row(3) :: Nil)
   }
+
+  test("unnest") {
+    val df: DataFrame = spark.read.json(testFile("test-data/nest-test-data.json"))
+    checkAnswer(
+      df.selectExpr("unnest(r1.m2.f3, m1.f2, f1, r1.t2.t3, k1.k2)"),
+      Row(1, "a", "X", 1, 1) :: Row(2, "a", "X", 1, 1) ::
+        Row(3, "a", "X", 1, 1) :: Row(1, "b", "X", 1, 1) ::
+        Row(2, "b", "X", 1, 1) :: Row(3, "b", "X", 1, 1) ::
+        Row(4, "c", "Y", 2, 2) :: Row(5, "c", "Y", 2, 2) ::
+        Row(6, "c", "Y", 2, 2) :: Row(7, "c", "Y", 2, 2) :: Nil
+    )
+
+    df.createTempView("unnest_table")
+    checkAnswer(
+      sql("""
+        |select f1, a, count(*) from unnest_table
+        |lateral view unnest(r1.m2.f3) as (a) where m1.a1 = '01' group by f1, a
+        |""".stripMargin),
+      Row("X", 2, 1) :: Row("X", 3, 1) :: Row("X", 1, 1) ::  Nil
+    )
+
+    checkAnswer(
+      sql("""
+        |select count(a) from unnest_table
+        |lateral view unnest(r1.m2.f3) as a where m1.a1 = '01'
+        |""".stripMargin),
+      Row(3)
+    )
+    checkAnswer(
+      sql("""
+        |select c0 as `f1`, c1 as `r1.m2.f3` from unnest_table
+        |lateral view unnest(f1, r1.m2.f3) as c0, c1 where f1 = "X"
+        |""".stripMargin),
+      Row("X", 1) :: Row("X", 2) :: Row("X", 3) ::  Nil
+    )
+  }
+
+  test("nodeRecord") {
+    val df: DataFrame = spark.read.json(testFile("test-data/nest-test-data.json"))
+    checkAnswer(
+      df.selectExpr("node_count(r1.m2.f3, r1.m2)"),
+      Row(2) :: Row(1) ::  Row(4) :: Nil
+    )
+    checkAnswer(
+      df.selectExpr("node_count(r1.m2.f3, r1)"),
+      Row(3) :: Row(4) :: Nil
+    )
+
+    df.createTempView("unnest_table")
+    checkAnswer(
+      sql(
+      """
+        |select f1, node_count(r1.m2.f3, r1.m2) from unnest_table
+        |""".stripMargin),
+      Row("X", 1) :: Row("X", 2) ::  Row("Y", 4) :: Nil
+    )
+  }
 }
 
 case class EmptyGenerator() extends Generator {

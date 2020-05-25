@@ -18,6 +18,7 @@
 package org.apache.spark.sql.catalyst.expressions
 
 import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
 
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.{CatalystTypeConverters, InternalRow}
@@ -436,4 +437,114 @@ case class Inline(child: Expression) extends UnaryExpression with CollectionGene
   override protected def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {
     child.genCode(ctx)
   }
+}
+
+/**
+ * Expand nested data into a tiled structure and use Cartesian products for different
+ * columns in the expansion process.
+ */
+@ExpressionDescription(
+  usage = "_FUNC_(expr) - Expand nested data into a tiled structure and use Cartesian products" +
+    " for different columns in the expansion process.",
+  examples = """
+    Examples:
+      > SELECT _FUNC_(array(struct(array(1, 2)), struct(array(3))), 'a');
+       1  a
+       2  a
+			 3  a
+  """)
+case class Unnest(child: Seq[Expression]) extends Expression with CollectionGenerator {
+
+  lazy val nestNodes: Seq[NestNode] = {
+    NestNodeUtils.checkExpression(child)
+    NestNodeUtils.merger(
+      child.zipWithIndex.map{ case (n, i) => NestNodeUtils.wrapper(n, i)}
+    )
+  }
+
+  override def position: Boolean = false
+
+  override def inline: Boolean = false
+
+  override def elementSchema: StructType = {
+    var structType = new StructType()
+    child.zipWithIndex.foreach{
+      case(e, i) =>
+        structType = structType.add(s"c$i", getLeafDataType(e.dataType), nullable = false)
+    }
+    structType
+  }
+
+  override def eval(input: InternalRow): TraversableOnce[InternalRow] = {
+    val c: CartesianData = CartesianData.reduce(nestNodes.map(_.cartesian(input)))
+
+    val map: Map[Int, List[Any]] = c.ordinals()
+      .map(ord => (ord, c.getOrdinalCartesianData(ord).data)).toMap
+
+    val rows: Array[InternalRow] = new Array[InternalRow](c.size())
+
+    for (i <- 0 until c.size()) {
+      rows(i) = InternalRow.fromSeq(c.ordinals().sorted.map(n => map(n)(i)))
+    }
+    rows
+  }
+
+  override protected def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {
+    throw new UnsupportedOperationException("not support gen code")
+  }
+
+  @scala.annotation.tailrec
+  private def getLeafDataType(dataType: DataType): DataType = {
+    dataType match {
+      case ArrayType(et, _) =>
+        getLeafDataType(et)
+      case MapType(_, _, _) =>
+        throw new UnsupportedOperationException("not support mapType")
+      case _ => dataType
+    }
+  }
+
+  override def children: Seq[Expression] = child
+}
+
+/**
+ * Compute the count of values within nested data nodes.
+ */
+@ExpressionDescription(
+  usage = "_FUNC_(expr) - Compute the count of values within nested data nodes.",
+  examples = """
+    Examples:
+      > SELECT _FUNC_(array(struct(array(1, 2)), struct(array(3))), array(struct()));
+       2
+       1
+  """)
+case class NodeCount(child: Expression, nest: Expression)
+  extends Expression with CollectionGenerator {
+
+  lazy val (nestNode, collectNode): (NestNode, NestNode) = {
+    NestNodeUtils.checkExpression(Seq(child, nest))
+    val rootNode = NestNodeUtils.wrapper(child, 0).rootNode()
+    val markNode = NestNodeUtils.wrapper(nest, 0).rootNode()
+    (rootNode, NestNodeUtils.getCollectNode(rootNode, markNode))
+  }
+
+  override def position: Boolean = false
+
+  override def inline: Boolean = false
+
+  override protected def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {
+    throw new UnsupportedOperationException("not support gen code")
+  }
+
+  override def elementSchema: StructType = new StructType().add("c0", IntegerType, nullable = false)
+
+  override def eval(input: InternalRow): TraversableOnce[InternalRow] = {
+    val array: ArrayBuffer[InternalRow] = new ArrayBuffer[InternalRow]()
+    val collect: CartesianData => Unit = c => array.append(InternalRow(c.size()))
+    collectNode.refreshCollect(collect)
+    nestNode.cartesian(input)
+    array
+  }
+
+  override def children: Seq[Expression] = Seq(child, nest)
 }
