@@ -26,6 +26,7 @@ import java.nio.charset.StandardCharsets;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.CharStreams;
 import org.apache.spark.network.shuffle.protocol.ExecutorShuffleInfo;
+import org.apache.spark.network.util.DigestUtils;
 import org.apache.spark.network.util.MapConfigProvider;
 import org.apache.spark.network.util.TransportConf;
 import org.apache.spark.network.shuffle.ExternalShuffleBlockResolver.AppExecId;
@@ -161,5 +162,40 @@ public class ExternalShuffleBlockResolverSuite {
     File file = new File(normPathname);
     String returnedPath = file.getPath();
     assertTrue(normPathname == returnedPath);
+  }
+
+  @Test
+  public void testDigestSortShuffleBlocks() throws IOException {
+    File digestFile = dataContext.getDataFile(0, 0);
+    long digest1 = DigestUtils.getDigest(digestFile, 0L, 6L);
+    long digest2 = DigestUtils.getDigest(digestFile, 6L, 6L);
+    long[] digests = {digest1, digest2};
+    dataContext.insertDigestData(0, 0, digests);
+
+    ExternalShuffleBlockResolver resolver = new ExternalShuffleBlockResolver(conf, null);
+    resolver.registerExecutor("app0", "exec0",
+      dataContext.createExecutorInfo(SORT_MANAGER));
+
+    InputStream block0Stream =
+      resolver.getBlockData("app0", "exec0", 0, 0, 0).createInputStream();
+    String block0 = CharStreams.toString(
+      new InputStreamReader(block0Stream, StandardCharsets.UTF_8));
+    block0Stream.close();
+    assertEquals(sortBlock0, block0);
+
+    InputStream block1Stream =
+      resolver.getBlockData("app0", "exec0", 0, 0, 1).createInputStream();
+    String block1 = CharStreams.toString(
+      new InputStreamReader(block1Stream, StandardCharsets.UTF_8));
+    block1Stream.close();
+    assertEquals(sortBlock1, block1);
+
+    InputStream block01Stream =
+      resolver.getContinuousBlocksData(
+        "app0", "exec0", 0, 0, 0, 2).createInputStream();
+    String block01 = CharStreams.toString(
+      new InputStreamReader(block01Stream, StandardCharsets.UTF_8));
+    block01Stream.close();
+    assertEquals(sortBlock0 + sortBlock1, block01);
   }
 }

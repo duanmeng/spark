@@ -79,8 +79,9 @@ class TestShuffleExecutorComponentsInitialized(delegate: ShuffleExecutorComponen
   override def initializeExecutor(
       appId: String,
       execId: String,
-      extraConfigs: JMap[String, String]): Unit = {
-    delegate.initializeExecutor(appId, execId, extraConfigs)
+      extraConfigs: JMap[String, String],
+      digestEnabled: java.lang.Boolean): Unit = {
+    delegate.initializeExecutor(appId, execId, extraConfigs, digestEnabled)
     assert(extraConfigs.get("test-plugin-key") == "plugin-set-value", extraConfigs)
     assert(extraConfigs.get("test-user-key") == "user-set-value")
     TestShuffleExecutorComponentsInitialized.initialized.set(true)

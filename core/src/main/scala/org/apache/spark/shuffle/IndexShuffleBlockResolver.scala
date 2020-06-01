@@ -48,9 +48,9 @@ private[spark] class IndexShuffleBlockResolver(
   extends ShuffleBlockResolver
   with Logging {
 
-  private lazy val blockManager = Option(_blockManager).getOrElse(SparkEnv.get.blockManager)
+  protected lazy val blockManager = Option(_blockManager).getOrElse(SparkEnv.get.blockManager)
 
-  private val transportConf = SparkTransportConf.fromSparkConf(conf, "shuffle")
+  protected val transportConf = SparkTransportConf.fromSparkConf(conf, "shuffle")
 
 
   def getDataFile(shuffleId: Int, mapId: Long): File = getDataFile(shuffleId, mapId, None)
@@ -74,7 +74,7 @@ private[spark] class IndexShuffleBlockResolver(
    * When the dirs parameter is None then use the disk manager's local directories. Otherwise,
    * read from the specified directories.
    */
-  private def getIndexFile(
+    def getIndexFile(
       shuffleId: Int,
       mapId: Long,
       dirs: Option[Array[String]] = None): File = {
@@ -104,10 +104,46 @@ private[spark] class IndexShuffleBlockResolver(
   }
 
   /**
+    * Write an index file with the offsets of each block, plus a final offset at the end for the
+    * end of the output file.
+    */
+  protected def writeIndexFile(
+    indexFile: File,
+    lengths: Array[Long]): Unit = {
+    // This is the first successful attempt in writing the map outputs for this task,
+    // so override any existing index and data files with the ones we wrote.
+    val indexTmp = Utils.tempFileWith(indexFile)
+    val out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(indexTmp)))
+    Utils.tryWithSafeFinally {
+      // We take in lengths of each block, need to convert it to offsets.
+      var offset = 0L
+      out.writeLong(offset)
+      lengths.foreach { length =>
+        offset += length
+        out.writeLong(offset)
+      }
+    } {
+      out.close()
+    }
+    Utils.tryWithSafeFinally {
+      if (indexFile.exists()) {
+        indexFile.delete()
+      }
+      if (!indexTmp.renameTo(indexFile)) {
+        throw new IOException(s"fail to rename file ${indexTmp.toPath} to ${indexFile.toPath}")
+      }
+    } {
+      if (indexTmp.exists() && !indexTmp.delete()) {
+        logError(s"Failed to delete temporary index file at ${indexTmp.getAbsolutePath}")
+      }
+    }
+  }
+
+  /**
    * Check whether the given index and data files match each other.
    * If so, return the partition lengths in the data file. Otherwise return null.
    */
-  private def checkIndexAndDataFile(index: File, data: File, blocks: Int): Array[Long] = {
+  protected def checkIndexAndDataFile(index: File, data: File, blocks: Int): Array[Long] = {
     // the index file should have `block + 1` longs as offset.
     if (index.length() != (blocks + 1) * 8L) {
       return null
@@ -164,53 +200,26 @@ private[spark] class IndexShuffleBlockResolver(
       lengths: Array[Long],
       dataTmp: File): Unit = {
     val indexFile = getIndexFile(shuffleId, mapId)
-    val indexTmp = Utils.tempFileWith(indexFile)
-    try {
-      val dataFile = getDataFile(shuffleId, mapId)
-      // There is only one IndexShuffleBlockResolver per executor, this synchronization make sure
-      // the following check and rename are atomic.
-      synchronized {
-        val existingLengths = checkIndexAndDataFile(indexFile, dataFile, lengths.length)
-        if (existingLengths != null) {
-          // Another attempt for the same task has already written our map outputs successfully,
-          // so just use the existing partition lengths and delete our temporary map outputs.
-          System.arraycopy(existingLengths, 0, lengths, 0, lengths.length)
-          if (dataTmp != null && dataTmp.exists()) {
-            dataTmp.delete()
-          }
-        } else {
-          // This is the first successful attempt in writing the map outputs for this task,
-          // so override any existing index and data files with the ones we wrote.
-          val out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(indexTmp)))
-          Utils.tryWithSafeFinally {
-            // We take in lengths of each block, need to convert it to offsets.
-            var offset = 0L
-            out.writeLong(offset)
-            for (length <- lengths) {
-              offset += length
-              out.writeLong(offset)
-            }
-          } {
-            out.close()
-          }
-
-          if (indexFile.exists()) {
-            indexFile.delete()
-          }
-          if (dataFile.exists()) {
-            dataFile.delete()
-          }
-          if (!indexTmp.renameTo(indexFile)) {
-            throw new IOException("fail to rename file " + indexTmp + " to " + indexFile)
-          }
-          if (dataTmp != null && dataTmp.exists() && !dataTmp.renameTo(dataFile)) {
-            throw new IOException("fail to rename file " + dataTmp + " to " + dataFile)
-          }
+    val dataFile = getDataFile(shuffleId, mapId)
+    // There is only one IndexShuffleBlockResolver per executor, this synchronization make sure
+    // the following check and rename are atomic.
+    synchronized {
+      val existingLengths = checkIndexAndDataFile(indexFile, dataFile, lengths.length)
+      if (existingLengths != null) {
+        // Another attempt for the same task has already written our map outputs successfully,
+        // so just use the existing partition lengths and delete our temporary map outputs.
+        System.arraycopy(existingLengths, 0, lengths, 0, lengths.length)
+        if (dataTmp != null && dataTmp.exists()) {
+          dataTmp.delete()
         }
-      }
-    } finally {
-      if (indexTmp.exists() && !indexTmp.delete()) {
-        logError(s"Failed to delete temporary index file at ${indexTmp.getAbsolutePath}")
+      } else {
+        writeIndexFile(indexFile, lengths)
+        if (dataFile.exists()) {
+          dataFile.delete()
+        }
+        if (dataTmp != null && dataTmp.exists() && !dataTmp.renameTo(dataFile)) {
+          throw new IOException(s"Fail to rename file ${dataTmp.toPath} to ${dataFile.toPath}")
+        }
       }
     }
   }
@@ -237,7 +246,7 @@ private[spark] class IndexShuffleBlockResolver(
     // class of issue from re-occurring in the future which is why they are left here even though
     // SPARK-22982 is fixed.
     val channel = Files.newByteChannel(indexFile.toPath)
-    channel.position(startReduceId * 8L)
+    channel.position(startReduceId * 8)
     val in = new DataInputStream(Channels.newInputStream(channel))
     try {
       val startOffset = in.readLong()

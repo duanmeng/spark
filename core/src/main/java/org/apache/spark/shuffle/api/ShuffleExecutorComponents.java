@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Optional;
 
+import org.apache.commons.io.filefilter.FalseFileFilter;
 import org.apache.spark.annotation.Private;
 
 /**
@@ -40,8 +41,9 @@ public interface ShuffleExecutorComponents {
    * @param execId The unique identifier of the executor being initialized
    * @param extraConfigs Extra configs that were returned by
    *                     {@link ShuffleDriverComponents#initializeApplication()}
+   * @param digestEnabled Enable digest
    */
-  void initializeExecutor(String appId, String execId, Map<String, String> extraConfigs);
+  void initializeExecutor(String appId, String execId, Map<String, String> extraConfigs, Boolean digestEnabled);
 
   /**
    * Called once per map task to create a writer that will be responsible for persisting all the

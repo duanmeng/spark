@@ -998,6 +998,13 @@ Apart from these, the following properties are also available, and may be useful
   </td>
   <td>2.3.0</td>
 </tr>
+<tr>
+  <td><code>spark.shuffle.internal.digest.enabled</code></td>
+  <td>false</td>
+  <td>
+    The parameter to control whether checking the digest of transmitted data during shuffle.
+  </td>
+</tr>
 </table>
 
 ### Spark UI

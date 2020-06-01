@@ -88,7 +88,13 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
 
   private lazy val shuffleExecutorComponents = loadShuffleExecutorComponents(conf)
 
-  override val shuffleBlockResolver = new IndexShuffleBlockResolver(conf)
+  override def shuffleBlockResolver: IndexShuffleBlockResolver = {
+    if (conf.get(config.SHUFFLE_INTERNAL_DIGEST_ENABLED)) {
+      new DigestIndexShuffleBlockResolver(conf)
+    } else {
+      new IndexShuffleBlockResolver(conf)
+    }
+  }
 
   /**
    * Obtains a [[ShuffleHandle]] to pass to tasks.
@@ -253,10 +259,12 @@ private[spark] object SortShuffleManager extends Logging {
     val executorComponents = ShuffleDataIOUtils.loadShuffleDataIO(conf).executor()
     val extraConfigs = conf.getAllWithPrefix(ShuffleDataIOUtils.SHUFFLE_SPARK_CONF_PREFIX)
         .toMap
+    val digestEnabled = conf.get(config.SHUFFLE_INTERNAL_DIGEST_ENABLED)
     executorComponents.initializeExecutor(
       conf.getAppId,
       SparkEnv.get.executorId,
-      extraConfigs.asJava)
+      extraConfigs.asJava,
+      digestEnabled)
     executorComponents
   }
 }

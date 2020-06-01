@@ -74,6 +74,12 @@ case class ShuffleDataBlockId(shuffleId: Int, mapId: Long, reduceId: Int) extend
 }
 
 @DeveloperApi
+case class ShuffleDigestBlockId(shuffleId: Int, mapId: Long, reduceId: Int) extends BlockId {
+  override def name: String =
+    "shuffle_" + shuffleId + "_" + mapId + "_" + reduceId + ".internal.crc"
+}
+
+@DeveloperApi
 case class ShuffleIndexBlockId(shuffleId: Int, mapId: Long, reduceId: Int) extends BlockId {
   override def name: String = "shuffle_" + shuffleId + "_" + mapId + "_" + reduceId + ".index"
 }
@@ -119,6 +125,7 @@ object BlockId {
   val SHUFFLE_BATCH = "shuffle_([0-9]+)_([0-9]+)_([0-9]+)_([0-9]+)".r
   val SHUFFLE_DATA = "shuffle_([0-9]+)_([0-9]+)_([0-9]+).data".r
   val SHUFFLE_INDEX = "shuffle_([0-9]+)_([0-9]+)_([0-9]+).index".r
+  val SHUFFLE_DIGEST = "shuffle_([0-9]+)_([0-9]+)_([0-9]+).internal.crc".r
   val BROADCAST = "broadcast_([0-9]+)([_A-Za-z0-9]*)".r
   val TASKRESULT = "taskresult_([0-9]+)".r
   val STREAM = "input-([0-9]+)-([0-9]+)".r
@@ -137,6 +144,8 @@ object BlockId {
       ShuffleDataBlockId(shuffleId.toInt, mapId.toLong, reduceId.toInt)
     case SHUFFLE_INDEX(shuffleId, mapId, reduceId) =>
       ShuffleIndexBlockId(shuffleId.toInt, mapId.toLong, reduceId.toInt)
+    case SHUFFLE_DIGEST(shuffleId, mapId, reduceId) =>
+      ShuffleDigestBlockId(shuffleId.toInt, mapId.toLong, reduceId.toInt)
     case BROADCAST(broadcastId, field) =>
       BroadcastBlockId(broadcastId.toLong, field.stripPrefix("_"))
     case TASKRESULT(taskId) =>

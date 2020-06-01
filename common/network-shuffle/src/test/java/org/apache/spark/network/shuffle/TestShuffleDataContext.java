@@ -140,4 +140,26 @@ public class TestShuffleDataContext {
   public ExecutorShuffleInfo createExecutorInfo(String shuffleManager) {
     return new ExecutorShuffleInfo(localDirs, subDirsPerLocalDir, shuffleManager);
   }
+
+  /** Creates digest file within our local dirs. */
+  public void insertDigestData(int shuffleId, int mapId, long[] digests) throws IOException {
+    String blockId = "shuffle_" + shuffleId + "_" + mapId + "_0";
+    DataOutputStream digestStream = null;
+    boolean suppressExceptionsDuringClose = true;
+    try {
+      digestStream = new DataOutputStream(new FileOutputStream(
+        ExecutorDiskUtils.getFile(localDirs, subDirsPerLocalDir, blockId + ".internal.crc")));
+      for (long digest : digests) {
+        digestStream.writeLong(digest);
+      }
+      suppressExceptionsDuringClose = false;
+    } finally {
+      Closeables.close(digestStream, suppressExceptionsDuringClose);
+    }
+  }
+
+  public File getDataFile(int shuffleId, int mapId) {
+    String blockId = "shuffle_" + shuffleId + "_" + mapId + "_0";
+    return ExecutorDiskUtils.getFile(localDirs, subDirsPerLocalDir, blockId + ".data");
+  }
 }

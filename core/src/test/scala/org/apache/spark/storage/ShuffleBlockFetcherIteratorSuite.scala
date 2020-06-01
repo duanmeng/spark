@@ -32,9 +32,9 @@ import org.scalatest.PrivateMethodTester
 
 import org.apache.spark.{SparkFunSuite, TaskContext}
 import org.apache.spark.network._
-import org.apache.spark.network.buffer.{FileSegmentManagedBuffer, ManagedBuffer}
+import org.apache.spark.network.buffer.{DigestFileSegmentManagedBuffer, FileSegmentManagedBuffer, ManagedBuffer}
 import org.apache.spark.network.shuffle.{BlockFetchingListener, DownloadFileManager, ExternalBlockStoreClient}
-import org.apache.spark.network.util.LimitedInputStream
+import org.apache.spark.network.util.{DigestUtils, LimitedInputStream}
 import org.apache.spark.shuffle.FetchFailedException
 import org.apache.spark.storage.ShuffleBlockFetcherIterator.FetchBlockInfo
 import org.apache.spark.util.Utils
@@ -1090,5 +1090,85 @@ class ShuffleBlockFetcherIteratorSuite extends SparkFunSuite with PrivateMethodT
     assert(mergedBlockId.startReduceId === bId1.startReduceId)
     assert(mergedBlockId.endReduceId === bId3.reduceId + 1)
     assert(mergedBlock.size === inputBlocks.map(_.size).sum)
+  }
+
+  test("Digest should be checked and valid") {
+    val blockManager = mock(classOf[BlockManager])
+    val localBmId = BlockManagerId("test-client", "test-client", 1)
+    doReturn(localBmId).when(blockManager).blockManagerId
+
+    // Make sure remote blocks would return
+    val remoteBmId = BlockManagerId("test-client-1", "test-client-1", 2)
+    val tempDir = Utils.createTempDir()
+    val dataTmp = File.createTempFile("shuffle", null, tempDir)
+    val out = new FileOutputStream(dataTmp)
+    Utils.tryWithSafeFinally {
+      out.write(new Array[Byte](30))
+    } {
+      out.close()
+    }
+    val digest = DigestUtils.getDigest(new ByteArrayInputStream(new Array[Byte](30)))
+    val validDigestBuffer = new DigestFileSegmentManagedBuffer(null, dataTmp, 0, 30, digest)
+    val inValidDigestBuffer = new DigestFileSegmentManagedBuffer(null, dataTmp, 0, 29, digest)
+    val ignoredDigestBuffer = new DigestFileSegmentManagedBuffer(null, dataTmp, 0, 29, -1L)
+    val blocks = Map[BlockId, ManagedBuffer](
+      ShuffleBlockId(0, 0, 0) -> validDigestBuffer,
+      ShuffleBlockId(0, 1, 0) -> inValidDigestBuffer,
+      ShuffleBlockId(0, 2, 0) -> ignoredDigestBuffer
+    )
+    val transfer = mock(classOf[BlockTransferService])
+
+    when(transfer.fetchBlocks(any(), any(), any(), any(), any(), any()))
+      .thenAnswer((invocation: InvocationOnMock) => {
+        val listener = invocation.getArguments()(4).asInstanceOf[BlockFetchingListener]
+        Future {
+          // Return the first block, and then fail.
+          listener.onBlockFetchSuccess(
+            ShuffleBlockId(0, 0, 0).toString, blocks(ShuffleBlockId(0, 0, 0)))
+          listener.onBlockFetchSuccess(
+            ShuffleBlockId(0, 1, 0).toString, blocks(ShuffleBlockId(0, 1, 0)))
+          listener.onBlockFetchSuccess(
+            ShuffleBlockId(0, 2, 0).toString, blocks(ShuffleBlockId(0, 2, 0)))
+        }
+      })
+
+    val blocksByAddress = Seq[(BlockManagerId, Seq[(BlockId, Long, Int)])](
+      (remoteBmId, blocks.keys.map(blockId => (blockId, 1L, 0)).toSeq))
+
+    val taskContext = TaskContext.empty()
+    val iterator = new ShuffleBlockFetcherIterator(
+      taskContext,
+      transfer,
+      blockManager,
+      blocksByAddress.toIterator,
+      (_, in) => in,
+      maxBytesInFlight = Int.MaxValue,
+      maxReqsInFlight = Int.MaxValue,
+      maxBlocksInFlightPerAddress = Int.MaxValue,
+      maxReqSizeShuffleToMem = 200,
+      detectCorrupt = true,
+      false,
+      taskContext.taskMetrics.createTempShuffleReadMetrics(),
+      false,
+      true)
+
+    // Success to fetch ShuffleBlockId(0, 0, 0)
+    assert(iterator.next()._1 === ShuffleBlockId(0, 0, 0))
+    // ShuffleBlockId(0, 1, 0) would be fetched again
+    when(transfer.fetchBlocks(any(), any(), any(), any(), any(), any()))
+      .thenAnswer((invocation: InvocationOnMock) => {
+        val listener = invocation.getArguments()(4).asInstanceOf[BlockFetchingListener]
+        Future {
+          // Return the first block, and then fail.
+          listener.onBlockFetchSuccess(
+            ShuffleBlockId(0, 1, 0).toString, validDigestBuffer)
+        }
+      })
+    // ShuffleBlockId(0, 1, 0) failed at first, fetch ShuffleBlockId(0, 2, 0)
+    assert(iterator.next()._1 == ShuffleBlockId(0, 2, 0))
+    // success to fetch ShuffleBlockId(0, 1, 0) at the second request
+    assert(iterator.next()._1 == ShuffleBlockId(0, 1, 0))
+
+    Utils.deleteRecursively(tempDir)
   }
 }

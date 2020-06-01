@@ -30,8 +30,9 @@ import org.apache.commons.io.IOUtils
 
 import org.apache.spark.{SparkException, TaskContext}
 import org.apache.spark.internal.Logging
-import org.apache.spark.network.buffer.{FileSegmentManagedBuffer, ManagedBuffer}
+import org.apache.spark.network.buffer.{DigestFileSegmentManagedBuffer, FileSegmentManagedBuffer, ManagedBuffer}
 import org.apache.spark.network.shuffle._
+import org.apache.spark.network.util.{DigestUtils, TransportConf}
 import org.apache.spark.network.util.TransportConf
 import org.apache.spark.shuffle.{FetchFailedException, ShuffleReadMetricsReporter}
 import org.apache.spark.util.{CompletionIterator, TaskCompletionListener, Utils}
@@ -80,7 +81,8 @@ final class ShuffleBlockFetcherIterator(
     detectCorrupt: Boolean,
     detectCorruptUseExtraMemory: Boolean,
     shuffleMetrics: ShuffleReadMetricsReporter,
-    doBatchFetch: Boolean)
+    doBatchFetch: Boolean,
+    digestEnable: Boolean = false)
   extends Iterator[(BlockId, InputStream)] with DownloadFileManager with Logging {
 
   import ShuffleBlockFetcherIterator._
@@ -611,51 +613,44 @@ final class ShuffleBlockFetcherIterator(
             throwFetchFailedException(blockId, mapIndex, address, new IOException(msg))
           }
 
-          val in = try {
-            buf.createInputStream()
-          } catch {
-            // The exception could only be throwed by local shuffle block
-            case e: IOException =>
-              assert(buf.isInstanceOf[FileSegmentManagedBuffer])
-              e match {
-                case ce: ClosedByInterruptException =>
-                  logError("Failed to create input stream from local block, " +
-                    ce.getMessage)
-                case e: IOException => logError("Failed to create input stream from local block", e)
+          val digestValid =
+            if (digestEnable) checkDigest(buf, blockId, mapIndex, address, size) else true
+          if (!digestValid) {
+            result = null
+          } else {
+            val in = createInputStream(buf, blockId, mapIndex, address)
+            try {
+              input = streamWrapper(blockId, in)
+              // If the stream is compressed or wrapped, then we optionally decompress/unwrap the
+              // first maxBytesInFlight/3 bytes into memory, to check for corruption in that portion
+              // of the data. But even if 'detectCorruptUseExtraMemory' configuration is off, or if
+              // the corruption is later, we'll still detect the corruption later in the stream.
+              streamCompressedOrEncrypted = !input.eq(in)
+              if (streamCompressedOrEncrypted && detectCorruptUseExtraMemory) {
+                // TODO: manage the memory used here, and spill it into disk in case of OOM.
+                input = Utils.copyStreamUpTo(input, maxBytesInFlight / 3)
               }
-              buf.release()
-              throwFetchFailedException(blockId, mapIndex, address, e)
-          }
-          try {
-            input = streamWrapper(blockId, in)
-            // If the stream is compressed or wrapped, then we optionally decompress/unwrap the
-            // first maxBytesInFlight/3 bytes into memory, to check for corruption in that portion
-            // of the data. But even if 'detectCorruptUseExtraMemory' configuration is off, or if
-            // the corruption is later, we'll still detect the corruption later in the stream.
-            streamCompressedOrEncrypted = !input.eq(in)
-            if (streamCompressedOrEncrypted && detectCorruptUseExtraMemory) {
-              // TODO: manage the memory used here, and spill it into disk in case of OOM.
-              input = Utils.copyStreamUpTo(input, maxBytesInFlight / 3)
-            }
-          } catch {
-            case e: IOException =>
-              buf.release()
-              if (buf.isInstanceOf[FileSegmentManagedBuffer]
+            } catch {
+              case e: IOException =>
+                buf.release()
+                if (buf.isInstanceOf[FileSegmentManagedBuffer]
                   || corruptedBlocks.contains(blockId)) {
-                throwFetchFailedException(blockId, mapIndex, address, e)
-              } else {
-                logWarning(s"got an corrupted block $blockId from $address, fetch again", e)
-                corruptedBlocks += blockId
-                fetchRequests += FetchRequest(
-                  address, Array(FetchBlockInfo(blockId, size, mapIndex)))
-                result = null
+                  throwFetchFailedException(blockId, mapIndex, address, e)
+                } else {
+                  logWarning(s"ShuffleBlockFetcherIterator get a corrupted " +
+                    s"block $blockId from $address, fetch again", e)
+                  corruptedBlocks += blockId
+                  fetchRequests += FetchRequest(
+                    address, Array(FetchBlockInfo(blockId, size, mapIndex)))
+                  result = null
+                }
+            } finally {
+              // TODO: release the buf here to free memory earlier
+              if (input == null) {
+                // Close the underlying stream if there was an issue in wrapping the stream using
+                // streamWrapper
+                in.close()
               }
-          } finally {
-            // TODO: release the buf here to free memory earlier
-            if (input == null) {
-              // Close the underlying stream if there was an issue in wrapping the stream using
-              // streamWrapper
-              in.close()
             }
           }
 
@@ -751,6 +746,77 @@ final class ShuffleBlockFetcherIterator(
       case _ =>
         throw new SparkException(
           "Failed to get block " + blockId + ", which is not a shuffle block", e)
+    }
+  }
+
+  private[this] def createInputStream(
+      buf: ManagedBuffer,
+      blockId: BlockId,
+      mapIndex: Int,
+      address: BlockManagerId): InputStream = {
+    try {
+      buf.createInputStream()
+    } catch {
+      // The exception could only be thrown by local shuffle block
+      case e: IOException =>
+        assert(buf.isInstanceOf[FileSegmentManagedBuffer])
+        e match {
+          case ce: ClosedByInterruptException =>
+            logError(s"Failed to create input stream from local block(${blockId.name}) " +
+              s"in ${address.toString}", ce)
+          case e: IOException =>
+            logError(s"Failed to create input stream from local block(${blockId.name}) " +
+              s"in ${address.toString}", e)
+        }
+        buf.release()
+        throwFetchFailedException(blockId, mapIndex, address, e)
+    }
+  }
+
+  private[this] def checkDigest(
+      buf: ManagedBuffer,
+      blockId: BlockId,
+      mapIndex: Int,
+      address: BlockManagerId,
+      size: Long): Boolean = {
+    buf match {
+      case b: DigestFileSegmentManagedBuffer =>
+        val digest = b.getDigest
+        if (digest < 0) {
+          logWarning(s"Digest is enabled but digest of ${address.toString}:${blockId.name}" +
+            s"(size = $size) is not generated(value = $digest) ignoring digest checking")
+          true
+        } else {
+          val in = createInputStream(buf, blockId, mapIndex, address)
+          try {
+            val actualDigest = DigestUtils.getDigest(in)
+            val valid = digest == actualDigest
+            if (!valid) {
+              buf.release()
+              val e = CheckDigestFailedException(s"The actual digest($actualDigest) " +
+                s"of ${address.toString}:${blockId.name} " +
+                s"calculated from segment file ${b.getFile}, " +
+                s"offset=${b.getOffset}, length=${b.getLength} is not equal to " +
+                s"the origin $digest")
+              if (corruptedBlocks.contains(blockId)) {
+                throwFetchFailedException(blockId, mapIndex, address, e)
+              } else {
+                logError("The digest of read data is not correct and fetch again", e)
+                corruptedBlocks += blockId
+                fetchRequests += FetchRequest(
+                  address, Array(FetchBlockInfo(blockId, size, mapIndex)))
+              }
+            }
+            valid
+          } finally {
+            in.close()
+          }
+        }
+
+      case c =>
+        logDebug(s"Digest is enable but buf of ${address.toString}:${blockId.name} " +
+          s"is not DigestFileSegmentManageBuffer(${c.getClass.getName}) ignore digest checking")
+        true
     }
   }
 }
@@ -994,4 +1060,10 @@ object ShuffleBlockFetcherIterator {
       address: BlockManagerId,
       e: Throwable)
     extends FetchResult
+
+  /**
+    * An exception that the origin digest is not equal with the fetchResult's digest.
+    */
+  private case class CheckDigestFailedException(message: String, cause: Throwable = null)
+    extends Exception(message, cause)
 }

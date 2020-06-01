@@ -1823,4 +1823,11 @@ package object config {
         "user shouldn't configure it normally")
       .intConf
       .createWithDefault(Int.MaxValue)
+
+  private[spark] val SHUFFLE_INTERNAL_DIGEST_ENABLED =
+    ConfigBuilder("spark.shuffle.internal.digest.enabled")
+      .internal()
+      .doc("The parameter to control whether checking the digest of transmitted data during shuffle.")
+      .booleanConf
+      .createWithDefault(false)
 }

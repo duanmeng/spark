@@ -39,6 +39,7 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.cache.Weigher;
 import com.google.common.collect.Maps;
+import org.apache.spark.network.buffer.DigestFileSegmentManagedBuffer;
 import org.iq80.leveldb.DB;
 import org.iq80.leveldb.DBIterator;
 import org.slf4j.Logger;
@@ -320,12 +321,28 @@ public class ExternalShuffleBlockResolver {
       ShuffleIndexInformation shuffleIndexInformation = shuffleIndexCache.get(indexFile);
       ShuffleIndexRecord shuffleIndexRecord = shuffleIndexInformation.getIndex(
         startReduceId, endReduceId);
-      return new FileSegmentManagedBuffer(
-        conf,
-        ExecutorDiskUtils.getFile(executor.localDirs, executor.subDirsPerLocalDir,
-          "shuffle_" + shuffleId + "_" + mapId + "_0.data"),
-        shuffleIndexRecord.getOffset(),
-        shuffleIndexRecord.getLength());
+      long digest = DigestShuffleInformation.getDigest(
+        executor, shuffleId, mapId, startReduceId, endReduceId - startReduceId);
+      File dataFile = ExecutorDiskUtils.getFile(executor.localDirs, executor.subDirsPerLocalDir,
+        "shuffle_" + shuffleId + "_" + mapId + "_0.data");
+      long offset = shuffleIndexRecord.getOffset();
+      long length = shuffleIndexRecord.getLength();
+      logger.debug("Get digest {} of executor {} shuffle_{}_{}_{} with {} blocks",
+        digest, executor, shuffleId, mapId, startReduceId, endReduceId - startReduceId);
+      if (digest < 0){
+        return new FileSegmentManagedBuffer(
+          conf,
+          dataFile,
+          offset,
+          length);
+      } else {
+        return new DigestFileSegmentManagedBuffer(
+          conf,
+          dataFile,
+          offset,
+          length,
+          digest);
+      }
     } catch (ExecutionException e) {
       throw new RuntimeException("Failed to open file: " + indexFile, e);
     }
