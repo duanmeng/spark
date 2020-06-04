@@ -364,6 +364,11 @@ case class CatalogTable(
       }
     }
 
+    if (tableType == CatalogTableType.MATERIALIZED_VIEW) {
+      viewText.foreach(map.put("View Text", _))
+      map.put("View Rewrite Enabled", enableRewrite.toString)
+    }
+
     if (properties.nonEmpty) map.put("Table Properties", tableProperties)
     stats.foreach(s => map.put("Statistics", s.simpleString))
     map ++= storage.toLinkedHashMap
