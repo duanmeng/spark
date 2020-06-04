@@ -102,8 +102,8 @@ case class MatchMaterilizedView(analyzer: Analyzer) extends Rule[LogicalPlan] {
     // Initialize all query related auxiliary data structures
     // that will be used throughout query rewriting process
     // Generate query table references
-    val (queryTableIdentifiers, queryTableAliasMap, queryTableSet) = getTableIdentifies(queryPlan)
-    if (queryTableIdentifiers.isEmpty) {
+    val (queryTableAliasMap, queryTableSet) = getTableIdentifies(queryPlan)
+    if (queryTableSet.isEmpty) {
       throw new TryMaterializedFailedException("can't find table in query")
     }
 
@@ -134,8 +134,8 @@ case class MatchMaterilizedView(analyzer: Analyzer) extends Rule[LogicalPlan] {
         checkMvPlan(mvPlan)
 
         // Generate view table references
-        val (viewTableIdentifiers, viewTableAliasMap, viewTableSet) = getTableIdentifies(mvPlan)
-        if (viewTableIdentifiers.isEmpty) {
+        val (viewTableAliasMap, viewTableSet) = getTableIdentifies(mvPlan)
+        if (viewTableSet.isEmpty) {
           throw new TryMaterializedFailedException("empty table in materialized view")
         }
 
@@ -154,7 +154,7 @@ case class MatchMaterilizedView(analyzer: Analyzer) extends Rule[LogicalPlan] {
         val viewEC: EquivalenceClasses = new EquivalenceClasses
         updateEquivalenceClass(viewEC, viewColEqualPreds, viewTableAliasMap)
 
-        var compensateTables: Set[IdentifierWithDatabase] = Set.empty
+        var compensateTables: Set[String] = Set.empty
         var compensateJoinPreds: Seq[EqualTo] = Seq.empty
 
         if (!(queryTableSet == viewTableSet)) {
@@ -181,8 +181,9 @@ case class MatchMaterilizedView(analyzer: Analyzer) extends Rule[LogicalPlan] {
 
             // query has more tables, get compensated information
             val result = compensateViewPartial(
-                queryTableIdentifiers, viewTableIdentifiers, queryColEqualPreds)
+              queryTableSet, viewTableSet, queryColEqualPreds, queryTableAliasMap)
             compensateTables = result._1
+
             compensateJoinPreds = result._2
             updateEquivalenceClass(viewEC, compensateJoinPreds, viewTableAliasMap)
           } else {
@@ -446,8 +447,7 @@ case class MatchMaterilizedView(analyzer: Analyzer) extends Rule[LogicalPlan] {
     }
   }
 
-  private def getTableIdentifies(plan: LogicalPlan):
-      (Set[IdentifierWithDatabase], Map[String, String], Set[String]) = {
+  private def getTableIdentifies(plan: LogicalPlan): (Map[String, String], Set[String]) = {
     var tableAliasMap = Map.empty[String, String]
     var tableSet = Set.empty[String]
     plan.foreach {
@@ -461,10 +461,7 @@ case class MatchMaterilizedView(analyzer: Analyzer) extends Rule[LogicalPlan] {
         tableSet += name.toString
       case _ =>
     }
-    val idents = plan.collect {
-      case SubqueryAlias(name, _) => name
-    }.toSet[AliasIdentifier]
-    (Set.empty[IdentifierWithDatabase], tableAliasMap, tableSet)
+    (tableAliasMap, tableSet)
   }
 
   private def extractPredicates(plan: LogicalPlan): Seq[Expression] = {
@@ -519,32 +516,32 @@ case class MatchMaterilizedView(analyzer: Analyzer) extends Rule[LogicalPlan] {
   }
 
   private def compensateViewPartial(
-      queryIdentifies: Set[IdentifierWithDatabase],
-      viewIdentifies: Set[IdentifierWithDatabase],
-      queryEquiColumnsPreds: Seq[EqualTo]
-      ): (Set[IdentifierWithDatabase], Seq[EqualTo]) = {
-    val missedIdentifies: Set[IdentifierWithDatabase] =
-      queryIdentifies.filter(identify => !viewIdentifies.contains(identify))
+      queryTableSet: Set[String],
+      viewTableSet: Set[String],
+      queryEquiColumnsPreds: Seq[EqualTo],
+      queryTableAliasMap: Map[String, String]): (Set[String], Seq[EqualTo]) = {
+    val missedTableSet =
+      queryTableSet.filter(qt => !viewTableSet.contains(qt))
     val newViewEquiColumnsPreds = mutable.Set.empty[EqualTo]
 
-    for (identify <- missedIdentifies) {
+    for (mt <- missedTableSet) {
       newViewEquiColumnsPreds ++=
-        queryEquiColumnsPreds.filter(p => isCompensateJoinCondition(identify, p))
+        queryEquiColumnsPreds.filter(
+          p => isCompensateJoinCondition(mt, p, queryTableAliasMap))
     }
-    (missedIdentifies, Seq(newViewEquiColumnsPreds.toArray: _*))
+    (missedTableSet, Seq(newViewEquiColumnsPreds.toArray: _*))
   }
 
-  private def isCompensateJoinCondition(ident: IdentifierWithDatabase, exp: Expression): Boolean = {
+  private def isCompensateJoinCondition(
+      tableName: String,
+      exp: Expression,
+      tableAliasMap: Map[String, String]): Boolean = {
     exp match {
       case EqualTo(l: AttributeReference, r: AttributeReference) =>
-        (isTargetIdentify(ident, l) || isTargetIdentify(ident, r))
+        tableAliasMap.getOrElse(l.qualifier.mkString("."), "").equals(tableName) ||
+          tableAliasMap.getOrElse(r.qualifier.mkString("."), "").equals(tableName)
       case _ => false
     }
-  }
-
-  private def isTargetIdentify(ident: IdentifierWithDatabase, exp: Expression): Boolean = {
-    exp.isInstanceOf[AttributeReference] &&
-      ident.unquotedString.equals(exp.asInstanceOf[AttributeReference].qualifier.mkString("."))
   }
 }
 

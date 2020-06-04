@@ -37,33 +37,30 @@ object MVPlanRewriteRules {
       queryTableAliasMap: Map[String, String],
       viewAttAliasMap: Map[String, String],
       viewEC: EquivalenceClasses,
-      compensateTables: Set[IdentifierWithDatabase],
+      compensateTables: Set[String],
       compensateJoinPreds: Seq[EqualTo],
       finalCompensatePreds: Seq[Expression],
       groupByCompensates: Set[Expression],
       orders: Seq[SortOrder],
       materializedView: MaterializedView): (String, Map[String, ExprId]) = {
 
-    // new tables in query
-    val compensateTableNames = compensateTables.map(
-      ident => getTableFullName(ident, queryTableAliasMap))
-
     // replace the expression with materialized view and get the output list for result
     val (outputs, expIdMap) = generateOutputStrList(
       queryOutputs, queryTableAliasMap, viewAttAliasMap, viewEC, groupByCompensates,
-      materializedView.getFullName, compensateTableNames)
+      materializedView.getFullName, compensateTables)
     if (outputs.isEmpty) {
       throw new TryMaterializedFailedException("generateOutputStrList is empty")
     }
 
-    val tables = Seq(materializedView.getFullName) ++ compensateTableNames
+    val tables = Seq(materializedView.getFullName) ++
+      getTableNamesWithAlias(compensateTables, queryTableAliasMap)
 
     // for join situation, query with the condition as t1.c1 = t2.c2
     // it should be filtered if view has this already
     var filteredCompensates = Seq.empty[Expression]
     finalCompensatePreds.foreach(preds => {
       val (isKeep, newExpr) =
-        MaterializedViewUtil.filterConditions(preds, queryTableAliasMap, compensateTableNames)
+        MaterializedViewUtil.filterConditions(preds, queryTableAliasMap, compensateTables)
       if (isKeep) {
         filteredCompensates :+= newExpr
       }
@@ -74,11 +71,11 @@ object MVPlanRewriteRules {
       expr => expr match {
         case bc@BinaryComparison(left, right) =>
           bc.makeCopy(Array(getExpressionWithUpdatedAttRef(left, queryTableAliasMap,
-            viewAttAliasMap, viewEC, materializedView.getFullName, false, compensateTableNames),
+            viewAttAliasMap, viewEC, materializedView.getFullName, false, compensateTables),
             getExpressionWithUpdatedAttRef(right, queryTableAliasMap,
-              viewAttAliasMap, viewEC, materializedView.getFullName, false, compensateTableNames)))
+              viewAttAliasMap, viewEC, materializedView.getFullName, false, compensateTables)))
         case _ => getExpressionWithUpdatedAttRef(expr, queryTableAliasMap,
-          viewAttAliasMap, viewEC, materializedView.getFullName, false, compensateTableNames)
+          viewAttAliasMap, viewEC, materializedView.getFullName, false, compensateTables)
       }
     )
 
@@ -87,11 +84,11 @@ object MVPlanRewriteRules {
       expr => expr match {
         case bc@BinaryComparison(left, right) =>
           bc.makeCopy(Array(getExpressionWithUpdatedAttRef(left, queryTableAliasMap,
-            viewAttAliasMap, viewEC, materializedView.getFullName, false, compensateTableNames),
+            viewAttAliasMap, viewEC, materializedView.getFullName, false, compensateTables),
             getExpressionWithUpdatedAttRef(right, queryTableAliasMap,
-              viewAttAliasMap, viewEC, materializedView.getFullName, false, compensateTableNames)))
+              viewAttAliasMap, viewEC, materializedView.getFullName, false, compensateTables)))
         case _ => getExpressionWithUpdatedAttRef(expr, queryTableAliasMap,
-          viewAttAliasMap, viewEC, materializedView.getFullName, false, compensateTableNames)
+          viewAttAliasMap, viewEC, materializedView.getFullName, false, compensateTables)
       }
     )
 
@@ -103,7 +100,7 @@ object MVPlanRewriteRules {
     // replace the expression with materialized view and get group by expression for result
     val updatedGroupByAttRefs = groupByCompensates.map(
       getExpressionWithUpdatedAttRef(_, queryTableAliasMap,
-        viewAttAliasMap, viewEC, materializedView.getFullName, false, compensateTableNames)
+        viewAttAliasMap, viewEC, materializedView.getFullName, false, compensateTables)
     )
 
     var groupByExprs = Seq.empty[String]
@@ -115,7 +112,7 @@ object MVPlanRewriteRules {
     var orderStrs = Seq.empty[String]
     val updatedOrders = orders.map(
       order => order.makeCopy(Array(getExpressionWithUpdatedAttRef(order.child, queryTableAliasMap,
-        viewAttAliasMap, viewEC, materializedView.getFullName, false, compensateTableNames),
+        viewAttAliasMap, viewEC, materializedView.getFullName, false, compensateTables),
         order.direction, order.nullOrdering, order.sameOrderExpressions))
     )
     for (order <- updatedOrders) {
@@ -215,6 +212,26 @@ object MVPlanRewriteRules {
       tableName
     } else {
       tableName + " " + ident.unquotedString
+    }
+  }
+
+  // for compensate tables, get the name with alias if necessary
+  // query: select * from mv_db.t1, db1.t2, db1.t3 as t
+  // in above query, compensate tables are db1.t2 and db1.t3
+  // tableNames = ["db1.t2", "db1.t3"]
+  // check if tableName has alias and return the table name used in from clause
+  // output: ["db1.t2", "db1.t3 t"]
+  private def getTableNamesWithAlias(
+      tableNames: Set[String],
+      queryTableAliasMap: Map[String, String]): Set[String] = {
+    tableNames.map { tname =>
+      val aliasSet = queryTableAliasMap.filter(
+        entry => entry._2.equals(tname) && !entry._1.equals(tname)).keySet
+      if (aliasSet.isEmpty) {
+        tname
+      } else {
+        tname + " " + aliasSet.head
+      }
     }
   }
 

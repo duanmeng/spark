@@ -682,7 +682,7 @@ object MaterializedViewUtil {
     }
   }
 
-  private def isAttInTables(
+  def isAttInTables(
       attRef: AttributeReference,
       tableNames: Set[String],
       tableAliasMap: Map[String, String]): Boolean = {

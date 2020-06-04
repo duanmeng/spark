@@ -1315,6 +1315,143 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
           |""".stripMargin)
   }
 
+  test("testJoin9") {
+    withMaterializedView("testmv",
+      mvSchema = new StructType()
+        .add("deptno", IntegerType, nullable = false),
+      mvQuery =
+        """
+          |select deptno
+          |from db1.emps
+          |""".stripMargin,
+      sql =
+        """
+          |select e.deptno, d.name
+          |from db1.emps e join db2.depts d
+          |where e.deptno = d.deptno
+          |order by d.name
+          |""".stripMargin) {
+      materialized =>
+
+        assert(
+          """
+            |select d.`name` AS `name`, mv_db.testmv.`deptno` AS `deptno`
+            |from db2.depts as d, mv_db.testmv
+            |where (mv_db.testmv.`deptno` = d.`deptno`)
+            |order by d.`name` ASC NULLS FIRST
+            |""".stripMargin.equals(getSql(materialized)))
+    }
+  }
+
+  test("testJoin10") {
+    withMaterializedView("testmv",
+      mvSchema = new StructType()
+        .add("deptno", IntegerType, nullable = false),
+      mvQuery =
+        """
+          |select deptno
+          |from db1.emps
+          |""".stripMargin,
+      sql =
+        """
+          |select d.name
+          |from db1.emps e join db2.depts d
+          |where e.deptno = d.deptno
+          |group by d.name
+          |""".stripMargin) {
+      materialized =>
+
+        assert(
+          """
+            |select d.`name` AS `name`
+            |from db2.depts as d, mv_db.testmv
+            |where (mv_db.testmv.`deptno` = d.`deptno`)
+            |group by d.`name`
+            |""".stripMargin.equals(getSql(materialized)))
+    }
+  }
+
+  test("testJoin11") {
+    withMaterializedView("testmv",
+      mvSchema = new StructType()
+        .add("deptno", IntegerType, nullable = false),
+      mvQuery =
+        """
+          |select deptno
+          |from db1.emps
+          |""".stripMargin,
+      sql =
+        """
+          |select e.deptno, d.name
+          |from db1.emps e join db2.depts d
+          |where e.deptno = d.deptno
+          |""".stripMargin) {
+      materialized =>
+
+        assert(
+          """
+            |select d.`name` AS `name`, mv_db.testmv.`deptno` AS `deptno`
+            |from db2.depts as d, mv_db.testmv
+            |where (mv_db.testmv.`deptno` = d.`deptno`)
+            |""".stripMargin.equals(getSql(materialized)))
+    }
+  }
+
+  test("testJoin12") {
+    withMaterializedView("testmv",
+      mvSchema = new StructType()
+        .add("deptno", IntegerType, nullable = false),
+      mvQuery =
+        """
+          |select deptno
+          |from db1.emps
+          |""".stripMargin,
+      sql =
+        """
+          |select e.deptno, d.name
+          |from db1.emps e join db2.depts d
+          |where e.deptno = d.deptno
+          |  and d.deptno > 1
+          |""".stripMargin) {
+      materialized =>
+
+        assert(
+          """
+            |select d.`name` AS `name`, mv_db.testmv.`deptno` AS `deptno`
+            |from db2.depts as d, mv_db.testmv
+            |where ((mv_db.testmv.`deptno` = d.`deptno`) AND (d.`deptno` > 1))
+            |""".stripMargin.equals(getSql(materialized)))
+    }
+  }
+
+  test("testJoin13") {
+    withMaterializedView("testmv",
+      mvSchema = new StructType()
+        .add("deptno", IntegerType, nullable = false),
+      mvQuery =
+        """
+          |select deptno
+          |from db1.emps
+          |""".stripMargin,
+      sql =
+        """
+          |select e.deptno, d.name
+          |from db1.emps e join db2.depts d
+          |where e.deptno = d.deptno
+          |  and d.deptno > 1
+          |  and e.deptno > 0
+          |""".stripMargin) {
+      materialized =>
+
+        assert(
+          """
+            |select d.`name` AS `name`, mv_db.testmv.`deptno` AS `deptno`
+            |from db2.depts as d, mv_db.testmv
+            |where ((mv_db.testmv.`deptno` = d.`deptno`) AND ((mv_db.testmv.`deptno` > 0) AND (d.`deptno` > 1)))
+            |""".stripMargin.equals(getSql(materialized)))
+    }
+  }
+
   test("testSort1") {
     withMaterializedView("testmv",
       mvSchema = new StructType()

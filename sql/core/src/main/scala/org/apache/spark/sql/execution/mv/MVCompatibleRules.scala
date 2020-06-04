@@ -17,7 +17,6 @@
 
 package org.apache.spark.sql.execution.mv
 
-import org.apache.spark.sql.catalyst.IdentifierWithDatabase
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, BinaryComparison, Cast, EqualNullSafe, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, LessThan, LessThanOrEqual, Literal, Not, Or, SortOrder}
 import org.apache.spark.sql.types.DataType
 
@@ -70,12 +69,11 @@ object MVCompatibleRules {
   def checkProjectListMatch(
       queryProjectAttRefMap: Map[String, Expression],
       viewProjectAttRefMap: Map[String, Expression],
-      compensateTables: Set[IdentifierWithDatabase],
+      compensateTables: Set[String],
       queryEC: EquivalenceClasses,
       viewEC: EquivalenceClasses,
       queryTableAliasMap: Map[String, String]): Unit = {
 
-    val addedIdentifies = compensateTables.map(ident => ident.unquotedString)
     queryProjectAttRefMap.values.foreach(expr => {
       var matched = false
       var hasAttRef = false
@@ -87,7 +85,7 @@ object MVCompatibleRules {
             val qAttRefSql = getExpressionSql(ar, queryTableAliasMap)
             if (viewProjectAttRefMap.contains(qAttRefSql) ||
               // if att in the compensate table?
-              addedIdentifies.contains(ar.qualifier.mkString(".")) ||
+              MaterializedViewUtil.isAttInTables(ar, compensateTables, queryTableAliasMap) ||
               // if the query output can be evaluated by another equal column in view?
               // it aways happened in join situation
               queryEC.getEquivalenceClassesMap.getOrElse(
@@ -127,7 +125,7 @@ object MVCompatibleRules {
   def checkOrdersMatch(
       orders: Seq[SortOrder],
       viewProjectAttRefMap: Map[String, Expression],
-      compensateTables: Set[IdentifierWithDatabase],
+      compensateTables: Set[String],
       queryEC: EquivalenceClasses,
       viewEC: EquivalenceClasses,
       queryTableAliasMap: Map[String, String]): Unit = {
@@ -154,7 +152,7 @@ object MVCompatibleRules {
   def isGroupByAttRefsMatch(
       queryGroupByExprs: Set[Expression],
       viewGroupByExprs: Set[Expression],
-      compensateTables: Set[IdentifierWithDatabase],
+      compensateTables: Set[String],
       viewEC: EquivalenceClasses,
       queryTableAliasMap: Map[String, String],
       viewTableAliasMap: Map[String, String]): (Boolean, Set[Expression]) = {
@@ -176,7 +174,6 @@ object MVCompatibleRules {
         // query1: group by c1, c2 => satisfied
         // query2: group by c1, c2, c4 => unsatisfied
         var viewMatchedExprs = Set.empty[Expression]
-        val addedTables = compensateTables.map(ident => ident.unquotedString)
         for (qgbExpr <- queryGroupByExprs) {
           var isMatch = false
           val qgbExprSql = getExpressionSql(qgbExpr, queryTableAliasMap)
@@ -190,7 +187,8 @@ object MVCompatibleRules {
             } else {
               qgbExpr match {
                 case ar@AttributeReference(_, _, _, _)
-                    if addedTables.contains(ar.qualifier.mkString(".")) =>
+                    if MaterializedViewUtil.isAttInTables(
+                      ar, compensateTables, queryTableAliasMap) =>
                   isMatch = true
                 case _ =>
               }
@@ -239,7 +237,7 @@ object MVCompatibleRules {
       throw new TryMaterializedFailedException(
         "computeCompensationOrs: query condition not satisfied")
     } else if (!queryOrs.isEmpty && viewOrs.isEmpty) {
-      (Seq(queryCondition.get), Seq.empty[Expression])
+      (queryOrs, Seq.empty[Expression])
     } else {
       var compensationOrs = Seq.empty[Expression]
       var unionCompensates = Seq.empty[Expression]
