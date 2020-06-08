@@ -180,6 +180,10 @@
       <artifactId>derby</artifactId>
     </dependency>
     <dependency>
+      <groupId>com.tencent.tdbank</groupId>
+      <artifactId>TDBusSDK</artifactId>
+    </dependency>
+    <dependency>
       <groupId>org.scala-lang</groupId>
       <artifactId>scala-compiler</artifactId>
       <scope>test</scope>

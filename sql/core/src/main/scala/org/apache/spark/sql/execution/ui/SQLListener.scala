@@ -57,6 +57,8 @@ case class SparkListenerSQLExecutionEnd(executionId: Long, time: Long)
   // The name of the execution, e.g. `df.collect` will trigger a SQL execution with name "collect".
   @JsonIgnore private[sql] var executionName: Option[String] = None
 
+  @JsonIgnore private[sql] var sqlText: String = null
+
   // The following 3 fields are only accessed when `executionName` is defined.
 
   // The duration of the SQL execution, in nanoseconds.

@@ -24,11 +24,13 @@ import org.apache.spark.sql.util.QueryExecutionListener
 
 
 class TestQueryExecutionListener extends QueryExecutionListener {
-  override def onSuccess(funcName: String, qe: QueryExecution, durationNs: Long): Unit = {
+  override def onSuccess(funcName: String, qe: QueryExecution, durationNs: Long
+      , sqlText: String): Unit = {
     OnSuccessCall.isOnSuccessCalled.set(true)
   }
 
-  override def onFailure(funcName: String, qe: QueryExecution, exception: Exception): Unit = { }
+  override def onFailure(funcName: String, qe: QueryExecution, exception: Exception,
+      sqlText: String): Unit = { }
 }
 
 /**

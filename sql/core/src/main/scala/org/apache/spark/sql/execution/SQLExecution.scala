@@ -31,6 +31,8 @@ object SQLExecution {
 
   val EXECUTION_ID_KEY = "spark.sql.execution.id"
 
+  val EXECUTION_SQL_TEXT_KEY = "spark.sql.execution.audit.text"
+
   private val _nextExecutionId = new AtomicLong(0)
 
   private def nextExecutionId: Long = _nextExecutionId.getAndIncrement
@@ -109,16 +111,23 @@ object SQLExecution {
           // parameter. The `ExecutionListenerManager` only watches SQL executions with name. We
           // can specify the execution name in more places in the future, so that
           // `QueryExecutionListener` can track more cases.
-          event.executionName = name
+          event.executionName = name match {
+            case Some(_) => name
+            case None => Some("default")
+          }
           event.duration = endTime - startTime
           event.qe = queryExecution
           event.executionFailure = ex
+          // set event's sqlText as EXECUTION_SQL_TEXT_KEY if exists from current sparkContext
+          // it'll be used in TSparkQueryExecutionListener
+          event.sqlText = sc.getLocalProperty(EXECUTION_SQL_TEXT_KEY)
           sc.listenerBus.post(event)
         }
       }
     } finally {
       executionIdToQueryExecution.remove(executionId)
       sc.setLocalProperty(EXECUTION_ID_KEY, oldExecutionId)
+      sc.setLocalProperty(EXECUTION_SQL_TEXT_KEY, null)
     }
   }
 

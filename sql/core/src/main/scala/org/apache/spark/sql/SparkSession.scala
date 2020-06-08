@@ -608,6 +608,7 @@ class SparkSession private(
     }
 
     val sqlConf = sessionState.conf
+    sparkContext.setLocalProperty(SQLExecution.EXECUTION_SQL_TEXT_KEY, sqlText)
     if (sqlConf.tauthEnabled) {
       // get user name for tauth, from ugi or conf
       val userName = if ("".equals(sqlConf.tauthUserName)) {

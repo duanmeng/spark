@@ -339,9 +339,11 @@ class UDFSuite extends QueryTest with SharedSparkSession {
       withTempPath { path =>
         var numTotalCachedHit = 0
         val listener = new QueryExecutionListener {
-          override def onFailure(f: String, qe: QueryExecution, e: Exception): Unit = {}
+          override def onFailure(f: String, qe: QueryExecution, e: Exception,
+              sqlText: String): Unit = {}
 
-          override def onSuccess(funcName: String, qe: QueryExecution, duration: Long): Unit = {
+          override def onSuccess(funcName: String, qe: QueryExecution, duration: Long,
+              sqlText: String): Unit = {
             qe.withCachedData match {
               case c: CreateDataSourceTableAsSelectCommand
                   if c.query.isInstanceOf[InMemoryRelation] =>

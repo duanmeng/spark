@@ -53,11 +53,13 @@ private class CountingQueryExecutionListener extends QueryExecutionListener {
 
   INSTANCE_COUNT.incrementAndGet()
 
-  override def onSuccess(funcName: String, qe: QueryExecution, durationNs: Long): Unit = {
+  override def onSuccess(funcName: String, qe: QueryExecution, durationNs: Long,
+      sqlText: String): Unit = {
     CALLBACK_COUNT.incrementAndGet()
   }
 
-  override def onFailure(funcName: String, qe: QueryExecution, exception: Exception): Unit = {
+  override def onFailure(funcName: String, qe: QueryExecution, exception: Exception,
+      sqlText: String): Unit = {
     CALLBACK_COUNT.incrementAndGet()
   }
 

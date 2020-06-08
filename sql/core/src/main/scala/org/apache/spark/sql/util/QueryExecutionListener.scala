@@ -43,11 +43,13 @@ trait QueryExecutionListener {
    * @param qe the QueryExecution object that carries detail information like logical plan,
    *           physical plan, etc.
    * @param durationNs the execution time for this query in nanoseconds.
+   * @param sqlText the origin sql from SparkSession.sql if exists.
    *
    * @note This can be invoked by multiple different threads.
    */
   @DeveloperApi
-  def onSuccess(funcName: String, qe: QueryExecution, durationNs: Long): Unit
+  def onSuccess(funcName: String, qe: QueryExecution, durationNs: Long,
+    sqlText: String): Unit
 
   /**
    * A callback function that will be called when a query execution failed.
@@ -58,10 +60,13 @@ trait QueryExecutionListener {
    * @param exception the exception that failed this query. If `java.lang.Error` is thrown during
    *                  execution, it will be wrapped with an `Exception` and it can be accessed by
    *                  `exception.getCause`.
+   * @param sqlText the origin sql from SparkSession.sql if exists.
+   *
    * @note This can be invoked by multiple different threads.
    */
   @DeveloperApi
-  def onFailure(funcName: String, qe: QueryExecution, exception: Exception): Unit
+  def onFailure(funcName: String, qe: QueryExecution, exception: Exception,
+    sqlText: String): Unit
 }
 
 
@@ -148,9 +153,9 @@ private[sql] class ExecutionListenerBus(session: SparkSession)
                 (if (other.getMessage == null) "" else s": ${other.getMessage}")
               new QueryExecutionException(message, other)
           }
-          listener.onFailure(funcName, event.qe, exception)
+          listener.onFailure(funcName, event.qe, exception, event.sqlText)
         case _ =>
-          listener.onSuccess(funcName, event.qe, event.duration)
+          listener.onSuccess(funcName, event.qe, event.duration, event.sqlText)
       }
     }
   }
