@@ -625,6 +625,8 @@ class InMemoryCatalog(
         desc => desc.table.tableType == CatalogTableType.MATERIALIZED_VIEW).
         map(desc => desc.table).toSeq
     }
-    mvs
+    // sort the result with table name, it's only for test mv multiple matched
+    mvs.sortWith((ct1, ct2) =>
+      ct1.identifier.unquotedString.compareTo(ct2.identifier.unquotedString) < 0)
   }
 }

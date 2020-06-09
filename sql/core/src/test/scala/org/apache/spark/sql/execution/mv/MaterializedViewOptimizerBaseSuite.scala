@@ -176,6 +176,38 @@ class MaterializedViewOptimizerBaseSuite extends SparkFunSuite with SharedSparkS
     }
   }
 
+  protected def withMultipleMaterializedView(
+      mvs: Seq[TestMaterializedView],
+      sql: String,
+      isPFModelEnabled: Boolean = true)(f: LogicalPlan => Unit): Unit = {
+    try {
+      analyzer.getSqlConf.setConfString(
+        "spark.sql.materializedView.pfmodel.enable", isPFModelEnabled.toString)
+      analyzer.getSqlConf.setConfString(
+        "spark.sql.materializedView.matchPolicy", "multiple")
+      mvs.foreach {
+        tmv => analyzer.getCatalog.createMaterializedView(
+          tmv.mvDb, tmv.mvName, tmv.mvQuery, tmv.mvSchema)
+      }
+
+      val unresolved = parser.parsePlan(sql)
+      val resolved = analyzer.executeAndCheck(unresolved)
+      val materialized = mvOptimizer.execute(resolved)
+      // scalastyle:off println
+      println(getSql(materialized))
+      // scalastyle:on println
+      assert(materialized.missingInput.isEmpty)
+      f(materialized)
+    } finally {
+      analyzer.getSqlConf.setConfString("spark.sql.materializedView.pfmodel.enable", "true")
+      analyzer.getSqlConf.setConfString("spark.sql.materializedView.matchPolicy", "once")
+      mvs.foreach {
+        tmv => analyzer.getCatalog.dropTable(
+          new TableIdentifier(tmv.mvName, Some(tmv.mvDb)), false, false)
+      }
+    }
+  }
+
   protected def withUnSatisfiedMV(
       mvName: String,
       mvSchema: StructType,
@@ -333,3 +365,9 @@ class MaterializedViewOptimizerBaseSuite extends SparkFunSuite with SharedSparkS
     sb.toString
   }
 }
+
+class TestMaterializedView(
+    val mvDb: String,
+    val mvName: String,
+    val mvSchema: StructType,
+    val mvQuery: String)

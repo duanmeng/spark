@@ -28,11 +28,39 @@ import org.apache.spark.sql.types.IntegerType
 
 object MVPlanRewriteRules {
 
-  // generate the new sql with materialized view,
-  // expIdMap is used if the query is a subquery, eg,
+  def generateResultSql(matchedResultSql: MatchedResultSql): String = {
+    // generate result sql with materialized view
+    val sb = StringBuilder.newBuilder
+    sb.append("select " + matchedResultSql.outputs.mkString(",") +
+      " from " + matchedResultSql.tables.mkString(","))
+
+    if (!matchedResultSql.joinStr.isEmpty) {
+      sb.append(" where " + matchedResultSql.joinStr)
+      if (!matchedResultSql.filters.isEmpty) {
+        sb.append(" and " + matchedResultSql.filters.mkString(" or "))
+      }
+    } else {
+      if (!matchedResultSql.filters.isEmpty) {
+        sb.append(" where " + matchedResultSql.filters.mkString(" or "))
+      }
+    }
+
+    if (!matchedResultSql.groupByExprs.isEmpty) {
+      sb.append(" group by " + matchedResultSql.groupByExprs.mkString(","))
+    }
+
+    if (!matchedResultSql.orderStrs.isEmpty) {
+      sb.append(" order by " + matchedResultSql.orderStrs.mkString(","))
+    }
+
+    sb.toString
+  }
+
+  // generate the matched sql with materialized view,
+  // expIdMap in MatchedResultSql is used if the query is a subquery, eg,
   // select sub.c1 from (select c1 from t1) sub
   // expId of c1 in subquery can't be updated, or the query will be failed
-  def generateReplacedSql(
+  def generateMatchedResultSql(
       queryOutputs: Seq[NamedExpression],
       queryTableAliasMap: Map[String, String],
       viewAttAliasMap: Map[String, String],
@@ -42,10 +70,10 @@ object MVPlanRewriteRules {
       finalCompensatePreds: Seq[Expression],
       groupByCompensates: Set[Expression],
       orders: Seq[SortOrder],
-      materializedView: MaterializedView): (String, Map[String, ExprId]) = {
+      materializedView: MaterializedView): MatchedResultSql = {
 
     // replace the expression with materialized view and get the output list for result
-    val (outputs, expIdMap) = generateOutputStrList(
+    val (outputs, exprIdMap) = generateOutputStrList(
       queryOutputs, queryTableAliasMap, viewAttAliasMap, viewEC, groupByCompensates,
       materializedView.getFullName, compensateTables)
     if (outputs.isEmpty) {
@@ -119,33 +147,14 @@ object MVPlanRewriteRules {
       orderStrs :+= order.sql
     }
 
-    val joinStrs = if (!updatedJoinPreds.isEmpty) {
+    val joinStr = if (!updatedJoinPreds.isEmpty) {
       MaterializedViewUtil.mergeToAnd(updatedJoinPreds).sql
     } else {
       ""
     }
 
-    // generate result sql with materialized view
-    val sb = StringBuilder.newBuilder
-    sb.append("select " + outputs.mkString(",") +
-      " from " + tables.mkString(","))
-    if (!joinStrs.isEmpty) {
-      sb.append(" where " + joinStrs)
-      if (!filters.isEmpty) {
-        sb.append(" and " + filters.mkString(" or "))
-      }
-    } else {
-      if (!filters.isEmpty) {
-        sb.append(" where " + filters.mkString(" or "))
-      }
-    }
-    if (!groupByExprs.isEmpty) {
-      sb.append(" group by " + groupByExprs.mkString(","))
-    }
-    if (!orderStrs.isEmpty) {
-      sb.append(" order by " + orderStrs.mkString(","))
-    }
-    (sb.toString, expIdMap)
+    new MatchedResultSql(outputs, tables, joinStr, filters, groupByExprs, orderStrs,
+      exprIdMap, materializedView)
   }
 
   def generateNewPlan(
@@ -343,7 +352,8 @@ object MVPlanRewriteRules {
     // and the attribute is not in compensate table, something wrong
     if (newExpr.sql.equals(queryExpr.sql) && isAttRefExist(queryExpr) &&
       !isAllCompensateAttRefs(queryExpr, compensateTableNames, queryTableAliasMap)) {
-      throw new TryMaterializedFailedException("generateProjectStrList: expr without transform")
+      throw new TryMaterializedFailedException(
+        s"generateProjectStrList: expr without transform, ${queryExpr.sql}")
     }
 
     newExpr
@@ -432,5 +442,37 @@ object MVPlanRewriteRules {
       case _ =>
     }
     result
+  }
+}
+
+class MatchedResultSql(
+    val outputs: Seq[String],
+    val tables: Seq[String],
+    val joinStr: String,
+    val filters: Seq[String],
+    val groupByExprs: Seq[String],
+    val orderStrs: Seq[String],
+    val exprIdMap: Map[String, ExprId],
+    val materializedView: MaterializedView) {
+
+  // Compare result sql according to shuffle & computation
+  // it's an initial version, and can be improved with table's statics
+  def compareTo(otherResultSql: MatchedResultSql): MatchedResultSql = {
+    var score = 0
+
+    // compare table/groupBy size, more size means more shuffle, eg,
+    score += (otherResultSql.tables.length - tables.length) +
+      (otherResultSql.groupByExprs.length - groupByExprs.length)
+
+    if (score == 0) {
+      // if there is no different with shuffle, compare filter, less filter means less computation
+      score += otherResultSql.filters.length - filters.length
+    }
+
+    if (score >= 0) {
+      this
+    } else {
+      otherResultSql
+    }
   }
 }

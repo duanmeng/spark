@@ -2694,5 +2694,192 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
           |group by deptno
           |""".stripMargin)
   }
+
+  test("testMultipleMatch1") {
+    val tmv1 = new TestMaterializedView(
+      mvDb = MATERIALIZED_VIEW_DB,
+      mvName = "tmv1",
+      mvSchema = new StructType()
+        .add("deptno", IntegerType, nullable = false),
+      mvQuery = """
+                  |select depts.deptno
+                  |from db2.depts join db1.emps
+                  |where emps.deptno = depts.deptno
+                  |group by depts.deptno
+                  |""".stripMargin
+    )
+
+    val tmv2 = new TestMaterializedView(
+      mvDb = MATERIALIZED_VIEW_DB,
+      mvName = "tmv2",
+      mvSchema = new StructType()
+        .add("deptno", IntegerType, nullable = false),
+      mvQuery = """
+                  |select depts.deptno
+                  |from db2.depts join db1.emps
+                  |where emps.deptno = depts.deptno
+                  |""".stripMargin
+    )
+
+    val tmv3 = new TestMaterializedView(
+      mvDb = MATERIALIZED_VIEW_DB,
+      mvName = "tmv3",
+      mvSchema = new StructType()
+        .add("deptno", IntegerType, nullable = false),
+      mvQuery = """
+                  |select deptno
+                  |from db1.emps
+                  |""".stripMargin
+    )
+
+    val tmv4 = new TestMaterializedView(
+      mvDb = MATERIALIZED_VIEW_DB,
+      mvName = "tmv4",
+      mvSchema = new StructType()
+        .add("deptno", IntegerType, nullable = false),
+      mvQuery = """
+                  |select depts.deptno
+                  |from db2.depts join db1.emps
+                  |where emps.deptno = depts.deptno
+                  |  and emps.deptno > 0
+                  |group by depts.deptno
+                  |""".stripMargin
+    )
+
+    val tmv5 = new TestMaterializedView(
+      mvDb = MATERIALIZED_VIEW_DB,
+      mvName = "tmv5",
+      mvSchema = new StructType()
+        .add("deptno", IntegerType, nullable = false),
+      mvQuery = """
+                  |select depts.deptno
+                  |from db2.depts join db1.emps
+                  |where emps.deptno = depts.deptno
+                  |  and emps.deptno > 0
+                  |""".stripMargin
+    )
+
+    val ftmv1 = new TestMaterializedView(
+      mvDb = MATERIALIZED_VIEW_DB,
+      mvName = "ftmv1",
+      mvSchema = new StructType()
+        .add("deptno", IntegerType, nullable = false),
+      mvQuery = """
+                  |select deptno
+                  |from db2.depts
+                  |where deptno < 0
+                  |""".stripMargin
+    )
+
+    withMultipleMaterializedView(mvs = Seq(tmv3, ftmv1),
+      sql =
+        """
+          |select emps.deptno
+          |from db2.depts join db1.emps
+          |where emps.deptno = depts.deptno
+          |group by emps.deptno
+          |""".stripMargin) {
+      materialized =>
+        assert(
+          """
+            |select mv_db.tmv3.`deptno` AS `deptno`
+            |from db2.depts, mv_db.tmv3
+            |where (mv_db.tmv3.`deptno` = db2.depts.`deptno`)
+            |group by mv_db.tmv3.`deptno`
+            |""".stripMargin.equals(getSql(materialized)))
+    }
+
+    // tmv2 is the best one
+    withMultipleMaterializedView(mvs = Seq(tmv2, tmv3, ftmv1),
+      sql =
+        """
+          |select emps.deptno
+          |from db2.depts join db1.emps
+          |where emps.deptno = depts.deptno
+          |group by emps.deptno
+          |""".stripMargin) {
+      materialized =>
+        assert(
+          """
+            |select mv_db.tmv2.`deptno` AS `deptno`
+            |from mv_db.tmv2
+            |group by mv_db.tmv2.`deptno`
+            |""".stripMargin.equals(getSql(materialized)))
+    }
+
+    // tmv1 is the best one
+    withMultipleMaterializedView(mvs = Seq(tmv1, tmv2, tmv3),
+      sql =
+        """
+          |select emps.deptno
+          |from db2.depts join db1.emps
+          |where emps.deptno = depts.deptno
+          |group by emps.deptno
+          |""".stripMargin) {
+      materialized =>
+        assert(
+          """
+            |select mv_db.tmv1.`deptno` AS `deptno`
+            |from mv_db.tmv1
+            |""".stripMargin.equals(getSql(materialized)))
+    }
+
+    // tmv4 should be the best one, but spark.sql.materializedView.multiplePolicy.limit = 3
+    // after (tmv1, tmv2, tmv3) matched, tmv4 won't be considered
+    withMultipleMaterializedView(mvs = Seq(tmv1, tmv2, tmv3, tmv4),
+      sql =
+        """
+          |select emps.deptno
+          |from db2.depts join db1.emps
+          |where emps.deptno = depts.deptno
+          |  and emps.deptno > 0
+          |group by emps.deptno
+          |""".stripMargin) {
+      materialized =>
+        assert(
+          """
+            |select mv_db.tmv1.`deptno` AS `deptno`
+            |from mv_db.tmv1
+            |where (mv_db.tmv1.`deptno` > 0)
+            |""".stripMargin.equals(getSql(materialized)))
+    }
+
+    // ftmv1 is unmatched, tmv4 is the best one in (tmv1, tmv2, tmv4)
+    withMultipleMaterializedView(mvs = Seq(tmv1, tmv2, ftmv1, tmv4),
+      sql =
+        """
+          |select emps.deptno
+          |from db2.depts join db1.emps
+          |where emps.deptno = depts.deptno
+          |  and emps.deptno > 0
+          |group by emps.deptno
+          |""".stripMargin) {
+      materialized =>
+        assert(
+          """
+            |select mv_db.tmv4.`deptno` AS `deptno`
+            |from mv_db.tmv4
+            |""".stripMargin.equals(getSql(materialized)))
+    }
+
+    // tmv1 is the better one, tmv5 cover filter but has extra group by
+    withMultipleMaterializedView(mvs = Seq(tmv1, tmv5),
+      sql =
+        """
+          |select emps.deptno
+          |from db2.depts join db1.emps
+          |where emps.deptno = depts.deptno
+          |  and emps.deptno > 0
+          |group by emps.deptno
+          |""".stripMargin) {
+      materialized =>
+        assert(
+          """
+            |select mv_db.tmv1.`deptno` AS `deptno`
+            |from mv_db.tmv1
+            |where (mv_db.tmv1.`deptno` > 0)
+            |""".stripMargin.equals(getSql(materialized)))
+    }
+  }
   // scalastyle:on
 }

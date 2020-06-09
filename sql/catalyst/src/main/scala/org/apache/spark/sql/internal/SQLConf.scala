@@ -2021,6 +2021,20 @@ object SQLConf {
     .booleanConf
     .createWithDefault(false)
 
+  val MATERIALIZED_VIEW_MATCH_POLICY = buildConf("spark.sql.materializedView.matchPolicy")
+    .doc("define the policy to process multiple materialized views matched, " +
+      "currently support 2 modes: once and multiple. In once mode, the first " +
+      "matched materialized view will be return for optimization. In multiple mode, " +
+      "the matched materialized view will be picked with cost based within N candidates " +
+      "which can be defined by spark.sql.materializedView.matchPolicy.multipleLimit.")
+    .stringConf
+    .createWithDefault("once")
+
+  val MATERIALIZED_VIEW_MULTIPLE_POLICY_LIMIT =
+    buildConf("spark.sql.materializedView.multiplePolicy.limit")
+      .intConf
+      .createWithDefault(3)
+
   object PartitionOverwriteMode extends Enumeration {
     val STATIC, DYNAMIC = Value
   }
@@ -3327,7 +3341,13 @@ class SQLConf extends Serializable with Logging {
 
   def materializedViewDbs: Seq[String] = getConf(SQLConf.MATERIALIZED_VIEW_DATABASES)
 
-  def isMaterializedViewPFModelEnabled: Boolean = getConf(SQLConf.MATERIALIZED_VIEW_PFMODEL_ENABLED)
+  def isMaterializedViewPFModelEnabled: Boolean =
+    getConf(SQLConf.MATERIALIZED_VIEW_PFMODEL_ENABLED)
+
+  def materializedViewMatchPolicy: String = getConf(SQLConf.MATERIALIZED_VIEW_MATCH_POLICY)
+
+  def materializedViewMultiplePolicyLimit: Int =
+    getConf(SQLConf.MATERIALIZED_VIEW_MULTIPLE_POLICY_LIMIT)
 
   /** ********************** SQLConf functionality methods ************ */
 

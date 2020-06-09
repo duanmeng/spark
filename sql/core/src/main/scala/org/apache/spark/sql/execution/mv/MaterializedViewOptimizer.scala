@@ -18,6 +18,7 @@
 package org.apache.spark.sql.execution.mv
 
 import scala.collection.mutable
+import scala.util.control.Breaks
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.{AliasIdentifier, IdentifierWithDatabase}
@@ -40,6 +41,8 @@ class MaterializedViewOptimizer(analyzer: Analyzer) extends Optimizer(analyzer.g
 }
 
 case class MatchMaterilizedView(analyzer: Analyzer) extends Rule[LogicalPlan] {
+
+  private val MATCH_POLICY_ONCE = "once"
 
   override def apply(plan: LogicalPlan): LogicalPlan = {
 
@@ -77,6 +80,8 @@ case class MatchMaterilizedView(analyzer: Analyzer) extends Rule[LogicalPlan] {
   }
 
   // rewrite logical plan if it wasn't parsed before
+  // todo: it only works when match failed, if sql can be optimized with materialized view,
+  //       there has duplicated optimization process and end with Exception
   private def rewritePlan(
       logicalPlan: LogicalPlan,
       subPlan: Option[LogicalPlan],
@@ -125,133 +130,155 @@ case class MatchMaterilizedView(analyzer: Analyzer) extends Rule[LogicalPlan] {
     val queryEC = new EquivalenceClasses
     updateEquivalenceClass(queryEC, queryColEqualPreds, queryTableAliasMap)
 
+    var matchedResultSqls = Seq.empty[MatchedResultSql]
+
     // 3. Iterate through all applicable materializations trying to
     // rewrite the given query
-    var mvResultPlan = queryPlan
-    for (materializedView <- getMaterializedViews) {
-      val mvPlan = materializedView.plan
-      val isSuccess = try {
-        checkMvPlan(mvPlan)
+    val loop = new Breaks
+    loop.breakable {
+      for (materializedView <- getMaterializedViews) {
+        val mvPlan = materializedView.plan
+        try {
+          checkMvPlan(mvPlan)
 
-        // Generate view table references
-        val (viewTableAliasMap, viewTableSet) = getTableIdentifies(mvPlan)
-        if (viewTableSet.isEmpty) {
-          throw new TryMaterializedFailedException("empty table in materialized view")
-        }
+          // Generate view table references
+          val (viewTableAliasMap, viewTableSet) = getTableIdentifies(mvPlan)
+          if (viewTableSet.isEmpty) {
+            throw new TryMaterializedFailedException("empty table in materialized view")
+          }
 
-        // Extract view attribute list
-        val (viewAttRefMap, viewAttAliasMap) =
-          getAttRefMap(mvPlan, viewTableAliasMap, false)
-        val (viewProjectAttRefMap, _, viewGroupByExprs) =
-          getSpecificAttRefs(mvPlan, viewTableAliasMap, false)
+          // Extract view attribute list
+          val (viewAttRefMap, viewAttAliasMap) =
+            getAttRefMap(mvPlan, viewTableAliasMap, false)
+          val (viewProjectAttRefMap, _, viewGroupByExprs) =
+            getSpecificAttRefs(mvPlan, viewTableAliasMap, false)
 
-        // Extract view predicates
-        val viewPredicates = extractPredicates(mvPlan)
-        val viewColEqualPreds = splitColEqualPredicates(viewPredicates)
+          // Extract view predicates
+          val viewPredicates = extractPredicates(mvPlan)
+          val viewColEqualPreds = splitColEqualPredicates(viewPredicates)
 
-        checkJoinCondition(viewColEqualPreds, viewTableSet, viewTableAliasMap)
+          checkJoinCondition(viewColEqualPreds, viewTableSet, viewTableAliasMap)
 
-        val viewEC: EquivalenceClasses = new EquivalenceClasses
-        updateEquivalenceClass(viewEC, viewColEqualPreds, viewTableAliasMap)
+          val viewEC: EquivalenceClasses = new EquivalenceClasses
+          updateEquivalenceClass(viewEC, viewColEqualPreds, viewTableAliasMap)
 
-        var compensateTables: Set[String] = Set.empty
-        var compensateJoinPreds: Seq[EqualTo] = Seq.empty
+          var compensateTables: Set[String] = Set.empty
+          var compensateJoinPreds: Seq[EqualTo] = Seq.empty
 
-        if (!(queryTableSet == viewTableSet)) {
-          // Try to compensate, e.g., for join queries it might be
-          // possible to join missing tables with view to compute result.
-          // Two supported cases:
-          // 1. query tables are subset of view tables,
-          // need to check whether PK-FK model configuration is enabled
-          // 2. view tables are subset of query tables,
-          // add additional tables through joins if possible
-          if (queryTableSet.subsetOf(viewTableSet)
+          if (!(queryTableSet == viewTableSet)) {
+            // Try to compensate, e.g., for join queries it might be
+            // possible to join missing tables with view to compute result.
+            // Two supported cases:
+            // 1. query tables are subset of view tables,
+            // need to check whether PK-FK model configuration is enabled
+            // 2. view tables are subset of query tables,
+            // add additional tables through joins if possible
+            if (queryTableSet.subsetOf(viewTableSet)
               && analyzer.getSqlConf.isMaterializedViewPFModelEnabled) {
-            if (!viewEC.contains(queryEC)) {
-              throw new TryMaterializedFailedException(
-                "Multiple tables with match type is MATCH_QUERY_PARTIAL," +
-                  " but equal columns are not satisfied")
+              if (!viewEC.contains(queryEC)) {
+                throw new TryMaterializedFailedException(
+                  "Multiple tables with match type is MATCH_QUERY_PARTIAL," +
+                    " but equal columns are not satisfied")
+              }
+            } else if (viewTableSet.subsetOf(queryTableSet)) {
+              if (!queryEC.contains(viewEC)) {
+                throw new TryMaterializedFailedException(
+                  "Multiple tables with match type is MATCH_VIEW_PARTIAL," +
+                    " but equal columns are not satisfied")
+              }
+
+              // query has more tables, get compensated information
+              val result = compensateViewPartial(
+                queryTableSet, viewTableSet, queryColEqualPreds, queryTableAliasMap)
+              compensateTables = result._1
+              compensateJoinPreds = result._2
+              updateEquivalenceClass(viewEC, compensateJoinPreds, viewTableAliasMap)
+            } else {
+              throw new TryMaterializedFailedException(s"Multiple tables with match type is " +
+                s"None, query: $queryTableSet, mv: $viewTableSet")
             }
-          } else if (viewTableSet.subsetOf(queryTableSet)) {
+          } else {
+            // check if columns equals expression match,
+            // eg, t1.c1 = t2.c1 should be in both query and view
             if (!queryEC.contains(viewEC)) {
               throw new TryMaterializedFailedException(
-                "Multiple tables with match type is MATCH_VIEW_PARTIAL," +
+                "Multiple tables with match type is MATCH_COMPLETE," +
                   " but equal columns are not satisfied")
             }
-
-            // query has more tables, get compensated information
-            val result = compensateViewPartial(
-              queryTableSet, viewTableSet, queryColEqualPreds, queryTableAliasMap)
-            compensateTables = result._1
-
-            compensateJoinPreds = result._2
-            updateEquivalenceClass(viewEC, compensateJoinPreds, viewTableAliasMap)
-          } else {
-            throw new TryMaterializedFailedException("Multiple tables with match type is None")
           }
-        } else {
-          // check if columns equals expression match,
-          // eg, t1.c1 = t2.c1 should be in both query and view
-          if (!queryEC.contains(viewEC)) {
-            throw new TryMaterializedFailedException(
-              "Multiple tables with match type is MATCH_COMPLETE," +
-                " but equal columns are not satisfied")
-          }
-        }
 
-        // check if order is satisfied with the materialized view
-        checkOrdersMatch(orders, viewProjectAttRefMap,
-          compensateTables, queryEC, viewEC, queryTableAliasMap)
+          // check if order is satisfied with the materialized view
+          checkOrdersMatch(orders, viewProjectAttRefMap,
+            compensateTables, queryEC, viewEC, queryTableAliasMap)
 
-        // check is project list match, view's outputs + viewMissedIdentifies >= query's outputs
-        checkProjectListMatch(queryProjectAttRefMap,
-          viewProjectAttRefMap, compensateTables, queryEC, viewEC, queryTableAliasMap)
+          // check is project list match, view's outputs + viewMissedIdentifies >= query's outputs
+          checkProjectListMatch(queryProjectAttRefMap,
+            viewProjectAttRefMap, compensateTables, queryEC, viewEC, queryTableAliasMap)
 
-        // check if group by is satisfied with the materialized view
-        // if satisfied, the result group by expression will be:
-        // 1. empty (expression in query is the same as in materialized view)
-        // 2. non-empty (depend on the result of expression match)
-        val (isGroupByMatch, groupByCompensates) =
+          // check if group by is satisfied with the materialized view
+          // if satisfied, the result group by expression will be:
+          // 1. empty (expression in query is the same as in materialized view)
+          // 2. non-empty (depend on the result of expression match)
+          val (isGroupByMatch, groupByCompensates) =
           isGroupByAttRefsMatch(queryGroupByExprs, viewGroupByExprs,
             compensateTables, viewEC, queryTableAliasMap, viewTableAliasMap)
-        if (!isGroupByMatch) {
-          throw new TryMaterializedFailedException("Group list is not satisfied")
+          if (!isGroupByMatch) {
+            throw new TryMaterializedFailedException("Group list is not satisfied")
+          }
+
+          // get compensate expression for filter
+          val (queryCompensates, unionCompensates) = computeCompensation(
+            getFilterCondition(queryPlan), getFilterCondition(mvPlan),
+            queryEC, viewEC, queryAttRefMap, viewAttRefMap,
+            queryTableAliasMap, viewTableAliasMap)
+
+          // doesn't support union for result
+          if (!unionCompensates.isEmpty) {
+            throw new TryMaterializedFailedException("Filter list is not satisfied")
+          }
+
+          val queryOutputs = MVPlanRewriteRules.filterOutputList(queryPlan, isSort2ndProject)
+
+          // generate the new sql with materialized view,
+          // expIdMap is used if the query is a subquery, eg,
+          // select sub.c1 from (select c1 from t1) sub
+          // expId of c1 in subquery can't be updated, or the query will be failed
+          matchedResultSqls :+= MVPlanRewriteRules.generateMatchedResultSql(queryOutputs,
+            queryTableAliasMap, viewAttAliasMap, viewEC, compensateTables, compensateJoinPreds,
+            queryCompensates, groupByCompensates, orders, materializedView)
+
+          if (MATCH_POLICY_ONCE.equals(analyzer.getSqlConf.materializedViewMatchPolicy)) {
+            loop.break
+          } else if (matchedResultSqls.size >=
+              analyzer.getSqlConf.materializedViewMultiplePolicyLimit) {
+            loop.break
+          }
+        } catch {
+          case ex: Exception =>
+            logWarning(s"Optimize with materialized view ${materializedView.getFullName} failed," +
+              s" ${ex.getMessage}")
         }
-
-        // get compensate expression for filter
-        val (queryCompensates, unionCompensates) = computeCompensation(
-          getFilterCondition(queryPlan), getFilterCondition(mvPlan),
-          queryEC, viewEC, queryAttRefMap, viewAttRefMap,
-          queryTableAliasMap, viewTableAliasMap)
-
-        // doesn't support union for result
-        if (!unionCompensates.isEmpty) {
-          throw new TryMaterializedFailedException("Filter list is not satisfied")
-        }
-
-        val queryOutputs = MVPlanRewriteRules.filterOutputList(queryPlan, isSort2ndProject)
-
-        // generate the new sql with materialized view,
-        // expIdMap is used if the query is a subquery, eg,
-        // select sub.c1 from (select c1 from t1) sub
-        // expId of c1 in subquery can't be updated, or the query will be failed
-        val (replacedSql, expIdMap) = MVPlanRewriteRules.generateReplacedSql(queryOutputs,
-          queryTableAliasMap, viewAttAliasMap, viewEC, compensateTables, compensateJoinPreds,
-          queryCompensates, groupByCompensates, orders, materializedView)
-
-        mvResultPlan = MVPlanRewriteRules.generateNewPlan(analyzer, replacedSql, expIdMap)
-        true
-      } catch {
-        case ex: Exception =>
-          logWarning(s"Optimize with materialized view ${materializedView.name} failed," +
-            s" ${ex.getMessage}")
-          false
-      }
-      if (isSuccess) {
-        return mvResultPlan
       }
     }
-    originPlan
+
+    if (matchedResultSqls.isEmpty) {
+      // there is no materialized view matched, return the origin logical plan
+      originPlan
+    } else {
+      var matchedResultSql = matchedResultSqls(0)
+      // for multiple materialized views matched, pick the best according to cbo
+      if (matchedResultSqls.size > 1) {
+        for (i <- 1 to matchedResultSqls.size - 1) {
+          matchedResultSql = matchedResultSql.compareTo(matchedResultSqls(i))
+        }
+      }
+      // generate the optimized logical plan with the picked materialized view
+      val optimizedPlan = MVPlanRewriteRules.generateNewPlan(analyzer,
+        MVPlanRewriteRules.generateResultSql(matchedResultSql), matchedResultSql.exprIdMap)
+      logInfo(s"Successfully optimize with materialized view: " +
+        s"${matchedResultSql.materializedView.getFullName}")
+      optimizedPlan
+    }
   }
 
   private def splitPlanWithSort(queryPlan: LogicalPlan): (LogicalPlan, Seq[SortOrder], Boolean) = {
