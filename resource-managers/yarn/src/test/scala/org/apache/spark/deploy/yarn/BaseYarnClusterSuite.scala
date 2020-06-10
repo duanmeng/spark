@@ -78,6 +78,7 @@ abstract class BaseYarnClusterSuite
     val yarnConf = newYarnConfig()
     yarnConf.set("yarn.nodemanager.disk-health-checker.max-disk-utilization-per-disk-percentage",
       "100.0")
+    yarnConf.set("yarn.nodemanager.emc.enable", "false")
 
     yarnCluster = new MiniYARNCluster(getClass().getName(), 1, 1, 1)
     yarnCluster.init(yarnConf)

@@ -124,7 +124,7 @@ class YarnAllocatorSuite extends SparkFunSuite with Matchers with BeforeAndAfter
       host: String,
       containerNumber: Int = containerNum,
       resource: Resource = containerResource): Container = {
-    val  containerId: ContainerId = null
+    val  containerId: ContainerId = ContainerId.newContainerId(appAttemptId, containerNum)
     containerNum += 1
     val nodeId = NodeId.newInstance(host, 1000)
     Container.newInstance(containerId, nodeId, "", resource, RM_REQUEST_PRIORITY, null)
