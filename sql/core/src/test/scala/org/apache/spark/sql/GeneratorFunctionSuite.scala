@@ -372,7 +372,7 @@ class GeneratorFunctionSuite extends QueryTest with SharedSparkSession {
     checkAnswer(
       sql("""
         |select f1, a, count(*) from unnest_table
-        |lateral view unnest(r1.m2.f3) as (a) where m1.a1 = '01' group by f1, a
+        |lateral view unnest(r1.m2.f3) as a where m1.a1 = '01' group by f1, a
         |""".stripMargin),
       Row("X", 2, 1) :: Row("X", 3, 1) :: Row("X", 1, 1) ::  Nil
     )
@@ -404,11 +404,11 @@ class GeneratorFunctionSuite extends QueryTest with SharedSparkSession {
       Row(3) :: Row(4) :: Nil
     )
 
-    df.createTempView("unnest_table")
+    df.createTempView("node_record")
     checkAnswer(
       sql(
       """
-        |select f1, node_count(r1.m2.f3, r1.m2) from unnest_table
+        |select f1, node_count(r1.m2.f3, r1.m2) from node_record
         |""".stripMargin),
       Row("X", 1) :: Row("X", 2) ::  Row("Y", 4) :: Nil
     )
