@@ -33,7 +33,7 @@ import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.datasources.{InsertIntoHadoopFsRelationCommand, LogicalRelation}
 import org.apache.spark.sql.hive.execution.{CreateHiveTableAsSelectCommand, InsertIntoHiveTable}
 import org.apache.spark.sql.util.QueryExecutionListener
-import org.apache.spark.util.EventLoop
+import org.apache.spark.util.{EventLoop, Utils}
 
 class TSparkQueryExecutionListener(conf: SparkConf) extends QueryExecutionListener with Logging {
 
@@ -63,8 +63,10 @@ class TSparkQueryExecutionListener(conf: SparkConf) extends QueryExecutionListen
     }
   }
 
-  // start a thread for sending audit log to TDBank asynchronous
-  eventLoop.start
+  if (!Utils.isTesting) {
+    // start a thread for sending audit log to TDBank asynchronous
+    eventLoop.start
+  }
 
   override def onSuccess(funcName: String, qe: QueryExecution, durationNs: Long,
       sqlText: String): Unit = {

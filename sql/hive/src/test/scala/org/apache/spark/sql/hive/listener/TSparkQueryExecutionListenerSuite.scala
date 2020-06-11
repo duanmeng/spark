@@ -21,7 +21,6 @@ import java.net.URI
 import java.text.SimpleDateFormat
 import java.util.Calendar
 
-import org.apache.spark.SparkFunSuite
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{Analyzer, FunctionRegistry}
 import org.apache.spark.sql.catalyst.catalog.{CatalogDatabase, CatalogStorageFormat, CatalogTable, CatalogTableType, InMemoryCatalog, SessionCatalog}
@@ -29,11 +28,11 @@ import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.SparkSqlParser
 import org.apache.spark.sql.execution.datasources.{FindDataSourceTable, ResolveSQLOnFile}
+import org.apache.spark.sql.hive.test.TestHiveSingleton
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.test.SharedSparkSession
 import org.apache.spark.sql.types._
 
-class TSparkQueryExecutionListenerSuite extends SparkFunSuite with SharedSparkSession {
+class TSparkQueryExecutionListenerSuite extends TestHiveSingleton {
 
   val catalog = new InMemoryCatalog
   val parser = new SparkSqlParser(new SQLConf)
@@ -182,7 +181,7 @@ class TSparkQueryExecutionListenerSuite extends SparkFunSuite with SharedSparkSe
       auditComment: String,
       expected: Set[SQLAuditInfo]): Unit = {
     try {
-      val sc = sparkConf
+      val sc = spark.sparkContext.getConf
       sc.set("spark.sql.audit.tdbank.bid", "test_bid")
       sc.set("spark.sql.audit.tdbank.tid", "test_tid")
       val listener = new TSparkQueryExecutionListener(sc)
