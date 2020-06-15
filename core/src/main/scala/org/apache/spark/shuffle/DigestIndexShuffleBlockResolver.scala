@@ -137,6 +137,10 @@ private[spark] class DigestIndexShuffleBlockResolver(
          mapId: Long,
          lengths: Array[Long],
          dataTmp: File): Unit = {
+    if (dataTmp == null) {
+      super.writeIndexFileAndCommit(shuffleId, mapId, lengths, null)
+      return
+    }
     val indexFile = getIndexFile(shuffleId, mapId)
     val digestFile = getDigestFile(shuffleId, mapId)
     val dataFile = getDataFile(shuffleId, mapId)

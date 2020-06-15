@@ -25,6 +25,7 @@ import java.util.concurrent.{CompletableFuture, Semaphore}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
+import io.netty.buffer.Unpooled
 import org.mockito.ArgumentMatchers.{any, eq => meq}
 import org.mockito.Mockito.{mock, times, verify, when}
 import org.mockito.invocation.InvocationOnMock
@@ -32,7 +33,7 @@ import org.scalatest.PrivateMethodTester
 
 import org.apache.spark.{SparkFunSuite, TaskContext}
 import org.apache.spark.network._
-import org.apache.spark.network.buffer.{DigestFileSegmentManagedBuffer, FileSegmentManagedBuffer, ManagedBuffer}
+import org.apache.spark.network.buffer.{DigestFileSegmentManagedBuffer, FileSegmentManagedBuffer, ManagedBuffer, NettyManagedBuffer}
 import org.apache.spark.network.shuffle.{BlockFetchingListener, DownloadFileManager, ExternalBlockStoreClient}
 import org.apache.spark.network.util.{DigestUtils, LimitedInputStream}
 import org.apache.spark.shuffle.FetchFailedException
@@ -1109,7 +1110,7 @@ class ShuffleBlockFetcherIteratorSuite extends SparkFunSuite with PrivateMethodT
     }
     val digest = DigestUtils.getDigest(new ByteArrayInputStream(new Array[Byte](30)))
     val validDigestBuffer = new DigestFileSegmentManagedBuffer(null, dataTmp, 0, 30, digest)
-    val inValidDigestBuffer = new DigestFileSegmentManagedBuffer(null, dataTmp, 0, 29, digest)
+    val inValidDigestBuffer = new NettyManagedBuffer(Unpooled.wrappedBuffer(new Array[Byte](23)))
     val ignoredDigestBuffer = new DigestFileSegmentManagedBuffer(null, dataTmp, 0, 29, -1L)
     val blocks = Map[BlockId, ManagedBuffer](
       ShuffleBlockId(0, 0, 0) -> validDigestBuffer,
@@ -1126,7 +1127,7 @@ class ShuffleBlockFetcherIteratorSuite extends SparkFunSuite with PrivateMethodT
           listener.onBlockFetchSuccess(
             ShuffleBlockId(0, 0, 0).toString, blocks(ShuffleBlockId(0, 0, 0)))
           listener.onBlockFetchSuccess(
-            ShuffleBlockId(0, 1, 0).toString, blocks(ShuffleBlockId(0, 1, 0)))
+            ShuffleBlockId(0, 1, 0).toString, blocks(ShuffleBlockId(0, 1, 0)), digest)
           listener.onBlockFetchSuccess(
             ShuffleBlockId(0, 2, 0).toString, blocks(ShuffleBlockId(0, 2, 0)))
         }
@@ -1161,7 +1162,7 @@ class ShuffleBlockFetcherIteratorSuite extends SparkFunSuite with PrivateMethodT
         Future {
           // Return the first block, and then fail.
           listener.onBlockFetchSuccess(
-            ShuffleBlockId(0, 1, 0).toString, validDigestBuffer)
+            ShuffleBlockId(0, 1, 0).toString, validDigestBuffer, -1)
         }
       })
     // ShuffleBlockId(0, 1, 0) failed at first, fetch ShuffleBlockId(0, 2, 0)

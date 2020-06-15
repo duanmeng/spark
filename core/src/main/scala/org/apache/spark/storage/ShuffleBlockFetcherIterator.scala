@@ -30,7 +30,7 @@ import org.apache.commons.io.IOUtils
 
 import org.apache.spark.{SparkException, TaskContext}
 import org.apache.spark.internal.Logging
-import org.apache.spark.network.buffer.{DigestFileSegmentManagedBuffer, FileSegmentManagedBuffer, ManagedBuffer}
+import org.apache.spark.network.buffer.{DigestFileSegmentManagedBuffer, FileSegmentManagedBuffer, ManagedBuffer, NettyManagedBuffer}
 import org.apache.spark.network.shuffle._
 import org.apache.spark.network.util.{DigestUtils, TransportConf}
 import org.apache.spark.network.util.TransportConf
@@ -212,7 +212,7 @@ final class ShuffleBlockFetcherIterator(
     while (iter.hasNext) {
       val result = iter.next()
       result match {
-        case SuccessFetchResult(_, _, address, _, buf, _) =>
+        case SuccessFetchResult(_, _, address, _, buf, _, _) =>
           if (address != blockManager.blockManagerId) {
             shuffleMetrics.incRemoteBytesRead(buf.size)
             if (buf.isInstanceOf[FileSegmentManagedBuffer]) {
@@ -247,6 +247,10 @@ final class ShuffleBlockFetcherIterator(
 
     val blockFetchingListener = new BlockFetchingListener {
       override def onBlockFetchSuccess(blockId: String, buf: ManagedBuffer): Unit = {
+        onBlockFetchSuccess(blockId, buf, -1L)
+      }
+
+      override def onBlockFetchSuccess(blockId: String, buf: ManagedBuffer, digest: Long): Unit = {
         // Only add the buffer to results queue if the iterator is not zombie,
         // i.e. cleanup() has not been called yet.
         ShuffleBlockFetcherIterator.this.synchronized {
@@ -255,8 +259,9 @@ final class ShuffleBlockFetcherIterator(
             // This needs to be released after use.
             buf.retain()
             remainingBlocks -= blockId
+            logDebug(s"onBlockFetchSuccess buf is ${buf.getClass.getName}")
             results.put(new SuccessFetchResult(BlockId(blockId), infoMap(blockId)._2,
-              address, infoMap(blockId)._1, buf, remainingBlocks.isEmpty))
+              address, infoMap(blockId)._1, buf, remainingBlocks.isEmpty, digest))
             logDebug("remainingBlocks: " + remainingBlocks)
           }
         }
@@ -574,7 +579,8 @@ final class ShuffleBlockFetcherIterator(
       shuffleMetrics.incFetchWaitTime(fetchWaitTime)
 
       result match {
-        case r @ SuccessFetchResult(blockId, mapIndex, address, size, buf, isNetworkReqDone) =>
+        case r @ SuccessFetchResult(
+                    blockId, mapIndex, address, size, buf, isNetworkReqDone, digest) =>
           if (address != blockManager.blockManagerId) {
             if (hostLocalBlocks.contains(blockId -> mapIndex)) {
               shuffleMetrics.incLocalBlocksFetched(1)
@@ -612,9 +618,8 @@ final class ShuffleBlockFetcherIterator(
               s"(expectedApproxSize = $size, isNetworkReqDone=$isNetworkReqDone)"
             throwFetchFailedException(blockId, mapIndex, address, new IOException(msg))
           }
-
           val digestValid =
-            if (digestEnable) checkDigest(buf, blockId, mapIndex, address, size) else true
+            if (digestEnable) checkDigest(buf, blockId, mapIndex, address, size, digest) else true
           if (!digestValid) {
             result = null
           } else {
@@ -773,48 +778,85 @@ final class ShuffleBlockFetcherIterator(
     }
   }
 
+  private[this] def handleDigestCheckFailure(
+      buf: ManagedBuffer,
+      blockId: BlockId,
+      mapIndex: Int,
+      address: BlockManagerId,
+      size: Long,
+      digest: Long,
+      actualDigest: Long,
+      isFileBuffer: Boolean): Unit = {
+    buf.release()
+    val bufferType = if (isFileBuffer) "DigestFileSegmentManagedBuffer" else "NettyManagedBuffer"
+    val e = CheckDigestFailedException(s"The actual digest($actualDigest) " +
+      s"fetch from ${address.toString}:${blockId.name} $bufferType " +
+      s"is not equal to the digest $digest in netty rpc message")
+    if (isFileBuffer || corruptedBlocks.contains(blockId)) {
+      throwFetchFailedException(blockId, mapIndex, address, e)
+    } else {
+      logError("The digest of read data is not correct and fetch again", e)
+      corruptedBlocks += blockId
+      fetchRequests += FetchRequest(
+        address, Array(FetchBlockInfo(blockId, size, mapIndex)))
+    }
+  }
+
+  private[this] def checkDigestImpl(
+      buf: ManagedBuffer,
+      blockId: BlockId,
+      mapIndex: Int,
+      address: BlockManagerId,
+      size: Long,
+      digest: Long,
+      isFileBuffer: Boolean): Boolean = {
+    if (digest < 0) {
+      logWarning(s"Buf is ${buf.getClass.getName} " +
+        s"but digest of ${address.toString}:${blockId.name} " +
+        s"(size = $size) is not generated(value = $digest) ignoring digest checking")
+      true
+    } else {
+      val in = createInputStream(buf, blockId, mapIndex, address)
+      try {
+        val actualDigest = DigestUtils.getDigest(in)
+        val valid = digest == actualDigest
+        logDebug(s"${buf.getClass.getName} ${address.toString} ${blockId.name} actual " +
+          s"digest is $actualDigest and digest is $digest")
+        if (!valid) {
+          handleDigestCheckFailure(
+            buf, blockId, mapIndex, address, size, digest, actualDigest, isFileBuffer)
+        }
+        valid
+      } finally {
+        if (isFileBuffer) {
+          in.close()
+        } else {
+          // in is a ByteBufInputStream created by NettyManagedBuffer,
+          // use reset to restore read index after digest checking
+          in.reset()
+        }
+      }
+    }
+  }
+
   private[this] def checkDigest(
       buf: ManagedBuffer,
       blockId: BlockId,
       mapIndex: Int,
       address: BlockManagerId,
-      size: Long): Boolean = {
+      size: Long,
+      digestOfNettyManagedBuffer: Long): Boolean = {
     buf match {
       case b: DigestFileSegmentManagedBuffer =>
+        assert(digestOfNettyManagedBuffer == -1L)
         val digest = b.getDigest
-        if (digest < 0) {
-          logWarning(s"Digest is enabled but digest of ${address.toString}:${blockId.name}" +
-            s"(size = $size) is not generated(value = $digest) ignoring digest checking")
-          true
-        } else {
-          val in = createInputStream(buf, blockId, mapIndex, address)
-          try {
-            val actualDigest = DigestUtils.getDigest(in)
-            val valid = digest == actualDigest
-            if (!valid) {
-              buf.release()
-              val e = CheckDigestFailedException(s"The actual digest($actualDigest) " +
-                s"of ${address.toString}:${blockId.name} " +
-                s"calculated from segment file ${b.getFile}, " +
-                s"offset=${b.getOffset}, length=${b.getLength} is not equal to " +
-                s"the origin $digest")
-              if (corruptedBlocks.contains(blockId)) {
-                throwFetchFailedException(blockId, mapIndex, address, e)
-              } else {
-                logError("The digest of read data is not correct and fetch again", e)
-                corruptedBlocks += blockId
-                fetchRequests += FetchRequest(
-                  address, Array(FetchBlockInfo(blockId, size, mapIndex)))
-              }
-            }
-            valid
-          } finally {
-            in.close()
-          }
-        }
+        checkDigestImpl(buf, blockId, mapIndex, address, size, digest, true)
+      case _: NettyManagedBuffer =>
+        val digest = digestOfNettyManagedBuffer
+        checkDigestImpl(buf, blockId, mapIndex, address, size, digest, false)
 
       case c =>
-        logDebug(s"Digest is enable but buf of ${address.toString}:${blockId.name} " +
+        logWarning(s"Digest is enable but buf of ${address.toString}:${blockId.name} " +
           s"is not DigestFileSegmentManageBuffer(${c.getClass.getName}) ignore digest checking")
         true
     }
@@ -1042,7 +1084,8 @@ object ShuffleBlockFetcherIterator {
       address: BlockManagerId,
       size: Long,
       buf: ManagedBuffer,
-      isNetworkReqDone: Boolean) extends FetchResult {
+      isNetworkReqDone: Boolean,
+      digest: Long = -1) extends FetchResult {
     require(buf != null)
     require(size >= 0)
   }
