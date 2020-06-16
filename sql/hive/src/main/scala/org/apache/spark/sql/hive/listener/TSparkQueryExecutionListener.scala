@@ -39,7 +39,7 @@ class TSparkQueryExecutionListener(conf: SparkConf) extends QueryExecutionListen
 
   private val sdfTime = new SimpleDateFormat("yyyyMMddHHmmss")
   private val sdfDate = new SimpleDateFormat("yyyyMMdd")
-  private val AUDIT_PLATFORM = "SparkSQL"
+  private val DEFAULT_AUDIT_PLATFORM = "SparkSQL"
   private val ACTION_READ = "read"
   private val ACTION_WRITE = "write"
   private val STATUS_SUCCESS = "success"
@@ -176,8 +176,9 @@ class TSparkQueryExecutionListener(conf: SparkConf) extends QueryExecutionListen
       status: String,
       duration: Long,
       comment: String): Set[SQLAuditInfo] = {
+    val platform = conf.get("spark.sql.audit.platform", DEFAULT_AUDIT_PLATFORM)
     resources.map { resource =>
-      new SQLAuditInfo(UUID.randomUUID.toString, auditDate, auditTime, AUDIT_PLATFORM,
+      new SQLAuditInfo(UUID.randomUUID.toString, auditDate, auditTime, platform,
         auditBatch, user, resource, action, status, duration, comment)
     }
   }
@@ -206,7 +207,8 @@ class SQLAuditInfo(
     other match {
       case sai: SQLAuditInfo =>
         action == sai.action && resource == sai.resource && auditDate == sai.auditDate &&
-          duration == sai.duration && comment == sai.comment && status == sai.status
+          duration == sai.duration && comment == sai.comment && status == sai.status &&
+          auditPlatform == sai.auditPlatform
       case _ => false
     }
   }

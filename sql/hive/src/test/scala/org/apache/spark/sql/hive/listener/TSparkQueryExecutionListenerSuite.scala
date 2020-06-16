@@ -81,97 +81,98 @@ class TSparkQueryExecutionListenerSuite extends TestHiveSingleton {
   }
 
   test("test1") {
-    auditTest("select * from db1.emps", "success", null, Set(createSQLAuditInfo(
-      "db1.emps", "read", "success", "Query")))
+    auditTest("select * from db1.emps", "success", null, "platform", Set(createSQLAuditInfo(
+      "db1.emps", "read", "success", "platform", "Query")))
   }
 
   test("test2") {
-    auditTest("select * from db1.emps", "fail", null, Set(createSQLAuditInfo(
-      "db1.emps", "read", "fail", "Query")))
+    auditTest("select * from db1.emps", "fail", null, "platform", Set(createSQLAuditInfo(
+      "db1.emps", "read", "fail", "platform", "Query")))
   }
 
   test("test3") {
     val testSql = "select * from db1.emps, db1.depts where emps.deptno = depts.deptno"
-    auditTest(testSql, "success", testSql, Set(
-      createSQLAuditInfo("db1.emps", "read", "success", testSql),
-      createSQLAuditInfo("db1.depts", "read", "success", testSql)))
+    auditTest(testSql, "success", testSql, "platform", Set(
+      createSQLAuditInfo("db1.emps", "read", "success", "platform", testSql),
+      createSQLAuditInfo("db1.depts", "read", "success", "platform", testSql)))
   }
 
   test("test4") {
     val testSql = "select * from db1.emps e, db1.depts d where e.deptno = d.deptno"
-    auditTest(testSql, "success", testSql, Set(
-      createSQLAuditInfo("db1.emps", "read", "success", testSql),
-      createSQLAuditInfo("db1.depts", "read", "success", testSql)))
+    auditTest(testSql, "success", testSql, "platform", Set(
+      createSQLAuditInfo("db1.emps", "read", "success", "platform", testSql),
+      createSQLAuditInfo("db1.depts", "read", "success", "platform", testSql)))
   }
 
   test("test5") {
     val testSql = "select * from db1.emps e1, db1.emps e2, db1.depts d" +
       " where e1.deptno = d.deptno and e2.deptno = d.deptno"
-    auditTest(testSql, "success", testSql, Set(
-      createSQLAuditInfo("db1.emps", "read", "success", testSql),
-      createSQLAuditInfo("db1.depts", "read", "success", testSql)))
+    auditTest(testSql, "success", testSql, "platform", Set(
+      createSQLAuditInfo("db1.emps", "read", "success", "platform", testSql),
+      createSQLAuditInfo("db1.depts", "read", "success", "platform", testSql)))
   }
 
   test("test6") {
     val testSql = "select * from db1.emps e1" +
       " where e1.deptno in (select deptno from db1.depts)"
-    auditTest(testSql, "success", testSql, Set(
-      createSQLAuditInfo("db1.emps", "read", "success", testSql),
-      createSQLAuditInfo("db1.depts", "read", "success", testSql)))
+    auditTest(testSql, "success", testSql, "platform", Set(
+      createSQLAuditInfo("db1.emps", "read", "success", "platform", testSql),
+      createSQLAuditInfo("db1.depts", "read", "success", "platform", testSql)))
   }
 
   test("test7") {
     val testSql = "select * from db1.emps e1, (select deptno from db1.depts) t" +
       " where e1.deptno = t.deptno"
-    auditTest(testSql, "success", testSql, Set(
-      createSQLAuditInfo("db1.emps", "read", "success", testSql),
-      createSQLAuditInfo("db1.depts", "read", "success", testSql)))
+    auditTest(testSql, "success", testSql, "platform", Set(
+      createSQLAuditInfo("db1.emps", "read", "success", "platform", testSql),
+      createSQLAuditInfo("db1.depts", "read", "success", "platform", testSql)))
   }
 
   test("test8") {
     val testSql = "select * from db1.emps e1" +
       " where e1.deptno > 1 and e1.deptno in (select deptno from db1.depts)"
-    auditTest(testSql, "success", testSql, Set(
-      createSQLAuditInfo("db1.emps", "read", "success", testSql),
-      createSQLAuditInfo("db1.depts", "read", "success", testSql)))
+    auditTest(testSql, "success", testSql, "platform", Set(
+      createSQLAuditInfo("db1.emps", "read", "success", "platform", testSql),
+      createSQLAuditInfo("db1.depts", "read", "success", "platform", testSql)))
   }
 
   test("test9") {
     val testSql = "select * from db1.emps e1" +
       " where e1.deptno > 1 or e1.deptno in (select deptno from db1.depts)"
-    auditTest(testSql, "success", testSql, Set(
-      createSQLAuditInfo("db1.emps", "read", "success", testSql),
-      createSQLAuditInfo("db1.depts", "read", "success", testSql)))
+    auditTest(testSql, "success", testSql, "platform", Set(
+      createSQLAuditInfo("db1.emps", "read", "success", "platform", testSql),
+      createSQLAuditInfo("db1.depts", "read", "success", "platform", testSql)))
   }
 
   test("test10") {
     val testSql = "select * from db1.emps e1" +
       " where e1.deptno not in (select deptno from db1.depts)"
-    auditTest(testSql, "success", testSql, Set(
-      createSQLAuditInfo("db1.emps", "read", "success", testSql),
-      createSQLAuditInfo("db1.depts", "read", "success", testSql)))
+    auditTest(testSql, "success", testSql, "platform", Set(
+      createSQLAuditInfo("db1.emps", "read", "success", "platform", testSql),
+      createSQLAuditInfo("db1.depts", "read", "success", "platform", testSql)))
   }
 
   test("test11") {
     val testSql = "select * \tfrom \tdb1.emps e1" +
       " where e1.deptno not in (select \tdeptno from db1.depts)"
-    auditTest(testSql, "success", testSql, Set(
-      createSQLAuditInfo("db1.emps", "read", "success", testSql),
-      createSQLAuditInfo("db1.depts", "read", "success", testSql)))
+    auditTest(testSql, "success", testSql, "platform", Set(
+      createSQLAuditInfo("db1.emps", "read", "success", "platform", testSql),
+      createSQLAuditInfo("db1.depts", "read", "success", "platform", testSql)))
   }
 
   test("test12") {
     val testSql = "show databases"
-    auditTest(testSql, "success", testSql, Set.empty[SQLAuditInfo])
+    auditTest(testSql, "success", testSql, "SparkSQL", Set.empty[SQLAuditInfo])
   }
 
   private def createSQLAuditInfo(
       resource: String,
       action: String,
       status: String,
+      platform: String,
       comment: String): SQLAuditInfo = {
     val sdfDate = new SimpleDateFormat("yyyyMMdd")
-    new SQLAuditInfo("", sdfDate.format(Calendar.getInstance.getTime), "", "", "", "",
+    new SQLAuditInfo("", sdfDate.format(Calendar.getInstance.getTime), "", platform, "", "",
       resource, action, status, 1100000000 / 1000000000, comment.replace("\t", " "))
   }
 
@@ -179,11 +180,13 @@ class TSparkQueryExecutionListenerSuite extends TestHiveSingleton {
       auditSql: String,
       auditStatus: String,
       auditComment: String,
+      auditPlatform: String,
       expected: Set[SQLAuditInfo]): Unit = {
     try {
       val sc = spark.sparkContext.getConf
       sc.set("spark.sql.audit.tdbank.bid", "test_bid")
       sc.set("spark.sql.audit.tdbank.tid", "test_tid")
+      sc.set("spark.sql.audit.platform", auditPlatform)
       val listener = new TSparkQueryExecutionListener(sc)
       val unresolved = parser.parsePlan(auditSql)
       val resolved = analyzer.executeAndCheck(unresolved)
