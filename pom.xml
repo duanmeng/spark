@@ -272,7 +272,7 @@
     <repository>
       <id>tencent_snapshot_repo</id>
       <name>Tencent Snapshot Repository</name>
-      <url>https://mirrors.tencent.com/repository/maven/tencent_public_snapshots/</url>
+      <url>http://mirrors.tencent.com/repository/maven/tianqiong-snapshots/</url>
       <releases>
         <enabled>false</enabled>
       </releases>
