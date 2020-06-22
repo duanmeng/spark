@@ -286,18 +286,6 @@
           <version>3.12.2-ts</version>
         </dependency>
         <dependency>
-          <groupId>org.apache.calcite.avatica</groupId>
-          <artifactId>avatica-core</artifactId>
-          <version>${supersql.driver.version}</version>
-          <classifier>shaded</classifier>
-          <exclusions>
-            <exclusion>
-              <groupId>*</groupId>
-              <artifactId>*</artifactId>
-            </exclusion>
-          </exclusions>
-        </dependency>
-        <dependency>
           <groupId>com.tencent.tdw</groupId>
           <artifactId>security-common</artifactId>
           <version>${tdw.security.common.version}</version>
