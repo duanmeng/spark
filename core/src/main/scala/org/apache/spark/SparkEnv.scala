@@ -474,10 +474,6 @@ object SparkEnv extends Logging {
       } else {
         Seq.empty[(String, String)]
       }
-
-    // For developers solving issues from users
-    logInfo(s"spark.hadoop.hadoop.job.ugi: ${conf.get("spark.hadoop.hadoop.job.ugi", "")}")
-
     val sparkProperties = (conf.getAll ++ schedulerMode).sorted
 
     // System properties that are not java classpaths
