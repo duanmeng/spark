@@ -1065,7 +1065,7 @@ object SQLConf {
     .booleanConf
     .createWithDefault(true)
 
-  val SUBQUERY_REUSE_ENABLED = buildConf("spark.sql.subquery.reuse")
+  val SUBQUERY_REUSE_ENABLED = buildConf("spark.sql.execution.subquery.reuse.enabled")
     .internal()
     .doc("When true, the planner will try to find out duplicated subqueries and re-use them.")
     .booleanConf
@@ -1161,6 +1161,18 @@ object SQLConf {
         " operations.")
       .booleanConf
       .createWithDefault(true)
+
+  val STREAMING_UI_ENABLED =
+    buildConf("spark.sql.streaming.ui.enabled")
+      .doc("Whether to run the structured streaming UI for the Spark application.")
+      .booleanConf
+      .createWithDefault(true)
+
+  val STREAMING_UI_INACTIVE_QUERY_RETENTION =
+    buildConf("spark.sql.streaming.ui.numInactiveQueries")
+      .doc("The number of inactive queries to retain for structured streaming ui.")
+      .intConf
+      .createWithDefault(100)
 
   val VARIABLE_SUBSTITUTE_ENABLED =
     buildConf("spark.sql.variable.substitute")
@@ -1740,7 +1752,7 @@ object SQLConf {
       "implementation class names for which Data Source V2 code path is disabled. These data " +
       "sources will fallback to Data Source V1 code path.")
     .stringConf
-    .createWithDefault("kafka")
+    .createWithDefault("avro,csv,json,kafka,orc,parquet,text")
 
   val DISABLED_V2_STREAMING_WRITERS = buildConf("spark.sql.streaming.disabledV2Writers")
     .doc("A comma-separated list of fully qualified data source register class names for which" +
@@ -1975,6 +1987,15 @@ object SQLConf {
       .booleanConf
       .createWithDefault(false)
 
+  val LEGACY_ALLOW_NEGATIVE_SCALE_OF_DECIMAL_ENABLED =
+    buildConf("spark.sql.legacy.allowNegativeScaleOfDecimal.enabled")
+      .internal()
+      .doc("When set to true, negative scale of Decimal type is allowed. For example, " +
+        "the type of number 1E10BD under legacy mode is DecimalType(2, -9), but is " +
+        "Decimal(11, 0) in non legacy mode.")
+      .booleanConf
+      .createWithDefault(false)
+
   val LEGACY_CREATE_HIVE_TABLE_BY_DEFAULT_ENABLED =
     buildConf("spark.sql.legacy.createHiveTableByDefault.enabled")
       .internal()
@@ -2114,7 +2135,7 @@ object SQLConf {
       .createWithDefault(true)
 
   val ADDITIONAL_REMOTE_REPOSITORIES =
-    buildConf("spark.sql.additionalRemoteRepositories")
+    buildConf("spark.sql.maven.additionalRemoteRepositories")
       .doc("A comma-delimited string config of the optional additional remote Maven mirror " +
         "repositories. This is only used for downloading Hive jars in IsolatedClientLoader " +
         "if the default Maven Central repo is unreachable.")
@@ -2142,11 +2163,13 @@ object SQLConf {
       .booleanConf
       .createWithDefault(false)
 
-  val LEGACY_ADD_DIRECTORY_USING_RECURSIVE = buildConf("spark.sql.legacy.addDirectory.recursive")
-    .doc("When true, users can add directory by passing path of a directory to ADD FILE " +
-      "command of SQL. If false, then only a single file can be added.")
-    .booleanConf
-    .createWithDefault(true)
+  val LEGACY_ADD_DIRECTORY_USING_RECURSIVE =
+    buildConf("spark.sql.legacy.addDirectory.recursive.enabled")
+      .internal()
+      .doc("When true, users can add directory by passing path of a directory to ADD FILE " +
+        "command of SQL. If false, then only a single file can be added.")
+      .booleanConf
+      .createWithDefault(true)
 
   val LEGACY_MSSQLSERVER_NUMERIC_MAPPING_ENABLED =
     buildConf("spark.sql.legacy.mssqlserver.numericMapping.enabled")
@@ -2159,6 +2182,16 @@ object SQLConf {
     .doc("When true, enable filter pushdown to CSV datasource.")
     .booleanConf
     .createWithDefault(true)
+
+  val ADD_PARTITION_BATCH_SIZE =
+    buildConf("spark.sql.addPartitionInBatch.size")
+      .internal()
+      .doc("The number of partitions to be handled in one turn when use " +
+        "`AlterTableAddPartitionCommand` to add partitions into table. The smaller " +
+        "batch size is, the less memory is required for the real handler, e.g. Hive Metastore.")
+      .intConf
+      .checkValue(_ > 0, "The value of spark.sql.addPartitionInBatch.size must be positive")
+      .createWithDefault(100)
 
   /**
    * Holds information about keys that have been deprecated.
@@ -2285,6 +2318,10 @@ class SQLConf extends Serializable with Logging {
   def checkpointLocation: Option[String] = getConf(CHECKPOINT_LOCATION)
 
   def isUnsupportedOperationCheckEnabled: Boolean = getConf(UNSUPPORTED_OPERATION_CHECK_ENABLED)
+
+  def isStreamingUIEnabled: Boolean = getConf(STREAMING_UI_ENABLED)
+
+  def streamingUIInactiveQueryRetention: Int = getConf(STREAMING_UI_INACTIVE_QUERY_RETENTION)
 
   def streamingFileCommitProtocolClass: String = getConf(STREAMING_FILE_COMMIT_PROTOCOL_CLASS)
 
@@ -2706,6 +2743,9 @@ class SQLConf extends Serializable with Logging {
 
   def exponentLiteralAsDecimalEnabled: Boolean =
     getConf(SQLConf.LEGACY_EXPONENT_LITERAL_AS_DECIMAL_ENABLED)
+
+  def allowNegativeScaleOfDecimalEnabled: Boolean =
+    getConf(SQLConf.LEGACY_ALLOW_NEGATIVE_SCALE_OF_DECIMAL_ENABLED)
 
   def createHiveTableByDefaultEnabled: Boolean =
     getConf(SQLConf.LEGACY_CREATE_HIVE_TABLE_BY_DEFAULT_ENABLED)
