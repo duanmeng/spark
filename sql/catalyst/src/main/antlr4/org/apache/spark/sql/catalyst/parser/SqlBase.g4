@@ -30,12 +30,6 @@ grammar SqlBase;
   public boolean legacy_exponent_literal_as_decimal_enabled = false;
 
   /**
-   * When false, CREATE TABLE syntax without a provider will use
-   * the value of spark.sql.sources.default as its provider.
-   */
-  public boolean legacy_create_hive_table_by_default_enabled = false;
-
-  /**
    * Verify whether current token is a valid decimal token (which contains dot).
    * Returns true if the character that follows the token is not a digit or letter or underscore.
    *
@@ -64,7 +58,7 @@ grammar SqlBase;
 }
 
 singleStatement
-    : statement EOF
+    : statement ';'* EOF
     ;
 
 singleExpression
@@ -107,12 +101,7 @@ statement
         (RESTRICT | CASCADE)?                                          #dropNamespace
     | SHOW (DATABASES | NAMESPACES) ((FROM | IN) multipartIdentifier)?
         (LIKE? pattern=STRING)?                                        #showNamespaces
-    | {!legacy_create_hive_table_by_default_enabled}?
-        createTableHeader ('(' colTypeList ')')? tableProvider?
-        createTableClauses
-        (AS? query)?                                                   #createTable
-    | {legacy_create_hive_table_by_default_enabled}?
-        createTableHeader ('(' colTypeList ')')? tableProvider
+    | createTableHeader ('(' colTypeList ')')? tableProvider
         createTableClauses
         (AS? query)?                                                   #createTable
     | createTableHeader ('(' columns=colTypeList ')')?
@@ -160,10 +149,7 @@ statement
         UNSET TBLPROPERTIES (IF EXISTS)? tablePropertyList             #unsetTableProperties
     | ALTER TABLE table=multipartIdentifier
         (ALTER | CHANGE) COLUMN? column=multipartIdentifier
-        (TYPE dataType)? commentSpec? colPosition?                     #alterTableColumn
-    | ALTER TABLE table=multipartIdentifier
-        ALTER COLUMN? column=multipartIdentifier
-        setOrDrop=(SET | DROP) NOT NULL                                #alterColumnNullability
+        alterColumnAction?                                             #alterTableAlterColumn
     | ALTER TABLE table=multipartIdentifier partitionSpec?
         CHANGE COLUMN?
         colName=multipartIdentifier colType colPosition?               #hiveChangeColumn
@@ -207,6 +193,8 @@ statement
         ('(' key=tablePropertyKey ')')?                                #showTblProperties
     | SHOW COLUMNS (FROM | IN) table=multipartIdentifier
         ((FROM | IN) ns=multipartIdentifier)?                          #showColumns
+    | SHOW VIEWS ((FROM | IN) multipartIdentifier)?
+        (LIKE? pattern=STRING)?                                        #showViews
     | SHOW PARTITIONS multipartIdentifier partitionSpec?               #showPartitions
     | SHOW identifier? FUNCTIONS
         (LIKE? (multipartIdentifier | pattern=STRING))?                #showFunctions
@@ -771,8 +759,8 @@ primaryExpression
     | CASE value=expression whenClause+ (ELSE elseExpression=expression)? END                  #simpleCase
     | CAST '(' expression AS dataType ')'                                                      #cast
     | STRUCT '(' (argument+=namedExpression (',' argument+=namedExpression)*)? ')'             #struct
-    | (FIRST | FIRST_VALUE) '(' expression ((IGNORE | RESPECT) NULLS)? ')'                     #first
-    | (LAST | LAST_VALUE) '(' expression ((IGNORE | RESPECT) NULLS)? ')'                       #last
+    | FIRST '(' expression (IGNORE NULLS)? ')'                                                 #first
+    | LAST '(' expression (IGNORE NULLS)? ')'                                                  #last
     | POSITION '(' substr=valueExpression IN str=valueExpression ')'                           #position
     | constant                                                                                 #constantDefault
     | ASTERISK                                                                                 #star
@@ -983,6 +971,13 @@ number
     | MINUS? BIGDECIMAL_LITERAL       #bigDecimalLiteral
     ;
 
+alterColumnAction
+    : TYPE dataType
+    | commentSpec
+    | colPosition
+    | setOrDrop=(SET | DROP) NOT NULL
+    ;
+
 // When `SQL_standard_keyword_behavior=true`, there are 2 kinds of keywords in Spark SQL.
 // - Reserved keywords:
 //     Keywords that are reserved and can't be used as identifiers for table, view, column,
@@ -1120,7 +1115,6 @@ ansiNonReserved
     | REPAIR
     | REPLACE
     | RESET
-    | RESPECT
     | RESTRICT
     | REVOKE
     | RLIKE
@@ -1168,6 +1162,7 @@ ansiNonReserved
     | USE
     | VALUES
     | VIEW
+    | VIEWS
     | WINDOW
     ;
 
@@ -1280,7 +1275,6 @@ nonReserved
     | FIELDS
     | FILEFORMAT
     | FIRST
-    | FIRST_VALUE
     | FOLLOWING
     | FOR
     | FOREIGN
@@ -1310,7 +1304,6 @@ nonReserved
     | ITEMS
     | KEYS
     | LAST
-    | LAST_VALUE
     | LATERAL
     | LAZY
     | LEADING
@@ -1374,7 +1367,6 @@ nonReserved
     | REPAIR
     | REPLACE
     | RESET
-    | RESPECT
     | RESTRICT
     | REVOKE
     | RLIKE
@@ -1434,6 +1426,7 @@ nonReserved
     | USER
     | VALUES
     | VIEW
+    | VIEWS
     | WHEN
     | WHERE
     | WINDOW
@@ -1531,7 +1524,6 @@ FIELDS: 'FIELDS';
 FILTER: 'FILTER';
 FILEFORMAT: 'FILEFORMAT';
 FIRST: 'FIRST';
-FIRST_VALUE: 'FIRST_VALUE';
 FOLLOWING: 'FOLLOWING';
 FOR: 'FOR';
 FOREIGN: 'FOREIGN';
@@ -1565,7 +1557,6 @@ ITEMS: 'ITEMS';
 JOIN: 'JOIN';
 KEYS: 'KEYS';
 LAST: 'LAST';
-LAST_VALUE: 'LAST_VALUE';
 LATERAL: 'LATERAL';
 LAZY: 'LAZY';
 LEADING: 'LEADING';
@@ -1632,7 +1623,6 @@ RENAME: 'RENAME';
 REPAIR: 'REPAIR';
 REPLACE: 'REPLACE';
 RESET: 'RESET';
-RESPECT: 'RESPECT';
 RESTRICT: 'RESTRICT';
 REVOKE: 'REVOKE';
 RIGHT: 'RIGHT';
@@ -1697,6 +1687,7 @@ USER: 'USER';
 USING: 'USING';
 VALUES: 'VALUES';
 VIEW: 'VIEW';
+VIEWS: 'VIEWS';
 WHEN: 'WHEN';
 WHERE: 'WHERE';
 WINDOW: 'WINDOW';
@@ -1793,7 +1784,7 @@ fragment LETTER
     ;
 
 SIMPLE_COMMENT
-    : '--' ~[\r\n]* '\r'? '\n'? -> channel(HIDDEN)
+    : '--' ('\\\n' | ~[\r\n])* '\r'? '\n'? -> channel(HIDDEN)
     ;
 
 BRACKETED_EMPTY_COMMENT

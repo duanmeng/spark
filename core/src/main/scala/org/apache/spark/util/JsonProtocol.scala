@@ -22,7 +22,7 @@ import java.util.{Properties, UUID}
 import scala.collection.JavaConverters._
 import scala.collection.Map
 
-import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.json4s.DefaultFormats
 import org.json4s.JsonAST._
@@ -59,6 +59,7 @@ private[spark] object JsonProtocol {
   private implicit val format = DefaultFormats
 
   private val mapper = new ObjectMapper().registerModule(DefaultScalaModule)
+    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
   /** ------------------------------------------------- *
    * JSON serialization methods for SparkListenerEvents |
@@ -474,6 +475,7 @@ private[spark] object JsonProtocol {
     ("Callsite" -> rddInfo.callSite) ~
     ("Parent IDs" -> parentIds) ~
     ("Storage Level" -> storageLevel) ~
+    ("Barrier" -> rddInfo.isBarrier) ~
     ("Number of Partitions" -> rddInfo.numPartitions) ~
     ("Number of Cached Partitions" -> rddInfo.numCachedPartitions) ~
     ("Memory Size" -> rddInfo.memSize) ~

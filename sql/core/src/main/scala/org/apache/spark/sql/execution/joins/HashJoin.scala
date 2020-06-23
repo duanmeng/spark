@@ -48,11 +48,11 @@ trait HashJoin {
     } else "None"
 
     s"""
-       |(${ExplainUtils.getOpId(this)}) $nodeName ${ExplainUtils.getCodegenId(this)}
-       |Left keys: ${leftKeys}
-       |Right keys: ${rightKeys}
-       |Join condition: ${joinCondStr}
-     """.stripMargin
+       |$formattedNodeName
+       |${ExplainUtils.generateFieldString("Left keys", leftKeys)}
+       |${ExplainUtils.generateFieldString("Right keys", rightKeys)}
+       |${ExplainUtils.generateFieldString("Join condition", joinCondStr)}
+       |""".stripMargin
   }
 
   override def output: Seq[Attribute] = {

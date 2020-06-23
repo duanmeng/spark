@@ -59,10 +59,22 @@ class CsvFunctionsSuite extends QueryTest with SharedSparkSession {
     val df2 = df
       .select(from_csv($"value", schemaWithCorrField1, Map(
         "mode" -> "Permissive", "columnNameOfCorruptRecord" -> columnNameOfCorruptRecord)))
-
-    checkAnswer(df2, Seq(
-      Row(Row(0, null, "0,2013-111-11 12:13:14")),
-      Row(Row(1, java.sql.Date.valueOf("1983-08-04"), null))))
+    withSQLConf(SQLConf.LEGACY_TIME_PARSER_POLICY.key -> "corrected") {
+      checkAnswer(df2, Seq(
+        Row(Row(0, null, "0,2013-111-11 12:13:14")),
+        Row(Row(1, java.sql.Date.valueOf("1983-08-04"), null))))
+    }
+    withSQLConf(SQLConf.LEGACY_TIME_PARSER_POLICY.key -> "legacy") {
+      checkAnswer(df2, Seq(
+        Row(Row(0, java.sql.Date.valueOf("2022-03-11"), null)),
+        Row(Row(1, java.sql.Date.valueOf("1983-08-04"), null))))
+    }
+    withSQLConf(SQLConf.LEGACY_TIME_PARSER_POLICY.key -> "exception") {
+      val msg = intercept[SparkException] {
+        df2.collect()
+      }.getCause.getMessage
+      assert(msg.contains("Fail to parse"))
+    }
   }
 
   test("schema_of_csv - infers schemas") {
@@ -199,5 +211,17 @@ class CsvFunctionsSuite extends QueryTest with SharedSparkSession {
         Map.empty[String, String].asJava)).collect()
       assert(readback(0).getAs[Row](0).getAs[Date](0).getTime >= 0)
     }
+  }
+
+  test("optional datetime parser does not affect csv time formatting") {
+    val s = "2015-08-26 12:34:46"
+    def toDF(p: String): DataFrame = sql(
+      s"""
+         |SELECT
+         | to_csv(
+         |   named_struct('time', timestamp'$s'), map('timestampFormat', "$p")
+         | )
+         | """.stripMargin)
+    checkAnswer(toDF("yyyy-MM-dd'T'HH:mm:ss.SSSXXX"), toDF("yyyy-MM-dd'T'HH:mm:ss[.SSS][XXX]"))
   }
 }

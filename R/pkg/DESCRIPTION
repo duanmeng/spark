@@ -23,7 +23,7 @@ Suggests:
     testthat,
     e1071,
     survival,
-    arrow
+    arrow (>= 0.15.1)
 Collate:
     'schema.R'
     'generics.R'
@@ -62,3 +62,4 @@ Collate:
 RoxygenNote: 5.0.1
 VignetteBuilder: knitr
 NeedsCompilation: no
+Encoding: UTF-8

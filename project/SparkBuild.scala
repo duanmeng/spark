@@ -226,7 +226,7 @@ object SparkBuild extends PomBuild {
     resolvers := Seq(
       // Google Mirror of Maven Central, placed first so that it's used instead of flaky Maven Central.
       // See https://storage-download.googleapis.com/maven-central/index.html for more info.
-      "gcs-maven-central-mirror" at "https://maven-central.storage-download.googleapis.com/repos/central/data/",
+      "gcs-maven-central-mirror" at "https://maven-central.storage-download.googleapis.com/maven2/",
       DefaultMavenRepository,
       Resolver.mavenLocal,
       Resolver.file("local", file(Path.userHome.absolutePath + "/.ivy2/local"))(Resolver.ivyStylePatterns)
@@ -478,7 +478,9 @@ object SparkParallelTestGrouping {
     "org.apache.spark.sql.hive.thriftserver.ThriftServerQueryTestSuite",
     "org.apache.spark.sql.hive.thriftserver.SparkSQLEnvSuite",
     "org.apache.spark.sql.hive.thriftserver.ui.ThriftServerPageSuite",
-    "org.apache.spark.sql.hive.thriftserver.ui.HiveThriftServer2ListenerSuite"
+    "org.apache.spark.sql.hive.thriftserver.ui.HiveThriftServer2ListenerSuite",
+    "org.apache.spark.sql.hive.thriftserver.ThriftServerWithSparkContextSuite",
+    "org.apache.spark.sql.kafka010.KafkaDelegationTokenSuite"
   )
 
   private val DEFAULT_TEST_GROUP = "default_test_group"
@@ -620,7 +622,10 @@ object KubernetesIntegrationTests {
 object DependencyOverrides {
   lazy val settings = Seq(
     dependencyOverrides += "com.google.guava" % "guava" % "14.0.1",
-    dependencyOverrides += "jline" % "jline" % "2.14.6")
+    dependencyOverrides += "commons-io" % "commons-io" % "2.4",
+    dependencyOverrides += "xerces" % "xercesImpl" % "2.12.0",
+    dependencyOverrides += "jline" % "jline" % "2.14.6",
+    dependencyOverrides += "org.apache.avro" % "avro" % "1.8.2")
 }
 
 /**
@@ -819,8 +824,10 @@ object Unidoc {
       .map(_.filterNot(_.getName.contains("$")))
       .map(_.filterNot(_.getCanonicalPath.contains("org/apache/spark/deploy")))
       .map(_.filterNot(_.getCanonicalPath.contains("org/apache/spark/examples")))
+      .map(_.filterNot(_.getCanonicalPath.contains("org/apache/spark/internal")))
       .map(_.filterNot(_.getCanonicalPath.contains("org/apache/spark/memory")))
       .map(_.filterNot(_.getCanonicalPath.contains("org/apache/spark/network")))
+      .map(_.filterNot(_.getCanonicalPath.contains("org/apache/spark/rpc")))
       .map(_.filterNot(f =>
         f.getCanonicalPath.contains("org/apache/spark/shuffle") &&
         !f.getCanonicalPath.contains("org/apache/spark/shuffle/api")))
@@ -959,6 +966,9 @@ object TestSettings {
       "2.12"
     }
      */
+
+  private val defaultExcludedTags = Seq("org.apache.spark.tags.ChromeUITest")
+
   lazy val settings = Seq (
     // Fork new JVMs for tests and set Java options for those
     fork := true,
@@ -996,6 +1006,10 @@ object TestSettings {
       sys.props.get("test.exclude.tags").map { tags =>
         tags.split(",").flatMap { tag => Seq("-l", tag) }.toSeq
       }.getOrElse(Nil): _*),
+    testOptions in Test += Tests.Argument(TestFrameworks.ScalaTest,
+      sys.props.get("test.default.exclude.tags").map(tags => tags.split(",").toSeq)
+        .map(tags => tags.filter(!_.trim.isEmpty)).getOrElse(defaultExcludedTags)
+        .flatMap(tag => Seq("-l", tag)): _*),
     testOptions in Test += Tests.Argument(TestFrameworks.JUnit,
       sys.props.get("test.exclude.tags").map { tags =>
         Seq("--exclude-categories=" + tags)

@@ -481,6 +481,28 @@ class JsonProtocolSuite extends SparkFunSuite {
     testAccumValue(Some("anything"), blocks, JString(blocks.toString))
     testAccumValue(Some("anything"), 123, JString("123"))
   }
+
+  test("SPARK-30936: forwards compatibility - ignore unknown fields") {
+    val expected = TestListenerEvent("foo", 123)
+    val unknownFieldsJson =
+      """{
+        |  "Event" : "org.apache.spark.util.TestListenerEvent",
+        |  "foo" : "foo",
+        |  "bar" : 123,
+        |  "unknown" : "unknown"
+        |}""".stripMargin
+    assert(JsonProtocol.sparkEventFromJson(parse(unknownFieldsJson)) === expected)
+  }
+
+  test("SPARK-30936: backwards compatibility - set default values for missing fields") {
+    val expected = TestListenerEvent("foo", 0)
+    val unknownFieldsJson =
+      """{
+        |  "Event" : "org.apache.spark.util.TestListenerEvent",
+        |  "foo" : "foo"
+        |}""".stripMargin
+    assert(JsonProtocol.sparkEventFromJson(parse(unknownFieldsJson)) === expected)
+  }
 }
 
 
@@ -1041,6 +1063,7 @@ private[spark] object JsonProtocolSuite extends Assertions {
       |          "Deserialized": true,
       |          "Replication": 1
       |        },
+      |        "Barrier" : false,
       |        "Number of Partitions": 201,
       |        "Number of Cached Partitions": 301,
       |        "Memory Size": 401,
@@ -1563,6 +1586,7 @@ private[spark] object JsonProtocolSuite extends Assertions {
       |            "Deserialized": true,
       |            "Replication": 1
       |          },
+      |          "Barrier" : false,
       |          "Number of Partitions": 200,
       |          "Number of Cached Partitions": 300,
       |          "Memory Size": 400,
@@ -1607,6 +1631,7 @@ private[spark] object JsonProtocolSuite extends Assertions {
       |            "Deserialized": true,
       |            "Replication": 1
       |          },
+      |          "Barrier" : false,
       |          "Number of Partitions": 400,
       |          "Number of Cached Partitions": 600,
       |          "Memory Size": 800,
@@ -1623,6 +1648,7 @@ private[spark] object JsonProtocolSuite extends Assertions {
       |            "Deserialized": true,
       |            "Replication": 1
       |          },
+      |          "Barrier" : false,
       |          "Number of Partitions": 401,
       |          "Number of Cached Partitions": 601,
       |          "Memory Size": 801,
@@ -1667,6 +1693,7 @@ private[spark] object JsonProtocolSuite extends Assertions {
       |            "Deserialized": true,
       |            "Replication": 1
       |          },
+      |          "Barrier" : false,
       |          "Number of Partitions": 600,
       |          "Number of Cached Partitions": 900,
       |          "Memory Size": 1200,
@@ -1683,6 +1710,7 @@ private[spark] object JsonProtocolSuite extends Assertions {
       |            "Deserialized": true,
       |            "Replication": 1
       |          },
+      |          "Barrier" : false,
       |          "Number of Partitions": 601,
       |          "Number of Cached Partitions": 901,
       |          "Memory Size": 1201,
@@ -1699,6 +1727,7 @@ private[spark] object JsonProtocolSuite extends Assertions {
       |            "Deserialized": true,
       |            "Replication": 1
       |          },
+      |          "Barrier" : false,
       |          "Number of Partitions": 602,
       |          "Number of Cached Partitions": 902,
       |          "Memory Size": 1202,
@@ -1743,6 +1772,7 @@ private[spark] object JsonProtocolSuite extends Assertions {
       |            "Deserialized": true,
       |            "Replication": 1
       |          },
+      |          "Barrier" : false,
       |          "Number of Partitions": 800,
       |          "Number of Cached Partitions": 1200,
       |          "Memory Size": 1600,
@@ -1759,6 +1789,7 @@ private[spark] object JsonProtocolSuite extends Assertions {
       |            "Deserialized": true,
       |            "Replication": 1
       |          },
+      |          "Barrier" : false,
       |          "Number of Partitions": 801,
       |          "Number of Cached Partitions": 1201,
       |          "Memory Size": 1601,
@@ -1775,6 +1806,7 @@ private[spark] object JsonProtocolSuite extends Assertions {
       |            "Deserialized": true,
       |            "Replication": 1
       |          },
+      |          "Barrier" : false,
       |          "Number of Partitions": 802,
       |          "Number of Cached Partitions": 1202,
       |          "Memory Size": 1602,
@@ -1791,6 +1823,7 @@ private[spark] object JsonProtocolSuite extends Assertions {
       |            "Deserialized": true,
       |            "Replication": 1
       |          },
+      |          "Barrier" : false,
       |          "Number of Partitions": 803,
       |          "Number of Cached Partitions": 1203,
       |          "Memory Size": 1603,
@@ -2310,3 +2343,5 @@ private[spark] object JsonProtocolSuite extends Assertions {
       |}
     """.stripMargin
 }
+
+case class TestListenerEvent(foo: String, bar: Int) extends SparkListenerEvent

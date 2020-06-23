@@ -117,7 +117,8 @@ private[this] object SharedFactory {
     Examples:
       > SELECT _FUNC_('{"a":"b"}', '$.a');
        b
-  """)
+  """,
+  group = "json_funcs")
 case class GetJsonObject(json: Expression, path: Expression)
   extends BinaryExpression with ExpectsInputTypes with CodegenFallback {
 
@@ -340,7 +341,8 @@ case class GetJsonObject(json: Expression, path: Expression)
     Examples:
       > SELECT _FUNC_('{"a":1, "b":2}', 'a', 'b');
        1	2
-  """)
+  """,
+  group = "json_funcs")
 // scalastyle:on line.size.limit line.contains.tab
 case class JsonTuple(children: Seq[Expression])
   extends Generator with CodegenFallback {
@@ -508,6 +510,7 @@ case class JsonTuple(children: Seq[Expression])
       > SELECT _FUNC_('{"time":"26/08/2015"}', 'time Timestamp', map('timestampFormat', 'dd/MM/yyyy'));
        {"time":2015-08-26 00:00:00}
   """,
+  group = "json_funcs",
   since = "2.2.0")
 // scalastyle:on line.size.limit
 case class JsonToStructs(
@@ -627,6 +630,7 @@ case class JsonToStructs(
       > SELECT _FUNC_(array((map('a', 1))));
        [{"a":1}]
   """,
+  group = "json_funcs",
   since = "2.2.0")
 // scalastyle:on line.size.limit
 case class StructsToJson(
@@ -736,6 +740,7 @@ case class StructsToJson(
       > SELECT _FUNC_('[{"col":01}]', map('allowNumericLeadingZeros', 'true'));
        array<struct<col:bigint>>
   """,
+  group = "json_funcs",
   since = "2.4.0")
 case class SchemaOfJson(
     child: Expression,
@@ -773,7 +778,18 @@ case class SchemaOfJson(
   override def eval(v: InternalRow): Any = {
     val dt = Utils.tryWithResource(CreateJacksonParser.utf8String(jsonFactory, json)) { parser =>
       parser.nextToken()
-      jsonInferSchema.inferField(parser)
+      // To match with schema inference from JSON datasource.
+      jsonInferSchema.inferField(parser) match {
+        case st: StructType =>
+          jsonInferSchema.canonicalizeType(st, jsonOptions).getOrElse(StructType(Nil))
+        case at: ArrayType if at.elementType.isInstanceOf[StructType] =>
+          jsonInferSchema
+            .canonicalizeType(at.elementType, jsonOptions)
+            .map(ArrayType(_, containsNull = at.containsNull))
+            .getOrElse(ArrayType(StructType(Nil), containsNull = at.containsNull))
+        case other: DataType =>
+          jsonInferSchema.canonicalizeType(other, jsonOptions).getOrElse(StringType)
+      }
     }
 
     UTF8String.fromString(dt.catalogString)
