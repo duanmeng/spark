@@ -246,11 +246,13 @@ class DataFrameCallbackSuite extends QueryTest
   test("get observable metrics by callback") {
     val metricMaps = ArrayBuffer.empty[Map[String, Row]]
     val listener = new QueryExecutionListener {
-      override def onSuccess(funcName: String, qe: QueryExecution, duration: Long): Unit = {
+      override def onSuccess(funcName: String, qe: QueryExecution,
+          duration: Long, sqlText: String): Unit = {
         metricMaps += qe.observedMetrics
       }
 
-      override def onFailure(funcName: String, qe: QueryExecution, exception: Exception): Unit = {
+      override def onFailure(funcName: String, qe: QueryExecution,
+          exception: Exception, sqlText: String): Unit = {
         // No-op
       }
     }
@@ -294,10 +296,12 @@ class DataFrameCallbackSuite extends QueryTest
   testQuietly("SPARK-31144: QueryExecutionListener should receive `java.lang.Error`") {
     var e: Exception = null
     val listener = new QueryExecutionListener {
-      override def onFailure(funcName: String, qe: QueryExecution, exception: Exception): Unit = {
+      override def onFailure(funcName: String, qe: QueryExecution,
+          exception: Exception, sqlText: String): Unit = {
         e = exception
       }
-      override def onSuccess(funcName: String, qe: QueryExecution, duration: Long): Unit = {}
+      override def onSuccess(funcName: String, qe: QueryExecution,
+          duration: Long, sqlText: String): Unit = {}
     }
     spark.listenerManager.register(listener)
 

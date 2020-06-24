@@ -278,11 +278,13 @@ class DataFrameReaderWriterSuite extends QueryTest with SharedSparkSession with 
   test("save mode for data source v2") {
     var plan: LogicalPlan = null
     val listener = new QueryExecutionListener {
-      override def onSuccess(funcName: String, qe: QueryExecution, durationNs: Long): Unit = {
+      override def onSuccess(funcName: String, qe: QueryExecution,
+          durationNs: Long, sqlText: String): Unit = {
         plan = qe.analyzed
 
       }
-      override def onFailure(funcName: String, qe: QueryExecution, exception: Exception): Unit = {}
+      override def onFailure(funcName: String, qe: QueryExecution,
+          exception: Exception, sqlText: String): Unit = {}
     }
 
     spark.listenerManager.register(listener)

@@ -21,7 +21,7 @@ import java.net.URI
 import java.text.SimpleDateFormat
 import java.util.Calendar
 
-import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.{QueryPlanningTracker, TableIdentifier}
 import org.apache.spark.sql.catalyst.analysis.{Analyzer, FunctionRegistry}
 import org.apache.spark.sql.catalyst.catalog.{CatalogDatabase, CatalogStorageFormat, CatalogTable, CatalogTableType, InMemoryCatalog, SessionCatalog}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
@@ -189,7 +189,7 @@ class TSparkQueryExecutionListenerSuite extends TestHiveSingleton {
       sc.set("spark.sql.audit.platform", auditPlatform)
       val listener = new TSparkQueryExecutionListener(sc)
       val unresolved = parser.parsePlan(auditSql)
-      val resolved = analyzer.executeAndCheck(unresolved)
+      val resolved = analyzer.executeAndCheck(unresolved, new QueryPlanningTracker)
       val sqlAuditInfos = listener.createSQLAuditInfos(
         resolved, auditStatus, 1200000000, auditComment)
       compareAuditInfos(sqlAuditInfos, expected)

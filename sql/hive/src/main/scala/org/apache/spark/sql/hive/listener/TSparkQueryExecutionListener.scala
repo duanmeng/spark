@@ -103,7 +103,7 @@ class TSparkQueryExecutionListener(conf: SparkConf) extends QueryExecutionListen
         ("DropTable", Set.empty[String], Set(d.tableName.unquotedString))
       case CreateTableCommand(table, _) =>
         ("CreateTable", Set.empty[String], Set(table.identifier.unquotedString))
-      case CreateTableLikeCommand(targetTable, sourceTable, _, _) =>
+      case CreateTableLikeCommand(targetTable, sourceTable, _, _, _, _) =>
         ("CreateTableLike", Set(sourceTable.unquotedString), Set(targetTable.unquotedString))
       case _ =>
         ("Query", getTables(plan), Set.empty[String])
@@ -124,8 +124,8 @@ class TSparkQueryExecutionListener(conf: SparkConf) extends QueryExecutionListen
     var tableSet = Set.empty[String]
     plan.foreach {
       case Filter(condition, _) => tableSet ++= getTablesFromExpression(condition)
-      case SubqueryAlias(name, HiveTableRelation(_, _, _) | LogicalRelation(_, _, _, _)) =>
-        tableSet += name.unquotedString
+      case SubqueryAlias(name, HiveTableRelation(_, _, _, _, _) | LogicalRelation(_, _, _, _)) =>
+        tableSet += name.toString
       case _ =>
     }
     tableSet

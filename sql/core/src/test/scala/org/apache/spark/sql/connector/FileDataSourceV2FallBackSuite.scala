@@ -162,11 +162,13 @@ class FileDataSourceV2FallBackSuite extends QueryTest with SharedSparkSession {
           override def onFailure(
               funcName: String,
               qe: QueryExecution,
-              exception: Exception): Unit = {
+              exception: Exception,
+              sqlText: String): Unit = {
             exceptions += funcName -> exception
           }
 
-          override def onSuccess(funcName: String, qe: QueryExecution, duration: Long): Unit = {
+          override def onSuccess(funcName: String, qe: QueryExecution,
+              duration: Long, sqlText: String): Unit = {
             commands += funcName -> qe.logical
           }
         }

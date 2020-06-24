@@ -17,9 +17,9 @@
 
 package org.apache.spark.sql
 
-import org.apache.spark.sql.test.SharedSQLContext
+import org.apache.spark.sql.test.SharedSparkSession
 
-class RecordFunctionSuite extends QueryTest with SharedSQLContext {
+class RecordFunctionSuite extends QueryTest with SharedSparkSession {
 
   test("record_every") {
     val df: DataFrame = spark.read.json(testFile("test-data/nest-test-data.json"))

@@ -28,8 +28,10 @@ import org.apache.spark.sql.streaming.StreamingQueryListener
 import org.apache.spark.sql.util.QueryExecutionListener
 
 class DummyQueryExecutionListener extends QueryExecutionListener {
-  override def onSuccess(funcName: String, qe: QueryExecution, durationNs: Long): Unit = {}
-  override def onFailure(funcName: String, qe: QueryExecution, exception: Exception): Unit = {}
+  override def onSuccess(funcName: String, qe: QueryExecution,
+    durationNs: Long, sqlText: String): Unit = {}
+  override def onFailure(funcName: String, qe: QueryExecution,
+    exception: Exception, sqlText: String): Unit = {}
 }
 
 class DummyStreamingQueryListener extends StreamingQueryListener {
