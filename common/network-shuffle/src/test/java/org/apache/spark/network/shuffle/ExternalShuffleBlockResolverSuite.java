@@ -25,6 +25,7 @@ import java.nio.charset.StandardCharsets;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.CharStreams;
+import org.apache.commons.lang3.SystemUtils;
 import org.apache.spark.network.shuffle.protocol.ExecutorShuffleInfo;
 import org.apache.spark.network.util.DigestUtils;
 import org.apache.spark.network.util.MapConfigProvider;
@@ -147,12 +148,19 @@ public class ExternalShuffleBlockResolverSuite {
 
   @Test
   public void testNormalizeAndInternPathname() {
-    assertPathsMatch("/foo", "bar", "baz", "/foo/bar/baz");
-    assertPathsMatch("//foo/", "bar/", "//baz", "/foo/bar/baz");
-    assertPathsMatch("foo", "bar", "baz///", "foo/bar/baz");
-    assertPathsMatch("/foo/", "/bar//", "/baz", "/foo/bar/baz");
-    assertPathsMatch("/", "", "", "/");
-    assertPathsMatch("/", "/", "/", "/");
+    String sep = File.separator;
+    String expectedPathname = sep + "foo" + sep + "bar" + sep + "baz";
+    assertPathsMatch("/foo", "bar", "baz", expectedPathname);
+    assertPathsMatch("//foo/", "bar/", "//baz", expectedPathname);
+    assertPathsMatch("/foo/", "/bar//", "/baz", expectedPathname);
+    assertPathsMatch("foo", "bar", "baz///", "foo" + sep + "bar" + sep + "baz");
+    assertPathsMatch("/", "", "", sep);
+    assertPathsMatch("/", "/", "/", sep);
+    if (SystemUtils.IS_OS_WINDOWS) {
+      assertPathsMatch("/foo\\/", "bar", "baz", expectedPathname);
+    } else {
+      assertPathsMatch("/foo\\/", "bar", "baz", sep + "foo\\" + sep + "bar" + sep + "baz");
+    }
   }
 
   private void assertPathsMatch(String p1, String p2, String p3, String expectedPathname) {
@@ -161,7 +169,7 @@ public class ExternalShuffleBlockResolverSuite {
     assertEquals(expectedPathname, normPathname);
     File file = new File(normPathname);
     String returnedPath = file.getPath();
-    assertTrue(normPathname == returnedPath);
+    assertEquals(normPathname, returnedPath);
   }
 
   @Test

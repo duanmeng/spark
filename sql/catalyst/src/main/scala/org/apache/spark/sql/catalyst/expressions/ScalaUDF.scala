@@ -24,7 +24,8 @@ import org.apache.spark.sql.catalyst.{CatalystTypeConverters, InternalRow}
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions.codegen._
 import org.apache.spark.sql.catalyst.expressions.codegen.Block._
-import org.apache.spark.sql.types.{AbstractDataType, AnyDataType, DataType}
+import org.apache.spark.sql.types.{AbstractDataType, AnyDataType, DataType, UserDefinedType}
+import org.apache.spark.util.Utils
 
 /**
  * User-defined function.
@@ -55,6 +56,12 @@ case class ScalaUDF(
   override lazy val deterministic: Boolean = udfDeterministic && children.forall(_.deterministic)
 
   override def toString: String = s"${udfName.getOrElse("UDF")}(${children.mkString(", ")})"
+
+  override lazy val canonicalized: Expression = {
+    // SPARK-32307: `ExpressionEncoder` can't be canonicalized, and technically we don't
+    // need it to identify a `ScalaUDF`.
+    Canonicalize.execute(copy(children = children.map(_.canonicalized), inputEncoders = Nil))
+  }
 
   /**
    * The analyzer should be aware of Scala primitive types so as to make the
@@ -1115,7 +1122,7 @@ case class ScalaUDF(
   private[this] val resultConverter = CatalystTypeConverters.createToCatalystConverter(dataType)
 
   lazy val udfErrorMessage = {
-    val funcCls = function.getClass.getSimpleName
+    val funcCls = Utils.getSimpleName(function.getClass)
     val inputTypes = children.map(_.dataType.catalogString).mkString(", ")
     val outputType = dataType.catalogString
     s"Failed to execute user defined function($funcCls: ($inputTypes) => $outputType)"
