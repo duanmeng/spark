@@ -506,10 +506,12 @@ class ClientSuite extends SparkFunSuite with Matchers {
         populateClasspath(args, conf, sparkConf, env)
         if (populateHadoopClassPath) {
           classpath(env) should
-            (contain (Fixtures.knownYARNAppCP) and contain (Fixtures.knownMRAppCP))
+            (contain (Fixtures.knownYARNAppCP.get.head) and
+              contain (Fixtures.knownMRAppCP.get.head))
         } else {
           classpath(env) should
-            (not contain (Fixtures.knownYARNAppCP) and not contain (Fixtures.knownMRAppCP))
+            (not contain (Fixtures.knownYARNAppCP.get.head) and
+              not contain (Fixtures.knownMRAppCP.get.head))
         }
       }
     }

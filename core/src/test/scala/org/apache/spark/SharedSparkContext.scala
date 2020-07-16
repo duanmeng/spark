@@ -17,8 +17,11 @@
 
 package org.apache.spark
 
+import org.apache.hadoop.security.UserGroupInformation
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
 import org.scalatest.Suite
+
+import org.apache.spark.deploy.SparkHadoopUtil
 
 /** Shares a local `SparkContext` between all tests in a suite and closes it at the end */
 trait SharedSparkContext extends BeforeAndAfterAll with BeforeAndAfterEach { self: Suite =>
@@ -46,6 +49,7 @@ trait SharedSparkContext extends BeforeAndAfterAll with BeforeAndAfterEach { sel
   override def beforeAll(): Unit = {
     super.beforeAll()
     initializeContext()
+    UserGroupInformation.setConfiguration(SparkHadoopUtil.newConfiguration(conf))
   }
 
   override def afterAll(): Unit = {
