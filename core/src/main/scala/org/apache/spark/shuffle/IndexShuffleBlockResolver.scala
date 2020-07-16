@@ -104,9 +104,9 @@ private[spark] class IndexShuffleBlockResolver(
   }
 
   /**
-    * Write an index file with the offsets of each block, plus a final offset at the end for the
-    * end of the output file.
-    */
+   * Write an index file with the offsets of each block, plus a final offset at the end for the
+   * end of the output file.
+   */
   protected def writeIndexFile(
     indexFile: File,
     lengths: Array[Long]): Unit = {

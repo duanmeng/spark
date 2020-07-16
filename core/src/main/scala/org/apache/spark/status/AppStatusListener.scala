@@ -1125,7 +1125,8 @@ private[spark] class AppStatusListener(
 
     val view = kvstore.view(classOf[JobDataWrapper]).index("completionTime")
     val toDelete = KVUtils.viewToSeq(view, countToDelete.toInt) { j =>
-      isForceClean || (j.info.status != JobExecutionStatus.RUNNING && j.info.status != JobExecutionStatus.UNKNOWN)
+      isForceClean || (j.info.status != JobExecutionStatus.RUNNING &&
+        j.info.status != JobExecutionStatus.UNKNOWN)
     }
     toDelete.foreach { j => {
       if (isForceClean) {
@@ -1146,7 +1147,8 @@ private[spark] class AppStatusListener(
     // UI.
     val view = kvstore.view(classOf[StageDataWrapper]).index("completionTime")
     val stages = KVUtils.viewToSeq(view, countToDelete.toInt) { s =>
-      isForceClean || (s.info.status != v1.StageStatus.ACTIVE && s.info.status != v1.StageStatus.PENDING)
+      isForceClean || (s.info.status != v1.StageStatus.ACTIVE &&
+        s.info.status != v1.StageStatus.PENDING)
     }
 
     val stageIds = stages.map { s =>

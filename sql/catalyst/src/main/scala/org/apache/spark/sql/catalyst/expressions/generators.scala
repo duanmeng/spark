@@ -451,7 +451,7 @@ case class Inline(child: Expression) extends UnaryExpression with CollectionGene
       > SELECT _FUNC_(array(struct(array(1, 2)), struct(array(3))), 'a');
        1  a
        2  a
-			 3  a
+       3  a
   """)
 case class Unnest(child: Seq[Expression]) extends Expression with CollectionGenerator {
 

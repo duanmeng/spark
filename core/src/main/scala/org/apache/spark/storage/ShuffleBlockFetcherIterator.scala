@@ -1105,8 +1105,8 @@ object ShuffleBlockFetcherIterator {
     extends FetchResult
 
   /**
-    * An exception that the origin digest is not equal with the fetchResult's digest.
-    */
+   * An exception that the origin digest is not equal with the fetchResult's digest.
+   */
   private case class CheckDigestFailedException(message: String, cause: Throwable = null)
     extends Exception(message, cause)
 }

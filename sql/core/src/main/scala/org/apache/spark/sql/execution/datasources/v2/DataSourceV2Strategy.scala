@@ -18,6 +18,7 @@
 package org.apache.spark.sql.execution.datasources.v2
 
 import scala.collection.JavaConverters._
+
 import org.apache.spark.sql.{AnalysisException, SparkSession, Strategy}
 import org.apache.spark.sql.catalyst.analysis.{ResolvedNamespace, ResolvedTable}
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Expression, NamedExpression, PredicateHelper, SubqueryExpression}

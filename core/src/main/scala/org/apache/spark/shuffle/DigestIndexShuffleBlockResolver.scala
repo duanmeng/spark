@@ -37,11 +37,11 @@ private[spark] class DigestIndexShuffleBlockResolver(
   with Logging {
 
   /**
-    * Get the shuffle digest file.
-    *
-    * When the dirs parameter is None then use the disk manager's local directories. Otherwise,
-    * read from the specified directories.
-    */
+   * Get the shuffle digest file.
+   *
+   * When the dirs parameter is None then use the disk manager's local directories. Otherwise,
+   * read from the specified directories.
+   */
   def getDigestFile(
       shuffleId: Int,
       mapId: Long,
@@ -55,8 +55,8 @@ private[spark] class DigestIndexShuffleBlockResolver(
   private final val digestLength = DigestUtils.getDigestLength
 
   /**
-    * Remove data file and index file that contain the output data from one map.
-    */
+   * Remove data file and index file that contain the output data from one map.
+   */
   override def removeDataByMap(shuffleId: Int, mapId: Long): Unit = {
     super.removeDataByMap(shuffleId, mapId)
     val file = getDigestFile(shuffleId, mapId);
@@ -68,8 +68,8 @@ private[spark] class DigestIndexShuffleBlockResolver(
   }
 
   /**
-    * Generate digest for each partition in data file.
-    */
+   * Generate digest for each partition in data file.
+   */
   private def generateDigests(dataTmp: File, lengths: Array[Long]): Array[Long] = {
     val digests = new Array[Long](lengths.length)
     val dateIn = if (dataTmp != null && dataTmp.exists()) {
@@ -123,15 +123,15 @@ private[spark] class DigestIndexShuffleBlockResolver(
   }
 
   /**
-    * Write an index file with the offsets of each block, plus a final offset at the end for the
-    * end of the output file. This will be used by getBlockData to figure out where each block
-    * begins and ends.
-    *
-    * It will commit the data and index file as an atomic operation, use the existing ones, or
-    * replace them with new ones.
-    *
-    * Note: the `lengths` will be updated to match the existing index file if use the existing ones.
-    */
+   * Write an index file with the offsets of each block, plus a final offset at the end for the
+   * end of the output file. This will be used by getBlockData to figure out where each block
+   * begins and ends.
+   *
+   * It will commit the data and index file as an atomic operation, use the existing ones, or
+   * replace them with new ones.
+   *
+   * Note: the `lengths` will be updated to match the existing index file if use the existing ones.
+   */
   override def writeIndexFileAndCommit(
          shuffleId: Int,
          mapId: Long,
