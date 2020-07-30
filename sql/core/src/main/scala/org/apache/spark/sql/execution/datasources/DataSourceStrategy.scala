@@ -541,6 +541,8 @@ object DataSourceStrategy {
       nestedPredicatePushdownEnabled: Boolean)
     : Option[Filter] = {
     predicate match {
+      case expressions.EqualTo(AttributeReference(attr, _, _, _), AttributeReference(_, _, _, _)) =>
+        Some(sources.EqualTo(attr, None))
       case expressions.And(left, right) =>
         // See SPARK-12218 for detailed discussion
         // It is not safe to just convert one side if we do not understand the

@@ -204,6 +204,68 @@ class DataSourceV2Strategy(session: SparkSession) extends Strategy with Predicat
           throw new AnalysisException("DELETE is only supported with v2 tables.")
       }
 
+    case MergeIntoTable(
+            aliasTargetTable,
+            sourceTable,
+            mergeCondition,
+            matchedActions,
+            notMatchedActions,
+            sourceTableName,
+            sourceQueryText) =>
+      var mergeFilters = Array.empty[Filter]
+      var deleteFilters = Array.empty[Filter]
+      var updateFilters = Array.empty[Filter]
+      var updateAssignments = Map.empty[String, Expression]
+      var insertFilters = Array.empty[Filter]
+      var insertAssignments = Map.empty[String, Expression]
+      var targetAlias = ""
+      val targetTable = aliasTargetTable match {
+        case SubqueryAlias(identifier, tt) =>
+          targetAlias = identifier.qualifier.mkString(".")
+          tt
+        case _ => aliasTargetTable
+      }
+      val sTable = sourceTable match {
+        case DataSourceV2ScanRelation(table, _, output) => table
+        case _ => throw new AnalysisException("MERGE is only supported with v2 tables.")
+      }
+      targetTable match {
+        case DataSourceV2ScanRelation(table, _, output) =>
+          mergeFilters = conditionToFilter("Merge", Some(mergeCondition), output)
+          matchedActions.foreach {
+            case DeleteAction(condition) =>
+              deleteFilters = conditionToFilter("Merge[Delete]", condition, output)
+            case UpdateAction(condition, assignments) =>
+              updateFilters = conditionToFilter("Merge[Update]", condition, output)
+              updateAssignments = Map(assignments map { assignment =>
+                assignment.key.asInstanceOf[AttributeReference].name -> assignment.value }: _*)
+            case _ =>
+                throw new AnalysisException("Unexpected matched action for merge statement.")
+          }
+
+          notMatchedActions.foreach {
+            case InsertAction(condition, assignments) =>
+              insertFilters = conditionToFilter("Merge[Insert]", condition, output)
+              insertAssignments = Map(assignments map {
+                assignment =>
+                  assignment.key.asInstanceOf[AttributeReference].name -> assignment.value }: _*)
+            case _ =>
+          }
+
+          val sourceAlias = sourceTable match {
+            case SubqueryAlias(identifier, _) =>
+              identifier.qualifier.mkString(".")
+            case _ => ""
+          }
+
+          MergeTableExec(table.asMergetable, targetAlias, sourceTableName, sourceQueryText,
+            sourceAlias, mergeFilters, deleteFilters, updateFilters, updateAssignments,
+            insertFilters, insertAssignments, sTable.asMergetable) :: Nil
+
+        case _ =>
+          throw new AnalysisException("MERGE is only supported with v2 tables.")
+      }
+
     case UpdateTable(relation, assignments, condition) =>
       relation match {
         case DataSourceV2ScanRelation(table, _, output) =>

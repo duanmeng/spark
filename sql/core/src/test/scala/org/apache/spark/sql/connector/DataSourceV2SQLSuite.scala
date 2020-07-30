@@ -1897,7 +1897,6 @@ class DataSourceV2SQLSuite
          """.stripMargin,
         "cannot resolve")
 
-      // MERGE INTO is not implemented yet.
       val e = intercept[UnsupportedOperationException] {
         sql(
           s"""
@@ -1910,6 +1909,91 @@ class DataSourceV2SQLSuite
            """.stripMargin)
       }
       assert(e.getMessage.contains("MERGE INTO TABLE is not supported temporarily"))
+
+    }
+  }
+
+  test("MERGE INTO TABLE EXEC basic") {
+    val target = "testcat.ns1.ns2.target"
+    val source = "testcat.ns1.ns2.source"
+    withTable(target, source) {
+      sql(
+        s"""
+           |CREATE TABLE $target (id bigint, name string, age int)
+           |USING foo
+           |PARTITIONED BY (id)
+         """.stripMargin)
+      sql(
+        s"""
+           |CREATE TABLE $source (id bigint, name string, age int)
+           |USING foo
+           |PARTITIONED BY (id)
+         """.stripMargin)
+      sql(
+        s"""
+           |INSERT INTO $source
+           |VALUES (1L, 'sd', 20), (2L, 'su', 20), (3L, 'si', 30), (4L, 'ss', 40)
+         """.stripMargin)
+      sql(
+        s"""
+           |INSERT INTO $target VALUES (1L, 'delete', 1), (2L, 'update', 2), (5L, 'none', 3)
+         """.stripMargin)
+      sql(
+        s"""
+           |MERGE INTO $target AS target
+           |USING $source AS source
+           |ON target.id = source.id
+           |WHEN MATCHED AND (target.id = 1) THEN DELETE
+           |WHEN MATCHED AND (target.id = 2) THEN UPDATE SET target.age = 10
+           |WHEN NOT MATCHED THEN INSERT *
+         """.stripMargin)
+
+      checkAnswer(spark.table(target), Seq(
+        Row(2, "update", 10),
+        Row(3, "si", 30),
+        Row(4, "ss", 40),
+        Row(5, "none", 3)
+      ))
+    }
+  }
+
+  test("MERGE INTO TABLE EXEC subquery") {
+    val target = "testcat.ns1.ns2.target"
+    val source = "testcat.ns1.ns2.source"
+    withTable(target, source) {
+      sql(
+        s"""
+           |CREATE TABLE $target (id bigint, name string, age int)
+           |USING foo
+           |PARTITIONED BY (id)
+         """.stripMargin)
+      sql(
+        s"""
+           |CREATE TABLE $source (id bigint, name string, age int)
+           |USING foo
+           |PARTITIONED BY (id)
+         """.stripMargin)
+      sql(
+        s"""
+           |INSERT INTO $source
+           |VALUES (1L, 'sd', 20), (2L, 'su', 20), (3L, 'si', 30), (4L, 'ss', 40)
+         """.stripMargin)
+      sql(
+        s"""
+           |INSERT INTO $target VALUES (1L, 'delete', 1), (2L, 'update', 2), (5L, 'none', 3)
+         """.stripMargin)
+      val exc = intercept[UnsupportedOperationException] {
+        sql(
+          s"""
+             |MERGE INTO $target AS target
+             |USING (WITH s as (SELECT * FROM $source) SELECT * FROM s) AS source
+             |ON target.id = source.id
+             |WHEN MATCHED AND (target.id = 1) THEN DELETE
+             |WHEN MATCHED AND (target.id = 2) THEN UPDATE SET target.age = 10
+             |WHEN NOT MATCHED THEN INSERT *
+         """.stripMargin)
+      }
+      assert(exc.getMessage.contains("Subquery is unsupported in InMemeoryTable"))
     }
   }
 

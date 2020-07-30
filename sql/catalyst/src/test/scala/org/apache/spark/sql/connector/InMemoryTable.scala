@@ -37,6 +37,7 @@ import org.apache.spark.sql.connector.write._
 import org.apache.spark.sql.sources.{And, EqualTo, Filter, IsNotNull}
 import org.apache.spark.sql.types.{DataType, DateType, StructType, TimestampType}
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
+import org.apache.spark.unsafe.types.UTF8String
 
 /**
  * A simple in-memory table. Rows are stored as a buffered group produced by each output task.
@@ -46,7 +47,9 @@ class InMemoryTable(
     val schema: StructType,
     override val partitioning: Array[Transform],
     override val properties: util.Map[String, String])
-  extends Table with SupportsRead with SupportsWrite with SupportsDelete with SupportsUpdate {
+  extends Table
+    with SupportsRead with SupportsWrite
+    with SupportsDelete with SupportsUpdate with SupportsMerge {
 
   private val allowUnsupportedTransforms =
     properties.getOrDefault("allow-unsupported-transforms", "false").toBoolean
@@ -235,24 +238,131 @@ class InMemoryTable(
     }
   }
 
-  override def deleteWhere(filters: Array[Filter]): Unit = dataMap.synchronized {
-    import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.MultipartIdentifierHelper
-    dataMap --= InMemoryTable.filtersToKeys(dataMap.keys, partCols.map(_.toSeq.quoted), filters)
+  override def deleteWhere(filters: Array[Filter]): Unit = {
+    deleteWhere(this.dataMap, filters)
   }
 
   override def update(
       assignments: Map[String, Expression],
       filters: Array[Filter]): Unit = dataMap.synchronized {
+    update(this.dataMap, assignments, filters)
+  }
+
+  private def partitionNames(): Seq[String] = {
+    import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.MultipartIdentifierHelper
+    partCols.map(_.toSeq.quoted)
+  }
+
+  private def deleteWhere(dataMap: mutable.Map[Seq[Any], BufferedRows], filters: Array[Filter]):
+    Unit = dataMap.synchronized {
+    val deleteKeys = InMemoryTable.filtersToKeys(dataMap.keys, partitionNames, filters)
+    dataMap --= deleteKeys
+  }
+
+  private def update(
+    dataMap: mutable.Map[Seq[Any], BufferedRows],
+    assignments: Map[String, Expression],
+    filters: Array[Filter]): Unit = dataMap.synchronized {
     // The implementation is only target on if update process can work
-    dataMap.values.foreach(_.rows.foreach { row =>
-      val filter = filters(0)
-      val colIndex = getFieldIndex(filter.asInstanceOf[EqualTo].attribute)
-      if (row.getInt(colIndex) == filter.asInstanceOf[EqualTo].value.asInstanceOf[Int]) {
-        assignments.asScala.foreach(
-          assignment => row.setInt(getFieldIndex(assignment._1),
-            assignment._2.asInstanceOf[Literal].value.asInstanceOf[Int]))
+    val matchedKeys = InMemoryTable.filtersToKeys(dataMap.keys, partitionNames, filters).toSet
+    dataMap.filter { case (key, _) => matchedKeys.contains(key) }
+      .values.foreach {
+        _.rows.foreach { row =>
+          assignments.asScala.foreach { assignment =>
+            row.setInt(
+              getFieldIndex(assignment._1),
+              assignment._2.asInstanceOf[Literal].value.asInstanceOf[Int])
+          }
       }
-    })
+    }
+  }
+
+  def insert(
+    sourceTable: InMemoryTable,
+    matchedKeys: Set[Seq[Any]],
+    assignments: Map[String, Expression],
+    filters: Array[Filter]): Unit = dataMap.synchronized {
+    // The implementation is only target on if insert process can work
+    val filteredKeys = InMemoryTable
+      .filtersToKeys(sourceTable.dataMap.keys, sourceTable.partitionNames, filters).toSet
+    sourceTable.dataMap.keys.foreach { key =>
+      if (!matchedKeys.contains(key) && filteredKeys.contains(key)) {
+        val data = sourceTable.dataMap.getOrElse(
+          key, throw new IllegalArgumentException(s"${key.toString} should exist"))
+        dataMap(key) = data
+      }
+    }
+  }
+
+  def getAttributeValues(attr: String): Set[Any] = {
+    import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.MultipartIdentifierHelper
+    val partitionNames = partCols.map(_.toSeq.quoted)
+    dataMap.keys.map { partValues =>
+      InMemoryTable.extractValue(attr, partitionNames, partValues)
+    }.toSet
+  }
+
+  def splitMatch(filters: Array[Filter]):
+    (mutable.Map[Seq[Any], BufferedRows],
+    mutable.Map[Seq[Any], BufferedRows]) = dataMap.synchronized {
+    val matchedKeys =
+      InMemoryTable.filtersToMergeKeys(dataMap.keys, partitionNames(), filters)
+    val unmatchedDataMap = dataMap -- matchedKeys
+    val matchedDataMap = dataMap -- unmatchedDataMap.keys
+    (matchedDataMap, unmatchedDataMap)
+  }
+
+  def mergeIntoWithTable(
+    targetAlias: String,
+    sourceTable: String,
+    sourceAlias: String,
+    mergeFilters: Array[Filter],
+    deleteFilters: Array[Filter],
+    updateFilters: Array[Filter],
+    updateAssignments: util.Map[String, Expression],
+    insertFilters: Array[Filter],
+    insertAssignments: util.Map[String, Expression],
+    sTable: SupportsMerge): Unit = {
+
+    val (matchedDataMap, unmatchedDataMap) = mergeFilters.headOption.map {
+      case EqualTo(attribute, None) =>
+        val filters = sTable.asInstanceOf[InMemoryTable]
+          .getAttributeValues(attribute)
+          .map { EqualTo(attribute, _).asInstanceOf[Filter] }
+          .toArray
+        splitMatch(filters)
+      case EqualTo(_, _) | IsNotNull(_) =>
+        splitMatch(Array(mergeFilters.head))
+      case _ => throw new IllegalArgumentException(s"Only one merge filter is supported")
+    }.getOrElse { throw  new IllegalArgumentException(s"Merge filter must be specified")}
+
+    dataMap.clear()
+    val matchedKeys = matchedDataMap.keys.toSet
+    deleteWhere(matchedDataMap, deleteFilters)
+    update(matchedDataMap, updateAssignments, updateFilters)
+    insert(sTable.asInstanceOf[InMemoryTable], matchedKeys, insertAssignments, insertFilters)
+    dataMap.synchronized {
+      matchedDataMap.foreach { case (key, value) =>
+        dataMap(key) = value
+      }
+      unmatchedDataMap.foreach { case (key, value) =>
+        dataMap(key) = value
+      }
+    }
+
+  }
+
+  def mergeIntoWithQuery(
+    targetAlias: String,
+    sourceQuery: String,
+    sourceAlias: String,
+    mergeFilters: Array[Filter],
+    deleteFilters: Array[Filter],
+    updateFilters: Array[Filter],
+    updateAssignments: util.Map[String, Expression],
+    insertFilters: Array[Filter],
+    insertAssignments: util.Map[String, Expression]): Unit = {
+    throw new UnsupportedOperationException(s"Subquery is unsupported in InMemeoryTable")
   }
 }
 
@@ -266,6 +376,27 @@ object InMemoryTable {
     keys.filter { partValues =>
       filters.flatMap(splitAnd).forall {
         case EqualTo(attr, value) =>
+          val actualValue = extractValue(attr, partitionNames, partValues)
+          if (actualValue.isInstanceOf[UTF8String]) {
+            value == actualValue.toString
+          } else {
+            value == actualValue
+          }
+        case IsNotNull(attr) =>
+          null != extractValue(attr, partitionNames, partValues)
+        case f =>
+          throw new IllegalArgumentException(s"Unsupported filter type: $f")
+      }
+    }
+  }
+
+  def filtersToMergeKeys(
+    keys: Iterable[Seq[Any]],
+    partitionNames: Seq[String],
+    filters: Array[Filter]): Iterable[Seq[Any]] = {
+    keys.filter { partValues =>
+      filters.flatMap(splitAnd).exists {
+        case EqualTo(attr, value) =>
           value == extractValue(attr, partitionNames, partValues)
         case IsNotNull(attr) =>
           null != extractValue(attr, partitionNames, partValues)
@@ -275,7 +406,7 @@ object InMemoryTable {
     }
   }
 
-  private def extractValue(
+  def extractValue(
       attr: String,
       partFieldNames: Seq[String],
       partValues: Seq[Any]): Any = {
@@ -287,6 +418,17 @@ object InMemoryTable {
     }
   }
 
+  def updateValue(
+    attr: String,
+    partFieldNames: Seq[String],
+    partValues: Seq[Any]): Any = {
+    partFieldNames.zipWithIndex.find(_._1 == attr) match {
+      case Some((_, partIndex)) =>
+        partValues(partIndex)
+      case _ =>
+        throw new IllegalArgumentException(s"Unknown filter attribute: $attr")
+    }
+  }
   private def splitAnd(filter: Filter): Seq[Filter] = {
     filter match {
       case And(left, right) => splitAnd(left) ++ splitAnd(right)

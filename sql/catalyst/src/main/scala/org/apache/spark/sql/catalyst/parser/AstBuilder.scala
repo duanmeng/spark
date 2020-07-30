@@ -405,6 +405,8 @@ class AstBuilder(conf: SQLConf) extends SqlBaseBaseVisitor[AnyRef] with Logging 
       throw new ParseException("Empty source for merge: you should specify a source" +
           " table/subquery in merge.", ctx.source)
     }
+    val sourceTableText = if (ctx.source != null) Some(ctx.source.getText) else None
+    val sourceQueryText = if (ctx.sourceQuery != null) Some(source(ctx.sourceQuery)) else None
     val sourceTableAlias = getTableAliasWithoutColumnAlias(ctx.sourceAlias, "MERGE")
     val aliasedSource =
       sourceTableAlias.map(SubqueryAlias(_, sourceTableOrQuery)).getOrElse(sourceTableOrQuery)
@@ -482,7 +484,9 @@ class AstBuilder(conf: SQLConf) extends SqlBaseBaseVisitor[AnyRef] with Logging 
       aliasedSource,
       mergeCondition,
       matchedActions,
-      notMatchedActions)
+      notMatchedActions,
+      sourceTableText,
+      sourceQueryText)
   }
 
   /**
