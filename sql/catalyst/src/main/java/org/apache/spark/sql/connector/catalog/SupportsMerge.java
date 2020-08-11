@@ -21,6 +21,7 @@ import org.apache.spark.annotation.Evolving;
 import org.apache.spark.sql.catalyst.expressions.Expression;
 import org.apache.spark.sql.sources.Filter;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -34,25 +35,25 @@ import java.util.Map;
 public interface SupportsMerge {
 
   void mergeIntoWithTable(
+    SupportsMerge sourceTable,
     String targetAlias,
-    String sourceTable,
+    String sourceTableName,
     String sourceAlias,
-    Filter[] mergeFilters,
-    Filter[] deleteFilters,
-    Filter[] updateFilters,
-    Map<String, Expression> updateAssignments,
-    Filter[] insertFilters,
-    Map<String, Expression> insertAssignments,
-    SupportsMerge sTable);
+    Expression mergeCondition,
+    Map<String, Expression> matchedActions,
+    Map<String, Expression> notMatchedActions,
+    Expression deleteExpression,
+    Expression updateExpression,
+    Expression insertExpression);
 
   void mergeIntoWithQuery(
     String targetAlias,
-    String sourceQuery,
+    String sourceTableName,
     String sourceAlias,
-    Filter[] mergeFilters,
-    Filter[] deleteFilters,
-    Filter[] updateFilters,
-    Map<String, Expression> updateAssignments,
-    Filter[] insertFilters,
-    Map<String, Expression> insertAssignments);
+    Expression mergeCondition,
+    Map<String, Expression> matchedActions,
+    Map<String, Expression> notMatchedActions,
+    Expression deleteExpression,
+    Expression updateExpression,
+    Expression insertExpression);
 }

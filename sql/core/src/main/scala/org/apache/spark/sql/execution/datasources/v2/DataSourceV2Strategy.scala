@@ -198,8 +198,10 @@ class DataSourceV2Strategy(session: SparkSession) extends Strategy with Predicat
     case DeleteFromTable(relation, condition) =>
       relation match {
         case DataSourceV2ScanRelation(table, _, output) =>
-          val filters = conditionToFilter("Delete", condition, output)
-          DeleteFromTableExec(table.asDeletable, filters) :: Nil
+          val cur = condition.map { c =>
+            normalizeExpression("Delete", c, output)
+          }
+          DeleteFromTableExec(table.asDeletable, cur.orNull) :: Nil
         case _ =>
           throw new AnalysisException("DELETE is only supported with v2 tables.")
       }
@@ -212,31 +214,37 @@ class DataSourceV2Strategy(session: SparkSession) extends Strategy with Predicat
             notMatchedActions,
             sourceTableName,
             sourceQueryText) =>
-      var mergeFilters = Array.empty[Filter]
-      var deleteFilters = Array.empty[Filter]
-      var updateFilters = Array.empty[Filter]
+      var deleteExpression: Expression = null
+      var updateExpression: Expression = null
+      var insertExpression: Expression = null
       var updateAssignments = Map.empty[String, Expression]
-      var insertFilters = Array.empty[Filter]
       var insertAssignments = Map.empty[String, Expression]
+
       var targetAlias = ""
       val targetTable = aliasTargetTable match {
         case SubqueryAlias(identifier, tt) =>
           targetAlias = identifier.qualifier.mkString(".")
           tt
+        case DataSourceV2Relation(table, _, _, _, _) =>
+          table.name()
         case _ => aliasTargetTable
       }
       val sTable = sourceTable match {
         case DataSourceV2ScanRelation(table, _, output) => table
         case _ => throw new AnalysisException("MERGE is only supported with v2 tables.")
       }
+
       targetTable match {
         case DataSourceV2ScanRelation(table, _, output) =>
-          mergeFilters = conditionToFilter("Merge", Some(mergeCondition), output)
           matchedActions.foreach {
             case DeleteAction(condition) =>
-              deleteFilters = conditionToFilter("Merge[Delete]", condition, output)
+              condition.foreach { c =>
+                deleteExpression = normalizeExpression("MergeInto[Delete]", c, output)
+              }
             case UpdateAction(condition, assignments) =>
-              updateFilters = conditionToFilter("Merge[Update]", condition, output)
+              condition.foreach { c =>
+                updateExpression = normalizeExpression("MergeInto[Update]", c, output)
+              }
               updateAssignments = Map(assignments map { assignment =>
                 assignment.key.asInstanceOf[AttributeReference].name -> assignment.value }: _*)
             case _ =>
@@ -245,7 +253,9 @@ class DataSourceV2Strategy(session: SparkSession) extends Strategy with Predicat
 
           notMatchedActions.foreach {
             case InsertAction(condition, assignments) =>
-              insertFilters = conditionToFilter("Merge[Insert]", condition, output)
+              condition.foreach { c =>
+                insertExpression = normalizeExpression("MergeInto[Insert]", c, output)
+              }
               insertAssignments = Map(assignments map {
                 assignment =>
                   assignment.key.asInstanceOf[AttributeReference].name -> assignment.value }: _*)
@@ -258,9 +268,21 @@ class DataSourceV2Strategy(session: SparkSession) extends Strategy with Predicat
             case _ => ""
           }
 
-          MergeTableExec(table.asMergetable, targetAlias, sourceTableName, sourceQueryText,
-            sourceAlias, mergeFilters, deleteFilters, updateFilters, updateAssignments,
-            insertFilters, insertAssignments, sTable.asMergetable) :: Nil
+
+
+          MergeInToTableExec(
+            table.asMergetable,
+            sTable.asMergetable,
+            targetAlias,
+            sourceTableName,
+            sourceQueryText,
+            sourceAlias,
+            normalizeExpression("MergeInto", mergeCondition, output),
+            updateAssignments.asJava,
+            insertAssignments.asJava,
+            deleteExpression,
+            updateExpression,
+            insertExpression) :: Nil
 
         case _ =>
           throw new AnalysisException("MERGE is only supported with v2 tables.")
@@ -269,12 +291,15 @@ class DataSourceV2Strategy(session: SparkSession) extends Strategy with Predicat
     case UpdateTable(relation, assignments, condition) =>
       relation match {
         case DataSourceV2ScanRelation(table, _, output) =>
-          val filters = conditionToFilter("Update", condition, output)
+          val cur = condition.map { c =>
+            normalizeExpression("Update", c, output)
+          }
           val assignmentMap = Map(assignments map {
             assignment =>
               assignment.key.asInstanceOf[AttributeReference].name -> assignment.value }: _*)
 
-          UpdateTableExec(table.asUpdatable, assignmentMap, filters) :: Nil
+          UpdateTableExec(
+            table.asUpdatable, assignmentMap, cur.orNull) :: Nil
         case _ =>
           throw new AnalysisException("UPDATE is only supported with v2 tables.")
       }
@@ -355,21 +380,13 @@ class DataSourceV2Strategy(session: SparkSession) extends Strategy with Predicat
     case _ => Nil
   }
 
-  private def conditionToFilter(
-      action: String,
-      condition: Option[Expression],
-      output: Seq[AttributeReference]): Array[Filter] = {
-    if (condition.exists(SubqueryExpression.hasSubquery)) {
+  private def normalizeExpression(
+    action: String, condition: Expression, output: Seq[AttributeReference]): Expression = {
+    if (SubqueryExpression.hasSubquery(condition)) {
       throw new AnalysisException(
         s"$action by condition with subquery is not supported: $condition")
     }
-    // fail if any filter cannot be converted.
-    // correctness depends on removing all matching data.
-    DataSourceStrategy.normalizeExprs(condition.toSeq, output)
-      .flatMap(splitConjunctivePredicates(_).map {
-        f => DataSourceStrategy.translateFilter(f, true).getOrElse(
-          throw new AnalysisException(s"Exec update failed:" +
-            s" cannot translate expression to source filter: $f"))
-      }).toArray
+    DataSourceStrategy.normalizeExprs(Seq(condition), output).head
   }
+
 }

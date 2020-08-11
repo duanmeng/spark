@@ -29,13 +29,13 @@ import org.apache.spark.sql.sources.Filter
 case class UpdateTableExec(
     table: SupportsUpdate,
     assignments: Map[String, Expression],
-    condition: Array[Filter]) extends LeafExecNode {
+    updateExpression: Expression) extends V2CommandExec with LeafExecNode {
 
   override def output: Seq[Attribute] = Nil
 
-  override protected def doExecute(): RDD[InternalRow] = {
-    table.update(assignments.asJava, condition)
-    sparkContext.emptyRDD
+  override protected def run(): Seq[InternalRow] = {
+    table.update(assignments.asJava, updateExpression)
+    Seq.empty
   }
 
 }

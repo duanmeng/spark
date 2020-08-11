@@ -17,62 +17,61 @@
 
 package org.apache.spark.sql.execution.datasources.v2
 
-import scala.collection.JavaConverters._
+import java.util
 
 import org.apache.spark.SparkException
-import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.connector.catalog.SupportsMerge
 import org.apache.spark.sql.execution.LeafExecNode
-import org.apache.spark.sql.sources.Filter
 
-case class MergeTableExec(
+case class MergeInToTableExec(
   table: SupportsMerge,
+  sourceTable: SupportsMerge,
   targetAlias: String,
-  sourceTable: Option[String],
+  sourceTableName: Option[String],
   sourceQuery: Option[String],
   sourceAlias: String,
-  mergeFilters: Array[Filter],
-  deleteFilters: Array[Filter],
-  updateFilters: Array[Filter],
-  updateAssignments: Map[String, Expression],
-  insertFilters: Array[Filter],
-  insertAssignments: Map[String, Expression],
-  sTable: SupportsMerge) extends LeafExecNode {
+  mergeCondition: Expression,
+  updateAssignments: util.Map[String, Expression],
+  insertAssignments: util.Map[String, Expression],
+  deleteExpression: Expression,
+  updateExpression: Expression,
+  insertExpression: Expression)
+  extends V2CommandExec with LeafExecNode {
 
   override def output: Seq[Attribute] = Nil
 
-  override protected def doExecute(): RDD[InternalRow] = {
+  override protected def run(): Seq[InternalRow] = {
 
-    if (sourceTable.isDefined) {
+    if (sourceTableName.isDefined) {
       table.mergeIntoWithTable(
+        sourceTable,
         targetAlias,
-        sourceTable.get,
+        sourceTableName.get,
         sourceAlias,
-        mergeFilters,
-        deleteFilters,
-        updateFilters,
-        updateAssignments.asJava,
-        insertFilters,
-        insertAssignments.asJava,
-        sTable)
+        mergeCondition,
+        updateAssignments,
+        insertAssignments,
+        deleteExpression,
+        updateExpression,
+        insertExpression)
     } else if (sourceQuery.isDefined) {
       table.mergeIntoWithQuery(
         targetAlias,
         sourceQuery.get,
         sourceAlias,
-        mergeFilters,
-        deleteFilters,
-        updateFilters,
-        updateAssignments.asJava,
-        insertFilters,
-        insertAssignments.asJava)
+        mergeCondition,
+        updateAssignments,
+        insertAssignments,
+        deleteExpression,
+        updateExpression,
+        insertExpression)
     } else {
-      throw new SparkException(s"SourceTable or SourceQuery should be set with Merge action")
+      throw new SparkException(s"sourceTableName or SourceQuery should be set with Merge action")
     }
 
-    sparkContext.emptyRDD
+    Seq.empty
   }
 
 }

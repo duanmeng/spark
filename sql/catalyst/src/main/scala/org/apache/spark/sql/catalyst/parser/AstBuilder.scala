@@ -396,7 +396,6 @@ class AstBuilder(conf: SQLConf) extends SqlBaseBaseVisitor[AnyRef] with Logging 
     val targetTable = UnresolvedRelation(visitMultipartIdentifier(ctx.target))
     val targetTableAlias = getTableAliasWithoutColumnAlias(ctx.targetAlias, "MERGE")
     val aliasedTarget = targetTableAlias.map(SubqueryAlias(_, targetTable)).getOrElse(targetTable)
-
     val sourceTableOrQuery = if (ctx.source != null) {
       UnresolvedRelation(visitMultipartIdentifier(ctx.source))
     } else if (ctx.sourceQuery != null) {

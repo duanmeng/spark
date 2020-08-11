@@ -1739,6 +1739,16 @@ class DataSourceV2SQLSuite
     }
   }
 
+  test("DeleteFrom: basic - delete is not null") {
+    val t = "testcat.ns1.ns2.tbl"
+    withTable(t) {
+      sql(s"CREATE TABLE $t (id bigint, data string, p int) USING foo PARTITIONED BY (id, p)")
+      sql(s"INSERT INTO $t VALUES (2L, 'a', 2), (2L, 'b', 3), (3L, 'c', 3)")
+      sql(s"DELETE FROM $t WHERE id is not null")
+      checkAnswer(spark.table(t), Seq())
+    }
+  }
+
   test("DeleteFrom: delete from aliased target table") {
     val t = "testcat.ns1.ns2.tbl"
     withTable(t) {
@@ -1770,8 +1780,8 @@ class DataSourceV2SQLSuite
         sql(s"DELETE FROM $t WHERE id IN (SELECT id FROM $t)")
       }
 
-      assert(spark.table(t).count === 3)
       assert(exc.getMessage.contains("Delete by condition with subquery is not supported"))
+      assert(spark.table(t).count === 3)
     }
   }
 
@@ -1896,20 +1906,6 @@ class DataSourceV2SQLSuite
            |THEN INSERT *
          """.stripMargin,
         "cannot resolve")
-
-      val e = intercept[UnsupportedOperationException] {
-        sql(
-          s"""
-             |MERGE INTO testcat.ns1.ns2.target AS target
-             |USING testcat.ns1.ns2.source AS source
-             |ON target.id = source.id
-             |WHEN MATCHED AND (target.p < 0) THEN DELETE
-             |WHEN MATCHED AND (target.p > 0) THEN UPDATE SET *
-             |WHEN NOT MATCHED THEN INSERT *
-           """.stripMargin)
-      }
-      assert(e.getMessage.contains("MERGE INTO TABLE is not supported temporarily"))
-
     }
   }
 

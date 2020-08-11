@@ -18,6 +18,7 @@
 package org.apache.spark.sql.connector.catalog;
 
 import org.apache.spark.annotation.Evolving;
+import org.apache.spark.sql.catalyst.expressions.Expression;
 import org.apache.spark.sql.sources.Filter;
 
 /**
@@ -40,8 +41,7 @@ public interface SupportsDelete {
    * To reject a delete implementations should throw {@link IllegalArgumentException} with a clear
    * error message that identifies which expression was rejected.
    *
-   * @param filters filter expressions, used to select rows to delete when all expressions match
    * @throws IllegalArgumentException If the delete is rejected due to required effort
    */
-  void deleteWhere(Filter[] filters);
+  void deleteWhere(Expression deleteExpression);
 }

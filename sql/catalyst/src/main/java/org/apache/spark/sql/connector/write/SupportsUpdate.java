@@ -23,6 +23,7 @@ import org.apache.spark.sql.connector.catalog.Table;
 import org.apache.spark.sql.sources.Filter;
 
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * A mix-in interface for {@link Table} update support. Data sources can implement this
@@ -42,8 +43,7 @@ public interface SupportsUpdate {
    * To reject a update implementations should throw {@link IllegalArgumentException} with a clear
    * error message that identifies which expression was rejected.
    *
-   * @param filters filter expressions, used to select rows to update when all expressions match
    * @throws IllegalArgumentException If the update is rejected due to required effort
    */
-  void update(Map<String, Expression> assignments, Filter[] filters);
+  void update(Map<String, Expression> assignments, Expression updateExpression);
 }
