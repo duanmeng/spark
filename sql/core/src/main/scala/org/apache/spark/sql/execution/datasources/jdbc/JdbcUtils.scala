@@ -63,11 +63,9 @@ object JdbcUtils extends Logging {
       }
 
       /* Start SuperSQL modification */
-      val connection: Connection = driver.connect(options.url, options.asConnectionProperties)
-
-      require(connection != null,
-        s"The driver could not open a JDBC connection. Check the URL: ${options.url}")
-
+      val info = options.asConnectionProperties
+      info.remove("dataSourceConf")
+      val connection = driver.connect(options.url, info)
       var st: Statement = null
       try {
         if (isSuperSql(connection.getMetaData.getURL)) {
@@ -358,20 +356,28 @@ object JdbcUtils extends Logging {
     url
   }
 
-  def isTdw(url: String): Boolean = {
+  private def isA(url: String, jdbcUrlPrefix: String): Boolean = {
     if (url == null) {
       return false
     }
     val newUrl = handleSuperSqlUrl(url)
-    newUrl.startsWith("jdbc:hive:")
+    newUrl.startsWith(jdbcUrlPrefix)
+  }
+
+  def isTdw(url: String): Boolean = {
+    isA(url, "jdbc:hive:")
   }
 
   def isHive(url: String): Boolean = {
-    if (url == null) {
-      return false
-    }
-    val newUrl = handleSuperSqlUrl(url)
-    newUrl.startsWith("jdbc:hive2:")
+    isA(url, "jdbc:hive2:")
+  }
+
+  def isPresto(url: String): Boolean = {
+    isA(url, "jdbc:presto:")
+  }
+
+  def isSuperSql(url: String): Boolean = {
+    isA(url, "jdbc:supersql:")
   }
 
   def isNoSql(url: String): Boolean = {
@@ -382,14 +388,6 @@ object JdbcUtils extends Logging {
     newUrl.startsWith("jdbc:hive2:") ||
       newUrl.startsWith("jdbc:phoenix:") ||
       newUrl.startsWith("jdbc:hive:")
-  }
-
-  def isSuperSql(url: String): Boolean = {
-    if (url == null) {
-      return false
-    }
-    val newUrl = handleSuperSqlUrl(url)
-    newUrl.startsWith("jdbc:supersql:")
   }
 
   private def hideSensitiveInfo(key: String, value: String): String = {
@@ -449,7 +447,7 @@ object JdbcUtils extends Logging {
     val bypassConfs = getBypassConfs(options)
     if (!bypassConfs.isEmpty) {
       for ((key, value) <- bypassConfs.asScala) {
-        val setCmd = "set " + key + " = " + value
+        val setCmd = "set " + (if (isPresto(options.url)) "session " else "") + key + " = " + value
         try {
           st.execute(setCmd)
         } catch {
