@@ -32,10 +32,10 @@ import java.util.Map;
  * @since 3.0.0
  */
 @Evolving
-public interface SupportsMerge {
+public interface SupportsMerge extends Table {
 
   void mergeIntoWithTable(
-    SupportsMerge sourceTable,
+    Table sourceTable,
     String targetAlias,
     String sourceTableName,
     String sourceAlias,
@@ -48,7 +48,7 @@ public interface SupportsMerge {
 
   void mergeIntoWithQuery(
     String targetAlias,
-    String sourceTableName,
+    String sourceQuery,
     String sourceAlias,
     Expression mergeCondition,
     Map<String, Expression> matchedActions,

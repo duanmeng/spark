@@ -207,46 +207,43 @@ class DataSourceV2Strategy(session: SparkSession) extends Strategy with Predicat
       }
 
     case MergeIntoTable(
-            aliasTargetTable,
+            targetTable,
             sourceTable,
             mergeCondition,
             matchedActions,
             notMatchedActions,
             sourceTableName,
-            sourceQueryText) =>
+            sourceQueryText,
+            targetAlias,
+            sourceAlias) =>
       var deleteExpression: Expression = null
       var updateExpression: Expression = null
       var insertExpression: Expression = null
       var updateAssignments = Map.empty[String, Expression]
       var insertAssignments = Map.empty[String, Expression]
 
-      var targetAlias = ""
-      val targetTable = aliasTargetTable match {
-        case SubqueryAlias(identifier, tt) =>
-          targetAlias = identifier.qualifier.mkString(".")
-          tt
-        case DataSourceV2Relation(table, _, _, _, _) =>
-          table.name()
-        case _ => aliasTargetTable
-      }
       val sTable = sourceTable match {
-        case DataSourceV2ScanRelation(table, _, output) => table
-        case _ => throw new AnalysisException("MERGE is only supported with v2 tables.")
+        case DataSourceV2ScanRelation(table, _, _) => table
+        case _ => null
       }
 
       targetTable match {
         case DataSourceV2ScanRelation(table, _, output) =>
           matchedActions.foreach {
             case DeleteAction(condition) =>
-              condition.foreach { c =>
-                deleteExpression = normalizeExpression("MergeInto[Delete]", c, output)
+              condition match {
+                case Some(c) =>
+                  deleteExpression = normalizeExpression("MergeInto[Delete]", c, output)
+                case None => throw new AnalysisException("Delete must have condition.")
               }
+
             case UpdateAction(condition, assignments) =>
               condition.foreach { c =>
                 updateExpression = normalizeExpression("MergeInto[Update]", c, output)
               }
               updateAssignments = Map(assignments map { assignment =>
                 assignment.key.asInstanceOf[AttributeReference].name -> assignment.value }: _*)
+
             case _ =>
                 throw new AnalysisException("Unexpected matched action for merge statement.")
           }
@@ -262,21 +259,13 @@ class DataSourceV2Strategy(session: SparkSession) extends Strategy with Predicat
             case _ =>
           }
 
-          val sourceAlias = sourceTable match {
-            case SubqueryAlias(identifier, _) =>
-              identifier.qualifier.mkString(".")
-            case _ => ""
-          }
-
-
-
           MergeInToTableExec(
             table.asMergetable,
-            sTable.asMergetable,
-            targetAlias,
+            sTable,
+            targetAlias.getOrElse(""),
             sourceTableName,
             sourceQueryText,
-            sourceAlias,
+            sourceAlias.getOrElse(""),
             normalizeExpression("MergeInto", mergeCondition, output),
             updateAssignments.asJava,
             insertAssignments.asJava,

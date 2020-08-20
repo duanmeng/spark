@@ -1254,7 +1254,9 @@ class PlanResolutionSuite extends AnalysisTest {
               Seq(InsertAction(Some(EqualTo(il: AttributeReference, StringLiteral("insert"))),
                 insertAssigns)),
               _,
-              _) =>
+              _,
+              Some("target"),
+              Some("source")) =>
             checkResolution(target, source, mergeCondition, Some(dl), Some(ul), Some(il),
               updateAssigns, insertAssigns)
 
@@ -1282,7 +1284,9 @@ class PlanResolutionSuite extends AnalysisTest {
               Seq(InsertAction(Some(EqualTo(il: AttributeReference, StringLiteral("insert"))),
                 insertAssigns)),
               _,
-              _) =>
+              _,
+              Some("target"),
+              Some("source")) =>
             checkResolution(target, source, mergeCondition, Some(dl), Some(ul), Some(il),
               updateAssigns, insertAssigns, starInUpdate = true)
 
@@ -1307,7 +1311,9 @@ class PlanResolutionSuite extends AnalysisTest {
               Seq(DeleteAction(Some(_)), UpdateAction(None, updateAssigns)),
               Seq(InsertAction(None, insertAssigns)),
               _,
-              _) =>
+              _,
+              Some("target"),
+              Some("source")) =>
             checkResolution(target, source, mergeCondition, None, None, None,
               updateAssigns, insertAssigns)
 
@@ -1336,7 +1342,9 @@ class PlanResolutionSuite extends AnalysisTest {
               Seq(InsertAction(Some(EqualTo(il: AttributeReference, StringLiteral("insert"))),
                 insertAssigns)),
               _,
-              _) =>
+              _,
+              Some("target"),
+              Some("source")) =>
             checkResolution(target, source, mergeCondition, Some(dl), Some(ul), Some(il),
               updateAssigns, insertAssigns)
 
@@ -1367,7 +1375,9 @@ class PlanResolutionSuite extends AnalysisTest {
               Seq(InsertAction(Some(EqualTo(il: AttributeReference, StringLiteral("insert"))),
                 insertAssigns)),
               _,
-              _) =>
+              None,
+              Some("target"),
+              None) =>
             assert(source.output.map(_.name) == Seq("i", "s"))
             checkResolution(target, source, mergeCondition, Some(dl), Some(ul), Some(il),
               updateAssigns, insertAssigns)
@@ -1403,7 +1413,9 @@ class PlanResolutionSuite extends AnalysisTest {
               Some(EqualTo(il: AttributeReference, StringLiteral("a"))),
               insertAssigns)),
             _,
-            _) =>
+            _,
+            None,
+            None) =>
           val ti = target.output.find(_.name == "i").get
           val ts = target.output.find(_.name == "s").get
           val si = source.output.find(_.name == "i").get
@@ -1517,7 +1529,9 @@ class PlanResolutionSuite extends AnalysisTest {
               Some(EqualTo(il: UnresolvedAttribute, StringLiteral("insert"))),
               insertAssigns)),
           _,
-          _) =>
+          _,
+          Some("target"),
+          Some("source")) =>
         assert(l.name == "target.i" && r.name == "source.i")
         assert(dl.name == "target.s")
         assert(ul.name == "target.s")

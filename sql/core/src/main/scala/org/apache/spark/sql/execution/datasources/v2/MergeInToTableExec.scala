@@ -22,12 +22,12 @@ import java.util
 import org.apache.spark.SparkException
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
-import org.apache.spark.sql.connector.catalog.SupportsMerge
+import org.apache.spark.sql.connector.catalog.{SupportsMerge, Table}
 import org.apache.spark.sql.execution.LeafExecNode
 
 case class MergeInToTableExec(
   table: SupportsMerge,
-  sourceTable: SupportsMerge,
+  sourceTable: Table,
   targetAlias: String,
   sourceTableName: Option[String],
   sourceQuery: Option[String],

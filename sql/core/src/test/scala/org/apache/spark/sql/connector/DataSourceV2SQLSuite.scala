@@ -1906,6 +1906,7 @@ class DataSourceV2SQLSuite
            |THEN INSERT *
          """.stripMargin,
         "cannot resolve")
+
     }
   }
 
@@ -1936,11 +1937,11 @@ class DataSourceV2SQLSuite
          """.stripMargin)
       sql(
         s"""
-           |MERGE INTO $target AS target
-           |USING $source AS source
-           |ON target.id = source.id
-           |WHEN MATCHED AND (target.id = 1) THEN DELETE
-           |WHEN MATCHED AND (target.id = 2) THEN UPDATE SET target.age = 10
+           |MERGE INTO $target AS t
+           |USING $source AS s
+           |ON t.id = s.id
+           |WHEN MATCHED AND (t.id = 1) THEN DELETE
+           |WHEN MATCHED AND (t.id = 2) THEN UPDATE SET t.age = 10
            |WHEN NOT MATCHED THEN INSERT *
          """.stripMargin)
 
@@ -1989,7 +1990,46 @@ class DataSourceV2SQLSuite
              |WHEN NOT MATCHED THEN INSERT *
          """.stripMargin)
       }
-      assert(exc.getMessage.contains("Subquery is unsupported in InMemeoryTable"))
+      assert(exc.getMessage.contains("Subquery is unsupported in InMemoryTable"))
+    }
+  }
+
+  test("MERGE INTO DELETE must have condition") {
+    val target = "testcat.ns1.ns2.target"
+    val source = "testcat.ns1.ns2.source"
+    withTable(target, source) {
+      sql(
+        s"""
+           |CREATE TABLE $target (id bigint, name string, age int)
+           |USING foo
+           |PARTITIONED BY (id)
+         """.stripMargin)
+      sql(
+        s"""
+           |CREATE TABLE $source (id bigint, name string, age int)
+           |USING foo
+           |PARTITIONED BY (id)
+         """.stripMargin)
+      sql(
+        s"""
+           |INSERT INTO $source
+           |VALUES (1L, 'sd', 20), (2L, 'su', 20), (3L, 'si', 30), (4L, 'ss', 40)
+         """.stripMargin)
+      sql(
+        s"""
+           |INSERT INTO $target VALUES (1L, 'delete', 1), (2L, 'update', 2), (5L, 'none', 3)
+         """.stripMargin)
+      val exc = intercept[AnalysisException] {
+        sql(
+          s"""
+           MERGE INTO $target AS target
+             |USING $source AS source
+             |ON target.id = source.id
+             |WHEN MATCHED THEN DELETE
+             |WHEN NOT MATCHED THEN INSERT *
+         """.stripMargin)
+      }
+      assert(exc.getMessage.contains("Delete must have condition"))
     }
   }
 

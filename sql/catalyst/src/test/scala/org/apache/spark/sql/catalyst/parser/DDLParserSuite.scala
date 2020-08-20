@@ -973,7 +973,9 @@ class DDLParserSuite extends AnalysisTest {
           Seq(Assignment(UnresolvedAttribute("target.col1"), UnresolvedAttribute("source.col1")),
             Assignment(UnresolvedAttribute("target.col2"), UnresolvedAttribute("source.col2"))))),
         Some("testcat2.ns1.ns2.tbl"),
-        None)
+        None,
+        Some("target"),
+        Some("source"))
     )
   }
 
@@ -1001,7 +1003,9 @@ class DDLParserSuite extends AnalysisTest {
           Seq(Assignment(UnresolvedAttribute("target.col1"), UnresolvedAttribute("source.col1")),
             Assignment(UnresolvedAttribute("target.col2"), UnresolvedAttribute("source.col2"))))),
         None,
-        Some("SELECT * FROM testcat2.ns1.ns2.tbl")
+        Some("SELECT * FROM testcat2.ns1.ns2.tbl"),
+        Some("target"),
+        Some("source")
       )
     )
   }
@@ -1032,7 +1036,9 @@ class DDLParserSuite extends AnalysisTest {
           Seq(Assignment(UnresolvedAttribute("target.col1"), UnresolvedAttribute("source.col1")),
             Assignment(UnresolvedAttribute("target.col2"), UnresolvedAttribute("source.col2"))))),
         None,
-        Some("WITH s as (SELECT * FROM testcat2.ns1.ns2.tbl) SELECT * FROM s")
+        Some("WITH s as (SELECT * FROM testcat2.ns1.ns2.tbl) SELECT * FROM s"),
+        Some("target"),
+        Some("source")
       )
     )
   }
@@ -1057,7 +1063,9 @@ class DDLParserSuite extends AnalysisTest {
           Seq(Assignment(UnresolvedAttribute("target.col1"), UnresolvedAttribute("source.col1")),
             Assignment(UnresolvedAttribute("target.col2"), UnresolvedAttribute("source.col2"))))),
         Some("testcat2.ns1.ns2.tbl"),
-        None
+        None,
+        Some("target"),
+        Some("source")
       )
     )
   }
@@ -1083,7 +1091,9 @@ class DDLParserSuite extends AnalysisTest {
         Seq(InsertAction(
           Some(EqualTo(UnresolvedAttribute("target.col2"), Literal("insert"))), Seq())),
         Some("testcat2.ns1.ns2.tbl"),
-        None
+        None,
+        Some("target"),
+        Some("source")
       )
     )
   }

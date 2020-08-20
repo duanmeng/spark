@@ -328,7 +328,7 @@ class InMemoryTable(
   }
 
   def mergeIntoWithTable(
-    sourceTable: SupportsMerge,
+    sourceTable: Table,
     targetAlias: String,
     sourceTableName: String,
     sourceAlias: String,
@@ -341,14 +341,19 @@ class InMemoryTable(
     val (matchedDataMap, unmatchedDataMap) = mergeCondition match {
       case ExpressionEqualTo(
       AttributeReference(attr, dataType, nullable, metadata), AttributeReference(_, _, _, _)) =>
-        val expressions = sourceTable.asInstanceOf[InMemoryTable]
-          .getAttributeValues(attr)
-          .map { value =>
-            ExpressionEqualTo(
-              AttributeReference(attr, dataType, nullable, metadata)().asInstanceOf[Expression],
-              Literal(value, dataType).asInstanceOf[Expression])
-          }
-          .toArray
+        val expressions = sourceTable match {
+          case st: InMemoryTable =>
+            st.getAttributeValues(attr)
+              .map { value =>
+                  ExpressionEqualTo(
+                    AttributeReference(
+                      attr, dataType, nullable, metadata)().asInstanceOf[Expression],
+                    Literal(value, dataType).asInstanceOf[Expression])
+              }
+              .toArray
+          case _ => throw new IllegalArgumentException(
+            s"Unsupported source table must be InMemoryTable when using InMemoryTable")
+        }
         splitMatch(expressions)
       case e: ExpressionIsNotNull =>
         splitMatch(Seq(e))
@@ -377,7 +382,7 @@ class InMemoryTable(
 
   def mergeIntoWithQuery(
     targetAlias: String,
-    sourceTableName: String,
+    sourceQuery: String,
     sourceAlias: String,
     mergeCondition: Expression,
     updateAssignments: util.Map[String, Expression],
@@ -385,7 +390,7 @@ class InMemoryTable(
     deleteExpression: Expression,
     updateExpression: Expression,
     insertExpression: Expression): Unit = {
-    throw new UnsupportedOperationException(s"Subquery is unsupported in InMemeoryTable")
+    throw new UnsupportedOperationException(s"Subquery is unsupported in InMemoryTable")
   }
 }
 
