@@ -273,6 +273,7 @@ object GeneratorNestedColumnAliasing {
     case _: Stack => true
     case _: PosExplode => true
     case _: Inline => true
+    case _: Unnest => true
     case _ => false
   }
 }
