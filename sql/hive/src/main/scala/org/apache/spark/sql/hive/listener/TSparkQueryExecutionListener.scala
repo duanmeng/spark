@@ -44,6 +44,7 @@ class TSparkQueryExecutionListener(conf: SparkConf) extends QueryExecutionListen
   private val ACTION_WRITE = "write"
   private val STATUS_SUCCESS = "success"
   private val STATUS_FAIL = "fail"
+  private val STRING_SPACE = " "
   private var ts: TubeSender = _
 
   private val eventLoop = new EventLoop[Set[SQLAuditInfo]]("TDBankEventLoop") {
@@ -159,7 +160,10 @@ class TSparkQueryExecutionListener(conf: SparkConf) extends QueryExecutionListen
     val c = if (comment == null) {
       command
     } else {
-      comment.replace("\t", " ")
+      // \t will be treated as splitter of columns, should be replaced
+      // \r\n, \r, \n will be treated as splitter of messages, should be replaced
+      comment.replace("\t", STRING_SPACE).replace("\r\n", STRING_SPACE)
+        .replace("\r", STRING_SPACE).replace("\n", STRING_SPACE)
     }
     createSQLAuditInfosByType(auditBatch, auditTime, auditDate, user, readResources,
       ACTION_READ, status, durationSec, c) ++ createSQLAuditInfosByType(auditBatch,

@@ -165,6 +165,28 @@ class TSparkQueryExecutionListenerSuite extends TestHiveSingleton {
     auditTest(testSql, "success", testSql, "SparkSQL", Set.empty[SQLAuditInfo])
   }
 
+  test("test13") {
+    val testSql = "select * from\ndb1.emps e1\r\n" +
+      "where e1.deptno not in\r(select deptno from db1.depts)"
+    val resultSql = "select * from db1.emps e1 " +
+      "where e1.deptno not in (select deptno from db1.depts)"
+    auditTest(testSql, "success", testSql, "platform", Set(
+      createSQLAuditInfo("db1.emps", "read", "success", "platform", resultSql),
+      createSQLAuditInfo("db1.depts", "read", "success", "platform", resultSql)))
+  }
+
+  test("test14") {
+    val testSql = """select * from
+                  |db1.emps e1
+                  |where e1.deptno not in
+                  |(select deptno from db1.depts)""".stripMargin
+    val resultSql = "select * from db1.emps e1 " +
+      "where e1.deptno not in (select deptno from db1.depts)"
+    auditTest(testSql, "success", testSql, "platform", Set(
+      createSQLAuditInfo("db1.emps", "read", "success", "platform", resultSql),
+      createSQLAuditInfo("db1.depts", "read", "success", "platform", resultSql)))
+  }
+
   private def createSQLAuditInfo(
       resource: String,
       action: String,
