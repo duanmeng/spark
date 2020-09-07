@@ -451,12 +451,12 @@ object JdbcUtils extends Logging {
         try {
           st.execute(setCmd)
         } catch {
-          case e: Exception =>
+          case e: Throwable =>
             logWarning(s"Failed to bypass datasource conf: url = ${options.url}, " +
               s"cmd = $setCmd, errMsg = ${e.toString}")
         }
       }
-      log.info(s"Bypass conf to datasource: url=${options.url}, " +
+      logInfo(s"Bypass conf to datasource: url=${options.url}, " +
         s"setCmds=${hideSensitiveInfo(bypassConfs)}")
     }
   }
@@ -1002,7 +1002,7 @@ object JdbcUtils extends Logging {
           rowCount += 1
           if (rowCount % batchSize == 0) {
             insertSql = insertSql.substring(0, insertSql.length - 1)
-            log.info(s"Batch insert sql #$seqNo: $insertSql")
+            logInfo(s"Batch insert sql #$seqNo: $insertSql")
             stmt.execute(insertSql)
             seqNo = seqNo + 1
             rowCount = 0
@@ -1011,7 +1011,7 @@ object JdbcUtils extends Logging {
         }
         if (rowCount > 0) {
           insertSql = insertSql.substring(0, insertSql.length - 1)
-          log.info(s"Batch insert sql #$seqNo: $insertSql")
+          logInfo(s"Batch insert sql #$seqNo: $insertSql")
           stmt.execute(insertSql)
           seqNo = seqNo + 1
           rowCount = 0
