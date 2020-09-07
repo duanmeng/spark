@@ -337,7 +337,7 @@ private[jdbc] class JDBCRDD(
       stmt.setFetchSize(options.fetchSize)
     }
 
-    log.info(s"JDBC pushdown SQL: url=$url, sql=$sqlText")
+    logInfo(s"JDBC pushdown SQL: url=$url, sql=$sqlText")
     /* End SuperSQL modification */
 
     rs = stmt.executeQuery()
