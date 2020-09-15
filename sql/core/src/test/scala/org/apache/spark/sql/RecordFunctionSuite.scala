@@ -26,12 +26,12 @@ class RecordFunctionSuite extends QueryTest with SharedSparkSession {
 
     checkAnswer(
       df.selectExpr("record_every(r1.m2.f3, '>', 2)"),
-      Row(false) :: Row(true) :: Nil
+      Row(false) :: Row(true) :: Row(false) :: Nil
     )
 
     checkAnswer(
       df.selectExpr("record_every(m1.f2, '<>', 'a')"),
-      Row(false) :: Row(true) :: Nil
+      Row(false) :: Row(true) :: Row(false) :: Nil
     )
   }
 
@@ -40,12 +40,12 @@ class RecordFunctionSuite extends QueryTest with SharedSparkSession {
 
     checkAnswer(
       df.selectExpr("record_some(r1.m2.f3, '>', 2)"),
-      Row(true) :: Row(true) :: Nil
+      Row(true) :: Row(true) :: Row(false) :: Nil
     )
 
     checkAnswer(
       df.selectExpr("record_some(m1.f2, '<>', 'a')"),
-      Row(true) :: Row(true) :: Nil
+      Row(true) :: Row(true) :: Row(false) :: Nil
     )
   }
 
@@ -53,7 +53,7 @@ class RecordFunctionSuite extends QueryTest with SharedSparkSession {
     val df: DataFrame = spark.read.json(testFile("test-data/nest-test-data.json"))
     checkAnswer(
       df.selectExpr("record_count(r1.m2.f3)"),
-      Row(3) :: Row(4) :: Nil
+      Row(3) :: Row(4) :: Row(0) :: Nil
     )
   }
 

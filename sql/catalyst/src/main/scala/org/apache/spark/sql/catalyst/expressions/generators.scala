@@ -456,7 +456,6 @@ case class Inline(child: Expression) extends UnaryExpression with CollectionGene
 case class Unnest(child: Seq[Expression]) extends Expression with CollectionGenerator {
 
   lazy val nestNodes: Seq[NestNode] = {
-    NestNodeUtils.checkExpression(child)
     NestNodeUtils.merger(
       child.zipWithIndex.map{ case (n, i) => NestNodeUtils.wrapper(n, i)}
     )
@@ -476,7 +475,7 @@ case class Unnest(child: Seq[Expression]) extends Expression with CollectionGene
   }
 
   override def eval(input: InternalRow): TraversableOnce[InternalRow] = {
-    val c: CartesianData = CartesianData.reduce(nestNodes.map(_.cartesian(input)))
+    val c: CartesianData = CartesianData.reduce(nestNodes.map(_.cartesian(Some(input))))
 
     val map: Map[Int, List[Any]] = c.ordinals()
       .map(ord => (ord, c.getOrdinalCartesianData(ord).data)).toMap
@@ -522,7 +521,6 @@ case class NodeCount(child: Expression, nest: Expression)
   extends Expression with CollectionGenerator {
 
   lazy val (nestNode, collectNode): (NestNode, NestNode) = {
-    NestNodeUtils.checkExpression(Seq(child, nest))
     val rootNode = NestNodeUtils.wrapper(child, 0).rootNode()
     val markNode = NestNodeUtils.wrapper(nest, 0).rootNode()
     (rootNode, NestNodeUtils.getCollectNode(rootNode, markNode))
@@ -542,7 +540,7 @@ case class NodeCount(child: Expression, nest: Expression)
     val array: ArrayBuffer[InternalRow] = new ArrayBuffer[InternalRow]()
     val collect: CartesianData => Unit = c => array.append(InternalRow(c.size()))
     collectNode.refreshCollect(collect)
-    nestNode.cartesian(input)
+    nestNode.cartesian(Some(input))
     array
   }
 

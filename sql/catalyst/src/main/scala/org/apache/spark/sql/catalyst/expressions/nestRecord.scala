@@ -28,11 +28,10 @@ abstract class RecordConditionExpression(child: Expression, symbol: Expression, 
   override def nullable: Boolean = true
 
   lazy val nestNode: NestNode = {
-    NestNodeUtils.checkExpression(Seq(child))
     NestNodeUtils.wrapper(child, 0).rootNode()
   }
 
-  lazy val childDataType: Option[DataType] = nestNode.leafNode().head.getDataType()
+  lazy val childDataType: Option[DataType] = nestNode.leafNode().head.dataType()
 
   lazy val compareFunction: Any => Boolean =
     RecordCompare.getCompareFunction(
@@ -62,7 +61,7 @@ case class RecordEvery(child: Expression, symbol: Expression, value: Expression)
   extends RecordConditionExpression(child, symbol, value) with CodegenFallback {
 
   override def eval(input: InternalRow): Boolean = {
-    val data: List[Any] = nestNode.cartesian(input).asInstanceOf[SingleCartesianData].data
+    val data: List[Any] = nestNode.cartesian(Some(input)).asInstanceOf[SingleCartesianData].data
 
     if (data.isEmpty) {
       false
@@ -88,7 +87,7 @@ case class RecordSome(child: Expression, symbol: Expression, value: Expression)
   extends RecordConditionExpression(child, symbol, value) with CodegenFallback {
 
   override def eval(input: InternalRow): Boolean = {
-    val data: List[Any] = nestNode.cartesian(input).asInstanceOf[SingleCartesianData].data
+    val data: List[Any] = nestNode.cartesian(Some(input)).asInstanceOf[SingleCartesianData].data
 
     if (data.isEmpty) {
       false
@@ -114,14 +113,13 @@ case class RecordCount(child: Expression) extends Expression
   with Serializable with CodegenFallback {
 
   lazy val nestNode: NestNode = {
-    NestNodeUtils.checkExpression(Seq(child))
     NestNodeUtils.wrapper(child, 0).rootNode()
   }
 
   override def nullable: Boolean = true
 
   override def eval(input: InternalRow): Int = {
-    nestNode.cartesian(input).size()
+    nestNode.cartesian(Some(input)).size()
   }
 
   override protected def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {

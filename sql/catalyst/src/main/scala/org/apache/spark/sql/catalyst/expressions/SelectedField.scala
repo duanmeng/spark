@@ -71,6 +71,24 @@ object SelectedField {
         dataTypeOpt.map { dt =>
           StructField(a.name, dt, a.nullable)
         }
+      case ExtractNestedArrayField(child, _, _, field @ StructField(name,
+      dataType, nullable, metadata), _) =>
+        val newFieldDataType = dataTypeOpt match {
+          case None =>
+            // GetArrayStructFields is the top level extractor. This means its result is
+            // not pruned and we need to use the element type of the array its producing.
+            field.dataType
+          case Some(ArrayType(dataType, _)) =>
+            // GetArrayStructFields is part of a chain of extractors and its result is pruned
+            // by a parent expression. In this case need to use the parent element type.
+            dataType
+          case Some(x) =>
+            // This should not happen.
+            throw new
+                AnalysisException(s"DataType '$x' is not supported by ExtractNestedArrayField.")
+        }
+        val newField = StructField(field.name, newFieldDataType, field.nullable)
+        selectField(child, Option(ArrayType(struct(newField), nullable)))
       case c: GetStructField =>
         val field = c.childSchema(c.ordinal)
         val newField = field.copy(dataType = dataTypeOpt.getOrElse(field.dataType))

@@ -143,6 +143,10 @@ object NestedColumnAliasing {
                               _: MapKeys |
                               _: ExtractValue |
                               _: AttributeReference, _, _, _, _) => Seq(e)
+    case ExtractNestedArrayField(_: MapValues |
+                                 _: MapKeys |
+                                 _: ExtractValue |
+                                 _: AttributeReference, _, _, _, _) => Seq(e)
     case es if es.children.nonEmpty => es.children.flatMap(collectRootReferenceAndExtractValue)
     case _ => Seq.empty
   }
@@ -260,7 +264,6 @@ object GeneratorNestedColumnAliasing {
           // Defer updating `Generate.unrequiredChildIndex` to next round of `ColumnPruning`.
           NestedColumnAliasing.replaceWithAliases(g, nestedFieldToAlias, attrToAliases)
       }
-
     case _ =>
       None
   }
