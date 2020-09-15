@@ -119,14 +119,14 @@ class GeneratorFunctionSuite extends QueryTest with SharedSparkSession {
     checkAnswer(
       df.select($"a", explode($"intList")),
       Row(1, 1) ::
-      Row(1, 2) ::
-      Row(1, 3) :: Nil)
+        Row(1, 2) ::
+        Row(1, 3) :: Nil)
 
     checkAnswer(
       df.select($"*", explode($"intList")),
       Row(1, Seq(1, 2, 3), 1) ::
-      Row(1, Seq(1, 2, 3), 2) ::
-      Row(1, Seq(1, 2, 3), 3) :: Nil)
+        Row(1, Seq(1, 2, 3), 2) ::
+        Row(1, Seq(1, 2, 3), 3) :: Nil)
   }
 
   test("explode_outer and other columns") {
@@ -371,25 +371,34 @@ class GeneratorFunctionSuite extends QueryTest with SharedSparkSession {
     df.createTempView("unnest_table")
     checkAnswer(
       sql("""
-        |select f1, a, count(*) from unnest_table
-        |lateral view unnest(r1.m2.f3) as a where m1.a1 = '01' group by f1, a
-        |""".stripMargin),
+            |select f1, a, count(*) from unnest_table
+            |lateral view unnest(r1.m2.f3) as a where m1.a1 = '01' group by f1, a
+            |""".stripMargin),
       Row("X", 2, 1) :: Row("X", 3, 1) :: Row("X", 1, 1) ::  Nil
     )
 
     checkAnswer(
       sql("""
-        |select count(a) from unnest_table
-        |lateral view unnest(r1.m2.f3) as a where m1.a1 = '01'
-        |""".stripMargin),
+            |select count(a) from unnest_table
+            |lateral view unnest(r1.m2.f3) as a where m1.a1 = '01'
+            |""".stripMargin),
       Row(3)
     )
     checkAnswer(
       sql("""
-        |select c0 as `f1`, c1 as `r1.m2.f3` from unnest_table
-        |lateral view unnest(f1, r1.m2.f3) as c0, c1 where f1 = "X"
-        |""".stripMargin),
+            |select c0 as `f1`, c1 as `r1.m2.f3` from unnest_table
+            |lateral view unnest(f1, r1.m2.f3) as c0, c1 where f1 = "X"
+            |""".stripMargin),
       Row("X", 1) :: Row("X", 2) :: Row("X", 3) ::  Nil
+    )
+
+    checkAnswer(
+      sql("""
+            |select c0, c1, c2 from unnest_table
+            |lateral view unnest(k1.k3, k1.k4.k5.k6, f1) as c0, c1, c2
+            |""".stripMargin),
+      Row(2, 1, "X") :: Row(2, 2, "X") :: Row(3, 7, "Y") :: Row(3, 8, "Y") :: Row(3, 1, "Y")
+        :: Row(3, 2, "Y") :: Nil
     )
   }
 
@@ -397,20 +406,20 @@ class GeneratorFunctionSuite extends QueryTest with SharedSparkSession {
     val df: DataFrame = spark.read.json(testFile("test-data/nest-test-data.json"))
     checkAnswer(
       df.selectExpr("node_count(r1.m2.f3, r1.m2)"),
-      Row(2) :: Row(1) ::  Row(4) :: Nil
+      Row(2) :: Row(1) :: Row(4) :: Row(0) :: Nil
     )
     checkAnswer(
       df.selectExpr("node_count(r1.m2.f3, r1)"),
-      Row(3) :: Row(4) :: Nil
+      Row(3) :: Row(4) :: Row(0) :: Nil
     )
 
     df.createTempView("node_record")
     checkAnswer(
       sql(
-      """
-        |select f1, node_count(r1.m2.f3, r1.m2) from node_record
-        |""".stripMargin),
-      Row("X", 1) :: Row("X", 2) ::  Row("Y", 4) :: Nil
+        """
+          |select f1, node_count(r1.m2.f3, r1.m2) from node_record
+          |""".stripMargin),
+      Row("X", 2) :: Row("X", 1) :: Row("Y", 4) :: Row("Z", 0) :: Nil
     )
   }
 }
