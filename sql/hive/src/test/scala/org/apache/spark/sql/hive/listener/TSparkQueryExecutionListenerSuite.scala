@@ -26,8 +26,10 @@ import org.apache.spark.sql.catalyst.analysis.{Analyzer, FunctionRegistry}
 import org.apache.spark.sql.catalyst.catalog.{CatalogDatabase, CatalogStorageFormat, CatalogTable, CatalogTableType, InMemoryCatalog, SessionCatalog}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.connector.catalog.CatalogManager
 import org.apache.spark.sql.execution.SparkSqlParser
 import org.apache.spark.sql.execution.datasources.{FindDataSourceTable, ResolveSQLOnFile}
+import org.apache.spark.sql.execution.datasources.v2.V2SessionCatalog
 import org.apache.spark.sql.hive.test.TestHiveSingleton
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
@@ -65,14 +67,20 @@ class TSparkQueryExecutionListenerSuite extends TestHiveSingleton {
     catalog.createTable(emps, false)
     catalog.createTable(depts, false)
 
+    val sessionCatalog = new SessionCatalog(
+      catalog,
+      FunctionRegistry.builtin,
+      new SQLConf().copy(SQLConf.CASE_SENSITIVE -> false)) {
+      override def createDatabase(dbDefinition: CatalogDatabase, ignoreIfExists: Boolean) {}
+    }
+
+    val sqlConf = new SQLConf().copy(SQLConf.CASE_SENSITIVE -> true)
     analyzer = new Analyzer(
-      new SessionCatalog(
-        catalog,
-        FunctionRegistry.builtin,
-        new SQLConf().copy(SQLConf.CASE_SENSITIVE -> false)) {
-        override def createDatabase(dbDefinition: CatalogDatabase, ignoreIfExists: Boolean) {}
-      },
-      new SQLConf().copy(SQLConf.CASE_SENSITIVE -> false)
+      new CatalogManager(
+        sqlConf,
+        new V2SessionCatalog(sessionCatalog, sqlConf),
+        sessionCatalog),
+      sqlConf
     ) {
       override val extendedResolutionRules: Seq[Rule[LogicalPlan]] =
         new FindDataSourceTable(spark) +:

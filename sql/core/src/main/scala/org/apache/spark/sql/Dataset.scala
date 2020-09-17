@@ -3207,7 +3207,9 @@ class Dataset[T] private[sql](
    * @group basic
    * @since 1.6.0
    */
-  def toJavaRDD: JavaRDD[T] = rdd.toJavaRDD()
+  def toJavaRDD: JavaRDD[T] = withNewRDDExecutionId {
+    rdd.toJavaRDD()
+  }
 
   /**
    * Returns the content of the Dataset as a `JavaRDD` of `T`s.

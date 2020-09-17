@@ -129,7 +129,18 @@ class TSparkQueryExecutionListener(conf: SparkConf) extends QueryExecutionListen
         tableSet += name.toString
       case _ =>
     }
-    tableSet
+    tableSet.map(getTableNameWithoutCatalog)
+  }
+
+  private def getTableNameWithoutCatalog(tableName: String): String = {
+    val parts = tableName.split("\\.")
+    parts.size match {
+      case 3 => Seq(parts(1), parts(2)).mkString(".")
+      case 2 => tableName
+      case _ =>
+        logWarning(s"Unexpected table name $tableName")
+        tableName
+    }
   }
 
   private def getTablesFromExpression(expr: Expression): Set[String] = {
