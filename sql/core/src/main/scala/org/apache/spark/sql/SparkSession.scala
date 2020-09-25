@@ -21,9 +21,6 @@ import java.io.Closeable
 import java.util.concurrent.TimeUnit._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 
-import com.tencent.tdw.security.authentication.{LocalKeyManager, ServiceTarget}
-import com.tencent.tdw.security.authentication.client.SecureClientFactory
-import org.apache.hadoop.security.UserGroupInformation
 import scala.collection.JavaConverters._
 import scala.reflect.runtime.universe.TypeTag
 import scala.util.control.NonFatal
@@ -603,48 +600,30 @@ class SparkSession private(
    * @since 2.0.0
    */
   def sql(sqlText: String): DataFrame = withActive {
-    val tracker = new QueryPlanningTracker
-    val plan = tracker.measurePhase(QueryPlanningTracker.PARSING) {
-      sessionState.sqlParser.parsePlan(sqlText)
-    }
-
-    val sqlConf = sessionState.conf
     sparkContext.setLocalProperty(SQLExecution.EXECUTION_SQL_TEXT_KEY, sqlText)
-    if (sqlConf.tauthEnabled) {
-      // get user name for tauth, from ugi or conf
-      val userName = if ("".equals(sqlConf.tauthUserName)) {
-        UserGroupInformation.getCurrentUser.getShortUserName
-      } else {
-        sqlConf.tauthUserName
+    try {
+      val tracker = new QueryPlanningTracker
+      val plan = tracker.measurePhase(QueryPlanningTracker.PARSING) {
+        sessionState.sqlParser.parsePlan(sqlText)
       }
-
-      val secureClient = SecureClientFactory.generate(
-        userName, LocalKeyManager.generateByDefaultKey(sqlConf.tauthUserKey))
-      // authenticate user with TAuth for sparkSql
-      secureClient.getAuthentication(
-        ServiceTarget.valueOf(sqlConf.tauthServiceSparkSql))
-      try {
-        Dataset.ofRows(self, plan, tracker)
-      } catch {
-        case e: Exception if sqlConf.supersqlAutoRouterEnabled &&
-          e.getMessage.indexOf(sqlConf.supersqlAutoRouterDependentMessage) > -1 =>
-          logInfo("Unsupported query with spark sql, forward to SuperSQL")
-
-          // authenticate user with TAuth for superSql
-          val authentication = secureClient.getAuthentication(
-            ServiceTarget.valueOf(sqlConf.tauthServiceSuperSql))
-
-          read.format("jdbc").option("driver", sqlConf.supersqlAutoRouterConnectionDriver).
-            option("rawAuth", authentication.flat).
-            option("url", sqlConf.supersqlAutoRouterConnectionUrl).
-            option("fetchsize", sqlConf.supersqlAutoRouterConnectionFetchSize).
-            option("query", sqlText).load
-
-        case t: Throwable => throw t
-      }
-    } else {
       Dataset.ofRows(self, plan, tracker)
+    } catch {
+      // Throw the exception if there has unsupported table type for THive
+      case e: Exception if hasUnsupportTHiveTable(e) =>
+        throw e
+      case e2: Exception =>
+        if (e2.getCause != null && hasUnsupportTHiveTable(e2.getCause)) {
+          throw e2.getCause
+        } else {
+          throw e2
+        }
+      case t: Throwable => throw t
     }
+  }
+
+  // If exception is thrown from oms because of unsupported table type
+  private def hasUnsupportTHiveTable(t: Throwable): Boolean = {
+    t.getMessage.indexOf(sessionState.conf.supersqlAutoRouterDependentMessage) > -1
   }
 
   /**
