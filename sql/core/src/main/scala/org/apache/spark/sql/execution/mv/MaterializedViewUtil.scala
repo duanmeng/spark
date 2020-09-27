@@ -19,9 +19,10 @@ package org.apache.spark.sql.execution.mv
 
 import java.math.BigDecimal
 
-import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, Expression, Not, Or}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, Expression, Literal, Not, Or}
 import org.apache.spark.sql.catalyst.util.TypeUtils
 import org.apache.spark.sql.types.{AbstractDataType, BinaryType, ByteType, DataType, DateType, Decimal, DecimalType, DoubleType, FloatType, IntegerType, LongType, ShortType, StringType, TimestampType}
+import org.apache.spark.unsafe.types.UTF8String
 import org.apache.spark.util.Utils
 
 object MaterializedViewUtil {
@@ -687,6 +688,127 @@ object MaterializedViewUtil {
       tableNames: Set[String],
       tableAliasMap: Map[String, String]): Boolean = {
     tableNames.contains(tableAliasMap.getOrElse(attRef.qualifier.mkString("."), ""))
+  }
+
+  def createLiteralWithType(data: Any, dataType: DataType): Literal = {
+    val newData = data match {
+      case d: Double =>
+        dataType match {
+          case DoubleType =>
+            data
+          case FloatType =>
+            d.toFloat
+          case DecimalType.Fixed(_, _) =>
+            BigDecimal.valueOf(d)
+          case _ => throw new TryMaterializedFailedException(
+            s"Unsupported trans from double to $dataType")
+        }
+      case f: Float =>
+        dataType match {
+          case FloatType =>
+            f
+          case DecimalType.Fixed(_, _) =>
+            BigDecimal.valueOf(f)
+          case _ => throw new TryMaterializedFailedException(
+            s"Unsupported trans from float to $dataType")
+        }
+      case l: Long =>
+        dataType match {
+          case DoubleType =>
+            l.toDouble
+          case FloatType =>
+            l.toFloat
+          case LongType =>
+            l
+          case DecimalType.Fixed(_, _) =>
+            BigDecimal.valueOf(l)
+          case _ => throw new TryMaterializedFailedException(
+            s"Unsupported trans from long to $dataType")
+        }
+      case i: Int =>
+        dataType match {
+          case DoubleType =>
+            i.toDouble
+          case FloatType =>
+            i.toFloat
+          case IntegerType =>
+            i
+          case LongType =>
+            i.toLong
+          case DecimalType.Fixed(_, _) =>
+            BigDecimal.valueOf(i.toLong)
+          case _ => throw new TryMaterializedFailedException(
+            s"Unsupported trans from int to $dataType")
+        }
+      case i: Integer =>
+        dataType match {
+          case DoubleType =>
+            i.toDouble
+          case FloatType =>
+            i.toFloat
+          case IntegerType =>
+            i
+          case LongType =>
+            i.toLong
+          case DecimalType.Fixed(_, _) =>
+            BigDecimal.valueOf(i.toLong)
+          case _ => throw new TryMaterializedFailedException(
+            s"Unsupported trans from Integer to $dataType")
+        }
+      case s: Short =>
+        dataType match {
+          case DoubleType =>
+            s.toDouble
+          case FloatType =>
+            s.toFloat
+          case ShortType =>
+            s
+          case IntegerType =>
+            s.toInt
+          case LongType =>
+            s.toLong
+          case DecimalType.Fixed(_, _) =>
+            BigDecimal.valueOf(s.toLong)
+          case _ => throw new TryMaterializedFailedException(
+            s"Unsupported trans from short to $dataType")
+        }
+      case b: Byte =>
+        dataType match {
+          case DoubleType =>
+            b.toDouble
+          case FloatType =>
+            b.toFloat
+          case ByteType =>
+            b
+          case ShortType =>
+            b.toShort
+          case IntegerType =>
+            b.toInt
+          case LongType =>
+            b.toLong
+          case DecimalType.Fixed(_, _) =>
+            BigDecimal.valueOf(b.toLong)
+          case _ => throw new TryMaterializedFailedException(
+            s"Unsupported trans from byte to $dataType")
+        }
+      case b: Decimal =>
+        dataType match {
+          case DecimalType.Fixed(_, _) =>
+            b
+          case _ => throw new TryMaterializedFailedException(
+            s"Unsupported trans from decimal to $dataType")
+        }
+      case s: UTF8String =>
+        dataType match {
+          case StringType => s
+          case _ => throw new TryMaterializedFailedException(
+            s"Unsupported trans from string to $dataType")
+        }
+      case _ =>
+        throw new TryMaterializedFailedException(
+          s"Unsupported trans $data to $dataType when createLiteralWithType")
+    }
+    Literal.create(newData, dataType)
   }
 }
 

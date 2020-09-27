@@ -62,7 +62,7 @@ class MaterializedViewOptimizerSub1Suite extends MaterializedViewOptimizerBaseSu
             |from (
             |select mv_db.testmv.`c` AS `c`, mv_db.testmv.`deptno` AS `deptno`, mv_db.testmv.`s` AS `s`
             |from mv_db.testmv
-            |) as `__auto_generated_subquery_name`
+            |) as __auto_generated_subquery_name
             |where (CAST((CAST(__auto_generated_subquery_name.`s` AS DECIMAL(20,2)) * CAST(0.8BD AS DECIMAL(20,2))) AS DECIMAL(22,3)) > CAST(CAST(10000 AS DECIMAL(5,0)) AS DECIMAL(22,3)))
             |""".stripMargin.equals(getSql(materialized)))
     }
@@ -582,7 +582,7 @@ class MaterializedViewOptimizerSub1Suite extends MaterializedViewOptimizerBaseSu
             |from (
             |select 100 AS `k`, mv_db.testmv.`deptno` AS `deptno`, mv_db.testmv.`salary` AS `salary`
             |from mv_db.testmv
-            |) as `__auto_generated_subquery_name`
+            |) as __auto_generated_subquery_name
             |group by __auto_generated_subquery_name.`deptno`
             |""".stripMargin.equals(getSql(materialized)))
     }
@@ -709,7 +709,7 @@ class MaterializedViewOptimizerSub1Suite extends MaterializedViewOptimizerBaseSu
             |from (
             |select mv_db.testmv.`deptno` AS `deptno`, mv_db.testmv.`sum_salary` AS `sum_salary`
             |from mv_db.testmv
-            |) as `__auto_generated_subquery_name`
+            |) as __auto_generated_subquery_name
             |where (CAST(__auto_generated_subquery_name.`sum_salary` AS DECIMAL(20,2)) > CAST(CAST(10 AS DECIMAL(2,0)) AS DECIMAL(20,2)))
             |""".stripMargin.equals(getSql(materialized)))
     }
@@ -749,7 +749,7 @@ class MaterializedViewOptimizerSub1Suite extends MaterializedViewOptimizerBaseSu
             |select mv_db.testmv.`deptno` AS `deptno`, mv_db.testmv.`sum_salary` AS `sum_salary`
             |from mv_db.testmv
             |where (mv_db.testmv.`deptno` >= 20)
-            |) as `__auto_generated_subquery_name`
+            |) as __auto_generated_subquery_name
             |where (CAST(__auto_generated_subquery_name.`sum_salary` AS DECIMAL(20,2)) > CAST(CAST(10 AS DECIMAL(2,0)) AS DECIMAL(20,2)))
             |""".stripMargin.equals(getSql(materialized)))
     }
@@ -790,7 +790,7 @@ class MaterializedViewOptimizerSub1Suite extends MaterializedViewOptimizerBaseSu
             |select mv_db.testmv.`deptno` AS `deptno`, mv_db.testmv.`sum_salary` AS `sum_salary`
             |from mv_db.testmv
             |where (mv_db.testmv.`deptno` >= 20)
-            |) as `__auto_generated_subquery_name`
+            |) as __auto_generated_subquery_name
             |where (CAST(__auto_generated_subquery_name.`sum_salary` AS DECIMAL(20,2)) > CAST(CAST(10 AS DECIMAL(2,0)) AS DECIMAL(20,2)))
             |""".stripMargin.equals(getSql(materialized)))
     }
@@ -2968,11 +2968,11 @@ class MaterializedViewOptimizerSub1Suite extends MaterializedViewOptimizerBaseSu
             |select mv_db.testmv.`deptno` AS `deptno`, mv_db.testmv.`empid` AS `empid`
             |from mv_db.testmv
             |where (mv_db.testmv.`empid` < CAST(200 AS BIGINT))
-            |) as `b`, (
+            |) as b, (
             |select mv_db.testmv.`empid` AS `empid`, mv_db.testmv.`name` AS `name`
             |from mv_db.testmv
             |where (mv_db.testmv.`empid` < CAST(300 AS BIGINT))
-            |) as `a`
+            |) as a
             |where (a.`empid` = b.`empid`)
             |""".stripMargin.equals(getSql(materialized)))
     }
@@ -3029,7 +3029,7 @@ class MaterializedViewOptimizerSub1Suite extends MaterializedViewOptimizerBaseSu
             |select mv_db.testmv.`deptno` AS `deptno`, mv_db.testmv.`empid` AS `empid`
             |from mv_db.testmv
             |group by mv_db.testmv.`deptno`, mv_db.testmv.`empid`
-            |) as `__auto_generated_subquery_name`
+            |) as __auto_generated_subquery_name
             |group by __auto_generated_subquery_name.`deptno`
             |""".stripMargin.equals(getSql(materialized)))
     }

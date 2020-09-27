@@ -197,9 +197,9 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
 
         assert(
           """
-            |select count(1) AS `c`, substring(mv_db.testmv.`name`, 1, 20) AS `subn`
+            |select count(1) AS `c`, substr(mv_db.testmv.`name`, 1, 20) AS `subn`
             |from mv_db.testmv
-            |group by substring(mv_db.testmv.`name`, 1, 20)
+            |group by substr(mv_db.testmv.`name`, 1, 20)
             |""".stripMargin.equals(getSql(materialized)))
     }
   }
@@ -354,7 +354,7 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
             |from mv_db.testmv
             |where (mv_db.testmv.`deptno` = 1)
             |group by mv_db.testmv.`deptno`
-            |) as `t`
+            |) as t
             |group by t.`deptno`
             |""".stripMargin.equals(getSql(materialized)))
     }
@@ -391,7 +391,7 @@ class MaterializedViewOptimizerSub2Suite extends MaterializedViewOptimizerBaseSu
             |from mv_db.testmv
             |where (mv_db.testmv.`deptno` = 1)
             |group by mv_db.testmv.`deptno`
-            |) as `t`
+            |) as t
             |group by t.`deptno`
             |""".stripMargin.equals(getSql(materialized)))
     }

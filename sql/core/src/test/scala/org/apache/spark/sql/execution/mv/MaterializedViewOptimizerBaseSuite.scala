@@ -27,8 +27,10 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, SortOrder}
 import org.apache.spark.sql.catalyst.plans.Inner
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.connector.catalog.CatalogManager
 import org.apache.spark.sql.execution.SparkSqlParser
 import org.apache.spark.sql.execution.datasources.{FindDataSourceTable, ResolveSQLOnFile}
+import org.apache.spark.sql.execution.datasources.v2.V2SessionCatalog
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.test.SharedSparkSession
 import org.apache.spark.sql.types._
@@ -135,14 +137,28 @@ class MaterializedViewOptimizerBaseSuite extends SparkFunSuite with SharedSparkS
       override def createDatabase(dbDefinition: CatalogDatabase, ignoreIfExists: Boolean) {}
     }
 
+//    analyzer = new Analyzer(
+//      sessionCatalog,
+//      new SQLConf().copy(SQLConf.CASE_SENSITIVE -> false)
+//    ) {
+//      override val extendedResolutionRules: Seq[Rule[LogicalPlan]] =
+//        new FindDataSourceTable(spark) +:
+//          new ResolveSQLOnFile(spark) +: Nil
+//    }
+
+    val sqlConf = new SQLConf().copy(SQLConf.CASE_SENSITIVE -> true)
     analyzer = new Analyzer(
-      sessionCatalog,
-      new SQLConf().copy(SQLConf.CASE_SENSITIVE -> false)
+      new CatalogManager(
+        sqlConf,
+        new V2SessionCatalog(sessionCatalog, sqlConf),
+        sessionCatalog),
+      sqlConf
     ) {
       override val extendedResolutionRules: Seq[Rule[LogicalPlan]] =
         new FindDataSourceTable(spark) +:
           new ResolveSQLOnFile(spark) +: Nil
     }
+
     mvOptimizer = new MaterializedViewOptimizer(analyzer)
   }
 
@@ -186,12 +202,12 @@ class MaterializedViewOptimizerBaseSuite extends SparkFunSuite with SharedSparkS
       analyzer.getSqlConf.setConfString(
         "spark.sql.materializedView.matchPolicy", "multiple")
       mvs.foreach {
-        tmv => analyzer.getCatalog.createMaterializedView(
+        tmv => sessionCatalog.createMaterializedView(
           tmv.mvDb, tmv.mvName, tmv.mvQuery, tmv.mvSchema)
       }
 
       val unresolved = parser.parsePlan(sql)
-      val resolved = analyzer.executeAndCheck(unresolved)
+      val resolved = analyzer.executeAndCheck(unresolved, new QueryPlanningTracker)
       val materialized = mvOptimizer.execute(resolved)
       // scalastyle:off println
       println(getSql(materialized))
@@ -202,7 +218,7 @@ class MaterializedViewOptimizerBaseSuite extends SparkFunSuite with SharedSparkS
       analyzer.getSqlConf.setConfString("spark.sql.materializedView.pfmodel.enable", "true")
       analyzer.getSqlConf.setConfString("spark.sql.materializedView.matchPolicy", "once")
       mvs.foreach {
-        tmv => analyzer.getCatalog.dropTable(
+        tmv => sessionCatalog.dropTable(
           new TableIdentifier(tmv.mvName, Some(tmv.mvDb)), false, false)
       }
     }
@@ -230,7 +246,7 @@ class MaterializedViewOptimizerBaseSuite extends SparkFunSuite with SharedSparkS
   }
 
   protected def getSql(plan: LogicalPlan): String = {
-    plan match {
+    val resultSql = plan match {
       case Project(_, Sort(orders, _, p@Project(_, _))) =>
         getSqlSingle(p, orders, isOrderAlias = true)
       case Project(_, Sort(orders, _, a@Aggregate(_, _, _))) => getSqlSingle(a, orders)
@@ -249,6 +265,8 @@ class MaterializedViewOptimizerBaseSuite extends SparkFunSuite with SharedSparkS
         sb.toString
       case d@Distinct(p@Project(_, _)) => getSqlSingle(p, Seq.empty[SortOrder], isDistinct = true)
     }
+    // remove spark_catalog.to match the result sql which is created with Spark 2.4
+    resultSql.replace("spark_catalog.", "")
   }
 
   protected def getSqlSingle(

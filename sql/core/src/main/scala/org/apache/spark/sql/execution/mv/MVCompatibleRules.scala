@@ -754,27 +754,35 @@ object MVCompatibleRules {
             "valueScopesToBinaryComparison failed: -Max --- Max is not supported")
         } else {
           if (vs.includeHighValue) {
-            bcs :+= LessThanOrEqual(queryAttRef, Literal.create(vs.highValue.get, dataType))
+            bcs :+= LessThanOrEqual(queryAttRef,
+              MaterializedViewUtil.createLiteralWithType(vs.highValue.get, dataType))
           } else {
-            bcs :+= LessThan(queryAttRef, Literal.create(vs.highValue.get, dataType))
+            bcs :+= LessThan(queryAttRef,
+              MaterializedViewUtil.createLiteralWithType(vs.highValue.get, dataType))
           }
         }
       } else if (vs.highValue.isEmpty) {
         if (vs.includeLowValue) {
-          bcs :+= GreaterThanOrEqual(queryAttRef, Literal.create(vs.lowValue.get, dataType))
+          bcs :+= GreaterThanOrEqual(queryAttRef,
+            MaterializedViewUtil.createLiteralWithType(vs.lowValue.get, dataType))
         } else {
-          bcs :+= GreaterThan(queryAttRef, Literal.create(vs.lowValue.get, dataType))
+          bcs :+= GreaterThan(queryAttRef,
+            MaterializedViewUtil.createLiteralWithType(vs.lowValue.get, dataType))
         }
       } else {
         if (vs.includeLowValue) {
-          bcs :+= GreaterThanOrEqual(queryAttRef, Literal.create(vs.lowValue.get, dataType))
+          bcs :+= GreaterThanOrEqual(queryAttRef,
+            MaterializedViewUtil.createLiteralWithType(vs.lowValue.get, dataType))
         } else {
-          bcs :+= GreaterThan(queryAttRef, Literal.create(vs.lowValue.get, dataType))
+          bcs :+= GreaterThan(queryAttRef,
+            MaterializedViewUtil.createLiteralWithType(vs.lowValue.get, dataType))
         }
         if (vs.includeHighValue) {
-          bcs :+= LessThanOrEqual(queryAttRef, Literal.create(vs.highValue.get, dataType))
+          bcs :+= LessThanOrEqual(queryAttRef,
+            MaterializedViewUtil.createLiteralWithType(vs.highValue.get, dataType))
         } else {
-          bcs :+= LessThan(queryAttRef, Literal.create(vs.highValue.get, dataType))
+          bcs :+= LessThan(queryAttRef,
+            MaterializedViewUtil.createLiteralWithType(vs.highValue.get, dataType))
         }
       }
     })
