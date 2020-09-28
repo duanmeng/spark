@@ -21,20 +21,41 @@ import java.net.URI
 import java.text.SimpleDateFormat
 import java.util.Calendar
 
+import org.scalatest.BeforeAndAfterAll
+
+import org.apache.spark.{SparkConf, SparkContext, SparkFunSuite}
+import org.apache.spark.internal.config
+import org.apache.spark.internal.config.UI.UI_ENABLED
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.{QueryPlanningTracker, TableIdentifier}
 import org.apache.spark.sql.catalyst.analysis.{Analyzer, FunctionRegistry}
-import org.apache.spark.sql.catalyst.catalog.{CatalogDatabase, CatalogStorageFormat, CatalogTable, CatalogTableType, InMemoryCatalog, SessionCatalog}
+import org.apache.spark.sql.catalyst.catalog._
+import org.apache.spark.sql.catalyst.optimizer.ConvertToLocalRelation
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.connector.catalog.CatalogManager
 import org.apache.spark.sql.execution.SparkSqlParser
 import org.apache.spark.sql.execution.datasources.{FindDataSourceTable, ResolveSQLOnFile}
 import org.apache.spark.sql.execution.datasources.v2.V2SessionCatalog
-import org.apache.spark.sql.hive.test.TestHiveSingleton
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
 
-class TSparkQueryExecutionListenerSuite extends TestHiveSingleton {
+class TSparkQueryExecutionListenerSuite extends SparkFunSuite with BeforeAndAfterAll {
+
+  val spark = new SparkSession(new SparkContext(
+    System.getProperty("spark.sql.test.master", "local[1]"),
+    "TestSQLContext",
+    new SparkConf()
+      .set("spark.sql.test", "")
+      .set(SQLConf.CODEGEN_FALLBACK.key, "false")
+      // SPARK-8910
+      .set(UI_ENABLED, false)
+      .set(config.UNSAFE_EXCEPTION_ON_MEMORY_LEAK, true)
+      // Disable ConvertToLocalRelation for better test coverage. Test cases built on
+      // LocalRelation will exercise the optimization rules better by disabling it as
+      // this rule may potentially block testing of other optimization rules such as
+      // ConstantPropagation etc.
+      .set(SQLConf.OPTIMIZER_EXCLUDED_RULES.key, ConvertToLocalRelation.ruleName)))
 
   val catalog = new InMemoryCatalog
   val parser = new SparkSqlParser(new SQLConf)

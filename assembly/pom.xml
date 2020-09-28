@@ -299,5 +299,15 @@
         </dependency>
       </dependencies>
     </profile>
+    <profile>
+      <id>spark-tencent-plugin</id>
+      <dependencies>
+        <dependency>
+          <groupId>com.tencent.spark</groupId>
+          <artifactId>spark-tencent-plugin_${scala.binary.version}</artifactId>
+          <version>${project.version}</version>
+        </dependency>
+      </dependencies>
+    </profile>
   </profiles>
 </project>
