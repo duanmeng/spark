@@ -181,6 +181,7 @@ object JdbcUtils extends Logging {
       rddSchema: StructType,
       tableSchema: Option[StructType],
       isCaseSensitive: Boolean,
+      hiveParColStr: String,
       dialect: JdbcDialect): String = {
     val insertTdw = isTdw(url)
     val columns = if (tableSchema.isEmpty) {
@@ -205,7 +206,8 @@ object JdbcUtils extends Logging {
       }.mkString(",")
     }
     val placeholders = rddSchema.fields.map(_ => "?").mkString(",")
-    s"INSERT INTO $table ($columns) VALUES ($placeholders)"
+    val colStr = if (hiveParColStr.isEmpty) "(" + columns + ")" else hiveParColStr
+    s"INSERT INTO $table $colStr VALUES ($placeholders)"
   }
   /* End SuperSQL modification */
 
@@ -339,6 +341,51 @@ object JdbcUtils extends Logging {
 
   def getTdwSchemaQuery(table: String): String = {
     s"SELECT * FROM $table LIMIT 1"
+  }
+
+  def getHiveParCols(conn: Connection,
+                     options: JDBCOptions): scala.collection.mutable.ListBuffer[String] = {
+    val result = scala.collection.mutable.ListBuffer.empty[String]
+    if (!isHive(options.url)) {
+      return result
+    }
+
+    var statement: Statement = null
+    var resultSet: ResultSet = null
+    try {
+      statement = conn.createStatement()
+      resultSet = statement.executeQuery("desc " + options.tableOrQuery)
+      var withParCols = false
+      while (resultSet.next() && !withParCols) {
+        if (resultSet.getString(1).equals("# Partition Information")) {
+          withParCols = true
+        }
+      }
+      if (!withParCols) {
+        return result
+      }
+      resultSet.next()
+      while (resultSet.next()) {
+        result.append(resultSet.getString(1))
+      }
+      return result
+    } catch {
+      case e: SQLException =>
+        log.warn("Failed to get partition columns for Hive table", e)
+    } finally {
+      if (resultSet != null) {
+        resultSet.close()
+      }
+      if (statement != null) {
+        statement.close()
+      }
+    }
+    result
+  }
+
+  def getHiveParColStr(conn: Connection, options: JDBCOptions): String = {
+    val list = getHiveParCols(conn, options)
+    if (list.isEmpty) "" else s"partition (${list.mkString(",")})"
   }
 
   def handleSuperSqlUrl(url: String): String = {
@@ -961,6 +1008,12 @@ object JdbcUtils extends Logging {
     val conn = getConnection()
     try {
       val stmt = conn.createStatement()
+      if (insertStmt.contains(" partition (")) {
+        stmt.execute("set hive.exec.dynamic.partition = true")
+        stmt.execute("set hive.exec.dynamic.partition.mode = nonstrict")
+        stmt.execute("set hive.strict.checks.cartesian.product = false")
+      }
+
       val index = insertStmt.indexOf(" VALUES ")
       val cmdPrefix = insertStmt.substring(0, index + " VALUES ".length)
       val numFields = rddSchema.fields.length
@@ -1155,9 +1208,10 @@ object JdbcUtils extends Logging {
     val getConnection: () => Connection = createConnectionFactory(options)
     val batchSize = options.batchSize
     val isolationLevel = options.isolationLevel
+    val hiveParColStr = getHiveParColStr(getConnection(), options)
 
     val insertStmt = getInsertStatement(
-      url, table, rddSchema, tableSchema, isCaseSensitive, dialect)
+      url, table, rddSchema, tableSchema, isCaseSensitive, hiveParColStr, dialect)
     val repartitionedDF = options.numPartitions match {
       case Some(n) if n <= 0 => throw new IllegalArgumentException(
         s"Invalid value `$n` for parameter `${JDBCOptions.JDBC_NUM_PARTITIONS}` in table writing " +
