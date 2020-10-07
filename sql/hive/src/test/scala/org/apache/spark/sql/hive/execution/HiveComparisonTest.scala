@@ -376,7 +376,7 @@ abstract class HiveComparisonTest
                 (!hiveQuery.logical.isInstanceOf[DescribeFunctionStatement]) &&
                 (!hiveQuery.logical.isInstanceOf[DescribeCommandBase]) &&
                 (!hiveQuery.logical.isInstanceOf[DescribeRelation]) &&
-                (!hiveQuery.logical.isInstanceOf[DescribeColumnStatement]) &&
+                (!hiveQuery.logical.isInstanceOf[DescribeColumn]) &&
                 preparedHive != catalyst) {
 
               val hivePrintOut = s"== HIVE - ${preparedHive.size} row(s) ==" +: preparedHive
