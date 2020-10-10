@@ -182,6 +182,9 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
       .orNull
     name = Option(name).orElse(sparkProperties.get("spark.app.name")).orNull
     jars = Option(jars).orElse(sparkProperties.get(config.JARS.key)).orNull
+    sparkProperties.get("spark.internal.metrics.jars").foreach { m =>
+      jars = Option(jars).map { _ + "," + m }.getOrElse(m)
+    }
     files = Option(files).orElse(sparkProperties.get(config.FILES.key)).orNull
     pyFiles = Option(pyFiles).orElse(sparkProperties.get(config.SUBMIT_PYTHON_FILES.key)).orNull
     ivyRepoPath = sparkProperties.get("spark.jars.ivy").orNull

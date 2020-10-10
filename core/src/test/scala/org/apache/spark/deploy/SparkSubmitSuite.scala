@@ -928,6 +928,21 @@ class SparkSubmitSuite
     }
   }
 
+  test("SPARK_CONF_DIR append spark.internal.metrics.jars in spark-defaults.conf") {
+    forConfDir(Map(
+      "spark.internal.metrics.jars" -> "file:///metrics.jar,hdfs://agent.jar")) { path =>
+      val unusedJar = TestUtils.createJarWithClasses(Seq.empty)
+      val args = Seq(
+        "--class", SimpleApplicationTest.getClass.getName.stripSuffix("$"),
+        "--name", "testApp",
+        "--master", "local",
+        "--jars", "/user/hello.jar",
+        unusedJar.toString)
+      val appArgs = new SparkSubmitArguments(args, env = Map("SPARK_CONF_DIR" -> path))
+      assert(appArgs.jars.contains("/user/hello.jar,file:///metrics.jar,hdfs://agent.jar"))
+    }
+  }
+
   test("support glob path") {
     withTempDir { tmpJarDir =>
       withTempDir { tmpFileDir =>
