@@ -51,13 +51,7 @@ case class ProjectionOverSchema(schema: StructType) {
         }
       case ExtractNestedArrayField(child, _, _, field, containsNullSeq) =>
         getProjection(child).map(p => (p, p.dataType)).map {
-          case (projection, ArrayType(ArrayType(projSchema @ StructType(_), _), _)) =>
-            ExtractNestedArrayField(projection,
-              projSchema.fieldIndex(field.name),
-              projSchema.fields.length,
-              projSchema(field.name),
-              containsNullSeq)
-          case (projection, ArrayType(projSchema @ StructType(_), _)) =>
+          case (projection, ExtractNestedArray(projSchema @ StructType(_), _, _)) =>
             ExtractNestedArrayField(projection,
               projSchema.fieldIndex(field.name),
               projSchema.fields.length,
