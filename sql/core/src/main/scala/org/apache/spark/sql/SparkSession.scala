@@ -623,7 +623,11 @@ class SparkSession private(
 
   // If exception is thrown from oms because of unsupported table type
   private def hasUnsupportTHiveTable(t: Throwable): Boolean = {
-    t.getMessage.indexOf(sessionState.conf.supersqlAutoRouterDependentMessage) > -1
+    if (t.getMessage != null) {
+      t.getMessage.indexOf(sessionState.conf.supersqlAutoRouterDependentMessage) > -1
+    } else {
+      false
+    }
   }
 
   /**
