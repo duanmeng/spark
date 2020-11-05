@@ -24,10 +24,12 @@ import com.github.luben.zstd.{ZstdInputStream, ZstdOutputStream}
 import com.ning.compress.lzf.{LZFInputStream, LZFOutputStream}
 import net.jpountz.lz4.{LZ4BlockInputStream, LZ4BlockOutputStream, LZ4Factory}
 import net.jpountz.xxhash.XXHashFactory
+import org.apache.hadoop.io.compress.GzipCodec
 import org.xerial.snappy.{Snappy, SnappyInputStream, SnappyOutputStream}
 
 import org.apache.spark.SparkConf
 import org.apache.spark.annotation.DeveloperApi
+import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.internal.config._
 import org.apache.spark.util.Utils
 
@@ -68,7 +70,8 @@ private[spark] object CompressionCodec {
     "lz4" -> classOf[LZ4CompressionCodec].getName,
     "lzf" -> classOf[LZFCompressionCodec].getName,
     "snappy" -> classOf[SnappyCompressionCodec].getName,
-    "zstd" -> classOf[ZStdCompressionCodec].getName)
+    "zstd" -> classOf[ZStdCompressionCodec].getName,
+    "gzip" -> classOf[GzipCompressionCodec].getName)
 
   def getCodecName(conf: SparkConf): String = {
     conf.get(IO_COMPRESSION_CODEC)
@@ -258,5 +261,29 @@ class ZStdCompressionCodec(conf: SparkConf) extends CompressionCodec {
     // `compressedInputStream` method above throws truncated error exception. This method set
     // `isContinuous` true to allow reading from open frames.
     new BufferedInputStream(new ZstdInputStream(s).setContinuous(true), bufferSize)
+  }
+}
+
+/**
+ * :: DeveloperApi ::
+ * GZIP implementation of [[org.apache.spark.io.CompressionCodec]].
+ * io.native.lib.available flag to use native zlib
+ *
+ * @note The wire protocol for this codec is not guaranteed to be compatible across versions
+ * of Spark. This is intended for use as an internal compression utility within a single Spark
+ * application.
+ */
+@DeveloperApi
+class GzipCompressionCodec(conf: SparkConf) extends CompressionCodec {
+  private val hadoopConf = SparkHadoopUtil.newConfiguration(conf)
+  private val gzipCodec = new GzipCodec()
+  gzipCodec.setConf(hadoopConf)
+
+  override def compressedOutputStream(s: OutputStream): OutputStream = {
+    new BufferedOutputStream(gzipCodec.createOutputStream(s))
+  }
+
+  override def compressedInputStream(s: InputStream): InputStream = {
+    new BufferedInputStream(gzipCodec.createInputStream(s))
   }
 }

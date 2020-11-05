@@ -128,6 +128,24 @@ class CompressionCodecSuite extends SparkFunSuite {
     }
   }
 
+  test("gzip compression codec") {
+    val codec = CompressionCodec.createCodec(conf, classOf[GzipCompressionCodec].getName)
+    assert(codec.getClass === classOf[GzipCompressionCodec])
+    testCodec(codec)
+  }
+
+  test("gzip compression codec short form") {
+    val codec = CompressionCodec.createCodec(conf, "gzip")
+    assert(codec.getClass === classOf[GzipCompressionCodec])
+    testCodec(codec)
+  }
+
+  test("gzip supports concatenation of serialized gzip") {
+    val codec = CompressionCodec.createCodec(conf, classOf[GzipCompressionCodec].getName)
+    assert(codec.getClass === classOf[GzipCompressionCodec])
+    testConcatenationOfSerializedStreams(codec)
+  }
+
   private def testConcatenationOfSerializedStreams(codec: CompressionCodec): Unit = {
     val bytes1: Array[Byte] = {
       val baos = new ByteArrayOutputStream()
