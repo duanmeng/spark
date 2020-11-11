@@ -39,16 +39,19 @@ class NestArraySchemaPruningSuite
     with AdaptiveSparkPlanHelper {
   case class AdRecord(positions: Array[Positions])
   case class Positions(imps: Array[Impression])
-  case class Impression(id: String, ad: Advertising)
+  case class Impression(id: String, ad: Advertising, clicks: Array[Clicks])
   case class Advertising(aindex: Int)
+  case class Clicks(fraud_type: Int)
 
-  val adRecords = AdRecord(Array(Positions(Array(Impression("1", Advertising(1)))))) ::
-    AdRecord(Array(Positions(Array(Impression("2", Advertising(2)))))) :: Nil
-
+  val adRecords = AdRecord(Array(Positions(Array(Impression("1", Advertising(1),
+    Array(Clicks(0), Clicks(1))))))) :: AdRecord(Array(Positions(Array(
+    Impression("2", Advertising(2), Array(Clicks(1), Clicks(2))))))) :: Nil
 
   testSchemaPruning("Nested arrays for pruning schema") {
-    val query = sql("select positions.imps.ad.aindex from adRecords")
-    checkScan(query, "struct<positions:array<struct<imps:array<struct<ad:struct<aindex:int>>>>>>")
+    val query =
+      sql("select positions.imps.ad.aindex, positions.imps.clicks.fraud_type from adRecords")
+    checkScan(query, "struct<positions:array<struct<imps:array<struct<ad:struct<aindex:int>, " +
+      "clicks:array<struct<fraud_type:int>>>>>>>")
   }
 
   protected def testSchemaPruning(testName: String)(testThunk: => Unit): Unit = {
@@ -70,8 +73,8 @@ class NestArraySchemaPruningSuite
 
       // Providing user specified schema. Inferred schema from different data sources might
       // be different.
-      val schema =
-      "`positions` ARRAY<STRUCT<`imps`: ARRAY<STRUCT<`id`: STRING, `ad`: STRUCT<`aindex`: INT>>>>>"
+      val schema = "`positions` ARRAY<STRUCT<`imps`: ARRAY<STRUCT<`id`: STRING, " +
+        "`ad`: STRUCT<`aindex`: INT>, `clicks`: ARRAY<STRUCT<`fraud_type`: INT>>>>>>"
       spark.read.format(dataSourceName).schema(schema).load(path + "/ad_records")
         .createOrReplaceTempView("adRecords")
 
