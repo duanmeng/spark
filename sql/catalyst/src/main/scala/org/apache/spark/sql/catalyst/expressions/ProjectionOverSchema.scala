@@ -49,14 +49,15 @@ case class ProjectionOverSchema(schema: StructType) {
               s"unmatched child schema for GetArrayStructFields: ${projSchema.toString}"
             )
         }
-      case ExtractNestedArrayField(child, _, _, field, containsNullSeq) =>
+      case ExtractNestedArrayField(child, _, _, field, containsNullSeq, extractIsArray) =>
         getProjection(child).map(p => (p, p.dataType)).map {
           case (projection, ExtractNestedArray(projSchema @ StructType(_), _, _)) =>
             ExtractNestedArrayField(projection,
               projSchema.fieldIndex(field.name),
               projSchema.fields.length,
               projSchema(field.name),
-              containsNullSeq)
+              containsNullSeq,
+              extractIsArray)
           case (_, projSchema) =>
             throw new IllegalStateException(
               s"unmatched child schema for ExtractNestedArrayField: ${projSchema.toString}"

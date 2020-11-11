@@ -146,7 +146,7 @@ object NestedColumnAliasing {
     case ExtractNestedArrayField(_: MapValues |
                                  _: MapKeys |
                                  _: ExtractValue |
-                                 _: AttributeReference, _, _, _, _) => Seq(e)
+                                 _: AttributeReference, _, _, _, _, _) => Seq(e)
     case es if es.children.nonEmpty => es.children.flatMap(collectRootReferenceAndExtractValue)
     case _ => Seq.empty
   }
