@@ -365,7 +365,8 @@ class GeneratorFunctionSuite extends QueryTest with SharedSparkSession {
         Row(3, "a", "X", 1, 1) :: Row(1, "b", "X", 1, 1) ::
         Row(2, "b", "X", 1, 1) :: Row(3, "b", "X", 1, 1) ::
         Row(4, "c", "Y", 2, 2) :: Row(5, "c", "Y", 2, 2) ::
-        Row(6, "c", "Y", 2, 2) :: Row(7, "c", "Y", 2, 2) :: Nil
+        Row(6, "c", "Y", 2, 2) :: Row(7, "c", "Y", 2, 2) ::
+        Row(null, null, "Z", 3, null) :: Nil
     )
 
     df.createTempView("unnest_table")
@@ -398,7 +399,7 @@ class GeneratorFunctionSuite extends QueryTest with SharedSparkSession {
             |lateral view unnest(k1.k3, k1.k4.k5.k6, f1) as c0, c1, c2
             |""".stripMargin),
       Row(2, 1, "X") :: Row(2, 2, "X") :: Row(3, 7, "Y") :: Row(3, 8, "Y") :: Row(3, 1, "Y")
-        :: Row(3, 2, "Y") :: Nil
+        :: Row(3, 2, "Y") :: Row(null, null, "Z") :: Nil
     )
   }
 

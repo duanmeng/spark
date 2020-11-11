@@ -469,7 +469,7 @@ case class Unnest(child: Seq[Expression]) extends Expression with CollectionGene
     var structType = new StructType()
     child.zipWithIndex.foreach{
       case(e, i) =>
-        structType = structType.add(s"c$i", getLeafDataType(e.dataType), nullable = false)
+        structType = structType.add(s"c$i", getLeafDataType(e.dataType), nullable = true)
     }
     structType
   }
@@ -538,7 +538,14 @@ case class NodeCount(child: Expression, nest: Expression)
 
   override def eval(input: InternalRow): TraversableOnce[InternalRow] = {
     val array: ArrayBuffer[InternalRow] = new ArrayBuffer[InternalRow]()
-    val collect: CartesianData => Unit = c => array.append(InternalRow(c.size()))
+    val collect: CartesianData => Unit = c => array.append(InternalRow(
+      if (c.volatileData()) {
+        c.size()
+      }
+      else {
+        0
+      }
+    ))
     collectNode.refreshCollect(collect)
     nestNode.cartesian(Some(input))
     array

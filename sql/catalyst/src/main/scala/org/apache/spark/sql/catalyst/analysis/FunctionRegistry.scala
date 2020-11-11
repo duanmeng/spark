@@ -566,6 +566,7 @@ object FunctionRegistry {
     expression[RecordEvery]("record_every"),
     expression[RecordSome]("record_some"),
     expression[RecordCount]("record_count"),
+    expression[RecordSum]("record_sum"),
     expression[NodeCount]("node_count")
   )
 
