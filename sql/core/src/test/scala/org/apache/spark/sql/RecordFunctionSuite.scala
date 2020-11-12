@@ -31,7 +31,7 @@ class RecordFunctionSuite extends QueryTest with SharedSparkSession {
 
     checkAnswer(
       df.selectExpr("record_every(m1.f2, '<>', 'a')"),
-      Row(false) :: Row(true) :: Row(false) :: Nil
+      Row(false) :: Row(true) :: Row(true) :: Nil
     )
   }
 
@@ -57,4 +57,11 @@ class RecordFunctionSuite extends QueryTest with SharedSparkSession {
     )
   }
 
+  test("record_sum") {
+    val df: DataFrame = spark.read.json(testFile("test-data/nest-test-data.json"))
+    checkAnswer(
+      df.selectExpr("record_sum(r1.m2.f3)"),
+      Row(6.0) :: Row(22.0) :: Row(0.0) :: Nil
+    )
+  }
 }

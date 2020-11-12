@@ -3815,6 +3815,13 @@ object functions {
   }
 
   /**
+   * Sum the internal values of nested data.
+   */
+  def recordSum(e: Column): Column = withExpr {
+    RecordSum(e.expr)
+  }
+
+  /**
    * Compute the count of values within nested data nodes.
    */
   def nodeCount(c: Column, nest: Column): Column = withExpr {

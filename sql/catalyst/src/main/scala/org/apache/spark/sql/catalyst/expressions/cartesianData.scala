@@ -53,6 +53,16 @@ trait CartesianData {
    * Data length
    */
   def size(): Int
+
+  /**
+   * fill null for empty CartesianData
+   */
+  protected def fillNullCartesianData(): CartesianData
+
+  /**
+   * volatile data
+   */
+  def volatileData(): Boolean
 }
 
 object CartesianData {
@@ -60,6 +70,14 @@ object CartesianData {
    * Calculate Cartesian product for two data sets
    */
   def reduce(datas: Seq[CartesianData]): CartesianData = {
+    doReduce(datas.map {
+      case scd: CartesianData if scd.size() == 0 =>
+        scd.fillNullCartesianData()
+      case c => c
+    })
+  }
+
+  private def doReduce(datas: Seq[CartesianData]): CartesianData = {
     datas.reduceLeft((c1, c2) => {
       val size1 = c1.size()
       val size2 = c2.size()
@@ -108,6 +126,15 @@ case class SingleCartesianData(var data: List[Any], ordinal: Int) extends Cartes
   }
 
   override def size(): Int = data.size
+
+  override def fillNullCartesianData(): SingleCartesianData = {
+    assert(data.isEmpty)
+    SingleCartesianData.apply(List(null), ordinal)
+  }
+
+  override def volatileData(): Boolean = {
+    data.exists(d => d != null)
+  }
 }
 
 /**
@@ -143,4 +170,15 @@ case class MultiCartesianData(multiData: List[SingleCartesianData]) extends Cart
 
   override def size(): Int = multiData.head.size()
 
+  /**
+   * fill null for empty CartesianData
+   */
+  override def fillNullCartesianData(): CartesianData = {
+    assert(!multiData.exists(d => d.size() != 0))
+    MultiCartesianData.apply(multiData.map(_.fillNullCartesianData()))
+  }
+
+  override def volatileData(): Boolean = {
+    multiData.exists(data => data.volatileData())
+  }
 }
