@@ -20,7 +20,8 @@ package org.apache.spark.sql.catalyst.expressions
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis._
-import org.apache.spark.sql.catalyst.expressions.codegen.{CodegenContext, CodeGenerator, CodegenFallback, ExprCode}
+import org.apache.spark.sql.catalyst.expressions.codegen.{CodegenContext, CodeGenerator,
+  CodegenFallback, ExprCode}
 import org.apache.spark.sql.catalyst.util._
 import org.apache.spark.sql.types._
 
@@ -61,9 +62,10 @@ object ExtractValue {
       case (ExtractNestedArray(StructType(fields), _, containsNullSeq),
         NonNullLiteral(v, StringType)) if containsNullSeq.nonEmpty =>
         val fieldName = v.toString
+        val isArray: Boolean = extractIsArray(child.dataType, fieldName)
         val ordinal = findField(fields, fieldName, resolver)
         ExtractNestedArrayField(child, ordinal, fields.length,
-          fields(ordinal).copy(name = fieldName), containsNullSeq)
+          fields(ordinal).copy(name = fieldName), containsNullSeq, extractIsArray = isArray)
       case (_: ArrayType, _) => GetArrayItem(child, extraction)
 
       case (MapType(kt, _, _), _) => GetMapValue(child, extraction)
@@ -96,6 +98,15 @@ object ExtractValue {
       ordinal
     }
   }
+
+  private def extractIsArray(dataType: DataType, fieldName: String): Boolean = {
+    dataType match {
+      case ArrayType(elementType, _) => extractIsArray(elementType, fieldName)
+      case StructType(fields) => fields.find(s => s.name == fieldName)
+        .exists(s => s.dataType.isInstanceOf[ArrayType])
+      case _ => false
+    }
+  }
 }
 
 trait ExtractValue extends Expression
@@ -119,9 +130,14 @@ object ExtractNestedArray {
   }
 }
 
-case class ExtractNestedArrayField(child: Expression, ordinal: Int, numFields: Int,
-  field: StructField, containsNullSeq: Seq[Boolean]) extends UnaryExpression with ExtractValue
-  with NullIntolerant with CodegenFallback {
+case class ExtractNestedArrayField(
+    child: Expression,
+    ordinal: Int,
+    numFields: Int,
+    field: StructField,
+    containsNullSeq: Seq[Boolean],
+    extractIsArray: Boolean) extends UnaryExpression
+  with ExtractValue with NullIntolerant with CodegenFallback {
 
   protected override def nullSafeEval(input: Any): Any = {
     val array = input.asInstanceOf[ArrayData]
