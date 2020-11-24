@@ -154,7 +154,7 @@ private[spark] class SparkSubmit extends Logging {
    */
   @tailrec
   private def submit(args: SparkSubmitArguments, uninitLog: Boolean): Unit = {
-    val (_, _, sparkConf, _) = prepareSubmitEnvironment(args)
+    val (childArgs, childClasspath, sparkConf, childMainClass) = prepareSubmitEnvironment(args)
 
     // UserGroupInformation.getCurrentUser has multiple implementation in hadoop-tdw,
     // to support hadoop-tdw & hadoop-apache, call the method according reflection.
@@ -178,7 +178,7 @@ private[spark] class SparkSubmit extends Logging {
       try {
         ugi.doAs(new PrivilegedExceptionAction[Unit]() {
           override def run(): Unit = {
-            runMain(args, uninitLog)
+            runMain(args, uninitLog, childArgs, childClasspath, sparkConf, childMainClass)
           }
         })
       } catch {
@@ -880,8 +880,9 @@ private[spark] class SparkSubmit extends Logging {
    * Note that this main class will not be the one provided by the user if we're
    * running cluster deploy mode or python applications.
    */
-  private def runMain(args: SparkSubmitArguments, uninitLog: Boolean): Unit = {
-    val (childArgs, childClasspath, sparkConf, childMainClass) = prepareSubmitEnvironment(args)
+  private def runMain(args: SparkSubmitArguments, uninitLog: Boolean,
+                      childArgs: Seq[String], childClasspath: Seq[String],
+                      sparkConf: SparkConf, childMainClass: String): Unit = {
     // Let the main class re-initialize the logging system once it starts.
     if (uninitLog) {
       Logging.uninitialize()
