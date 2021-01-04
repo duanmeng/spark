@@ -99,7 +99,7 @@ object SchemaPruning extends Rule[LogicalPlan] {
   private def canPruneRelation(fsRelation: HadoopFsRelation) =
     fsRelation.fileFormat.isInstanceOf[ParquetFileFormat] ||
       fsRelation.fileFormat.isInstanceOf[OrcFileFormat] ||
-      fsRelation.fileFormat.getClass.getCanonicalName.equals(
+      fsRelation.fileFormat.getClass.getCanonicalName.startsWith(
         "org.apache.spark.sql.execution.datasources.dragon.DragonFileFormat")
 
   /**
