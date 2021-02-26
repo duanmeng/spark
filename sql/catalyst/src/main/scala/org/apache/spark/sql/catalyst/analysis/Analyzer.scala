@@ -1473,7 +1473,7 @@ class Analyzer(
         // table by ResolveOutputRelation. that rule will alias the attributes to the table's names.
         o
 
-      case m @ MergeIntoTable(targetTable, sourceTable, _, _, _, _, _, _, _)
+      case m @ MergeIntoTable(targetTable, sourceTable, _, _, _)
         if !m.resolved && targetTable.resolved && sourceTable.resolved =>
 
         EliminateSubqueryAliases(targetTable) match {

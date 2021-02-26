@@ -35,25 +35,25 @@ import java.util.Map;
 public interface SupportsMerge extends Table {
 
   void mergeIntoWithTable(
-    Table sourceTable,
-    String targetAlias,
-    String sourceTableName,
-    String sourceAlias,
-    Expression mergeCondition,
-    Map<String, Expression> matchedActions,
-    Map<String, Expression> notMatchedActions,
-    Expression deleteExpression,
-    Expression updateExpression,
-    Expression insertExpression);
+      String targetAlias,
+      String sourceTable,
+      String sourceAlias,
+      Filter[] mergeFilters,
+      Filter[] deleteFilters,
+      Filter[] updateFilters,
+      Map<String, Expression> updateAssignments,
+      Filter[] insertFilters,
+      Map<String, Expression> insertAssignments,
+      SupportsMerge sTable);
 
   void mergeIntoWithQuery(
-    String targetAlias,
-    String sourceQuery,
-    String sourceAlias,
-    Expression mergeCondition,
-    Map<String, Expression> matchedActions,
-    Map<String, Expression> notMatchedActions,
-    Expression deleteExpression,
-    Expression updateExpression,
-    Expression insertExpression);
+      String targetAlias,
+      String sourceQuery,
+      String sourceAlias,
+      Filter[] mergeFilters,
+      Filter[] deleteFilters,
+      Filter[] updateFilters,
+      Map<String, Expression> updateAssignments,
+      Filter[] insertFilters,
+      Map<String, Expression> insertAssignments);
 }

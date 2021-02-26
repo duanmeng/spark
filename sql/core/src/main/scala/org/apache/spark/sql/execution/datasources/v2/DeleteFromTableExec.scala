@@ -18,15 +18,16 @@
 package org.apache.spark.sql.execution.datasources.v2
 
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
+import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.connector.catalog.SupportsDelete
+import org.apache.spark.sql.sources.Filter
 
 case class DeleteFromTableExec(
     table: SupportsDelete,
-    deleteExpression: Expression) extends V2CommandExec {
+    condition: Array[Filter]) extends V2CommandExec {
 
   override protected def run(): Seq[InternalRow] = {
-    table.deleteWhere(deleteExpression)
+    table.deleteWhere(condition)
     Seq.empty
   }
 

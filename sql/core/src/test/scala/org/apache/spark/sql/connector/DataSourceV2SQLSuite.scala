@@ -1907,129 +1907,19 @@ class DataSourceV2SQLSuite
          """.stripMargin,
         "cannot resolve")
 
-    }
-  }
-
-  test("MERGE INTO TABLE EXEC basic") {
-    val target = "testcat.ns1.ns2.target"
-    val source = "testcat.ns1.ns2.source"
-    withTable(target, source) {
-      sql(
-        s"""
-           |CREATE TABLE $target (id bigint, name string, age int)
-           |USING foo
-           |PARTITIONED BY (id)
-         """.stripMargin)
-      sql(
-        s"""
-           |CREATE TABLE $source (id bigint, name string, age int)
-           |USING foo
-           |PARTITIONED BY (id)
-         """.stripMargin)
-      sql(
-        s"""
-           |INSERT INTO $source
-           |VALUES (1L, 'sd', 20), (2L, 'su', 20), (3L, 'si', 30), (4L, 'ss', 40)
-         """.stripMargin)
-      sql(
-        s"""
-           |INSERT INTO $target VALUES (1L, 'delete', 1), (2L, 'update', 2), (5L, 'none', 3)
-         """.stripMargin)
-      sql(
-        s"""
-           |MERGE INTO $target AS t
-           |USING $source AS s
-           |ON t.id = s.id
-           |WHEN MATCHED AND (t.id = 1) THEN DELETE
-           |WHEN MATCHED AND (t.id = 2) THEN UPDATE SET t.age = 10
-           |WHEN NOT MATCHED THEN INSERT *
-         """.stripMargin)
-
-      checkAnswer(spark.table(target), Seq(
-        Row(2, "update", 10),
-        Row(3, "si", 30),
-        Row(4, "ss", 40),
-        Row(5, "none", 3)
-      ))
-    }
-  }
-
-  test("MERGE INTO TABLE EXEC subquery") {
-    val target = "testcat.ns1.ns2.target"
-    val source = "testcat.ns1.ns2.source"
-    withTable(target, source) {
-      sql(
-        s"""
-           |CREATE TABLE $target (id bigint, name string, age int)
-           |USING foo
-           |PARTITIONED BY (id)
-         """.stripMargin)
-      sql(
-        s"""
-           |CREATE TABLE $source (id bigint, name string, age int)
-           |USING foo
-           |PARTITIONED BY (id)
-         """.stripMargin)
-      sql(
-        s"""
-           |INSERT INTO $source
-           |VALUES (1L, 'sd', 20), (2L, 'su', 20), (3L, 'si', 30), (4L, 'ss', 40)
-         """.stripMargin)
-      sql(
-        s"""
-           |INSERT INTO $target VALUES (1L, 'delete', 1), (2L, 'update', 2), (5L, 'none', 3)
-         """.stripMargin)
-      val exc = intercept[UnsupportedOperationException] {
+      // MERGE INTO is not implemented yet.
+      val e = intercept[UnsupportedOperationException] {
         sql(
           s"""
-             |MERGE INTO $target AS target
-             |USING (WITH s as (SELECT * FROM $source) SELECT * FROM s) AS source
+             |MERGE INTO testcat.ns1.ns2.target AS target
+             |USING testcat.ns1.ns2.source AS source
              |ON target.id = source.id
-             |WHEN MATCHED AND (target.id = 1) THEN DELETE
-             |WHEN MATCHED AND (target.id = 2) THEN UPDATE SET target.age = 10
+             |WHEN MATCHED AND (target.p < 0) THEN DELETE
+             |WHEN MATCHED AND (target.p > 0) THEN UPDATE SET *
              |WHEN NOT MATCHED THEN INSERT *
-         """.stripMargin)
+           """.stripMargin)
       }
-      assert(exc.getMessage.contains("Subquery is unsupported in InMemoryTable"))
-    }
-  }
-
-  test("MERGE INTO DELETE must have condition") {
-    val target = "testcat.ns1.ns2.target"
-    val source = "testcat.ns1.ns2.source"
-    withTable(target, source) {
-      sql(
-        s"""
-           |CREATE TABLE $target (id bigint, name string, age int)
-           |USING foo
-           |PARTITIONED BY (id)
-         """.stripMargin)
-      sql(
-        s"""
-           |CREATE TABLE $source (id bigint, name string, age int)
-           |USING foo
-           |PARTITIONED BY (id)
-         """.stripMargin)
-      sql(
-        s"""
-           |INSERT INTO $source
-           |VALUES (1L, 'sd', 20), (2L, 'su', 20), (3L, 'si', 30), (4L, 'ss', 40)
-         """.stripMargin)
-      sql(
-        s"""
-           |INSERT INTO $target VALUES (1L, 'delete', 1), (2L, 'update', 2), (5L, 'none', 3)
-         """.stripMargin)
-      val exc = intercept[AnalysisException] {
-        sql(
-          s"""
-           MERGE INTO $target AS target
-             |USING $source AS source
-             |ON target.id = source.id
-             |WHEN MATCHED THEN DELETE
-             |WHEN NOT MATCHED THEN INSERT *
-         """.stripMargin)
-      }
-      assert(exc.getMessage.contains("Delete must have condition"))
+      assert(e.getMessage.contains("MERGE INTO TABLE is not supported temporarily"))
     }
   }
 

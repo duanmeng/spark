@@ -29,12 +29,12 @@ import org.apache.spark.sql.sources.Filter
 case class UpdateTableExec(
     table: SupportsUpdate,
     assignments: Map[String, Expression],
-    updateExpression: Expression) extends V2CommandExec with LeafExecNode {
+    condition: Array[Filter]) extends V2CommandExec with LeafExecNode {
 
   override def output: Seq[Attribute] = Nil
 
   override protected def run(): Seq[InternalRow] = {
-    table.update(assignments.asJava, updateExpression)
+    table.update(assignments.asJava, condition)
     Seq.empty
   }
 

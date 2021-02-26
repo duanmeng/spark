@@ -342,11 +342,7 @@ case class MergeIntoTable(
     sourceTable: LogicalPlan,
     mergeCondition: Expression,
     matchedActions: Seq[MergeAction],
-    notMatchedActions: Seq[MergeAction],
-    sourceTableName: Option[String] = None,
-    sourceQueryText: Option[String] = None,
-    targetAlias: Option[String] = None,
-    sourceAlias: Option[String] = None) extends Command with SupportsSubquery {
+    notMatchedActions: Seq[MergeAction]) extends Command with SupportsSubquery {
   override def children: Seq[LogicalPlan] = Seq(targetTable, sourceTable)
 }
 

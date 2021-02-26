@@ -971,12 +971,7 @@ class DDLParserSuite extends AnalysisTest {
               UnresolvedAttribute("source.col2"))))),
         Seq(InsertAction(Some(EqualTo(UnresolvedAttribute("target.col2"), Literal("insert"))),
           Seq(Assignment(UnresolvedAttribute("target.col1"), UnresolvedAttribute("source.col1")),
-            Assignment(UnresolvedAttribute("target.col2"), UnresolvedAttribute("source.col2"))))),
-        Some("testcat2.ns1.ns2.tbl"),
-        None,
-        Some("target"),
-        Some("source"))
-    )
+            Assignment(UnresolvedAttribute("target.col2"), UnresolvedAttribute("source.col2")))))))
   }
 
   test("merge into table: using subquery") {
@@ -1001,13 +996,7 @@ class DDLParserSuite extends AnalysisTest {
               UnresolvedAttribute("source.col2"))))),
         Seq(InsertAction(Some(EqualTo(UnresolvedAttribute("target.col2"), Literal("insert"))),
           Seq(Assignment(UnresolvedAttribute("target.col1"), UnresolvedAttribute("source.col1")),
-            Assignment(UnresolvedAttribute("target.col2"), UnresolvedAttribute("source.col2"))))),
-        None,
-        Some("SELECT * FROM testcat2.ns1.ns2.tbl"),
-        Some("target"),
-        Some("source")
-      )
-    )
+            Assignment(UnresolvedAttribute("target.col2"), UnresolvedAttribute("source.col2")))))))
   }
 
   test("merge into table: cte") {
@@ -1034,13 +1023,7 @@ class DDLParserSuite extends AnalysisTest {
               UnresolvedAttribute("source.col2"))))),
         Seq(InsertAction(Some(EqualTo(UnresolvedAttribute("target.col2"), Literal("insert"))),
           Seq(Assignment(UnresolvedAttribute("target.col1"), UnresolvedAttribute("source.col1")),
-            Assignment(UnresolvedAttribute("target.col2"), UnresolvedAttribute("source.col2"))))),
-        None,
-        Some("WITH s as (SELECT * FROM testcat2.ns1.ns2.tbl) SELECT * FROM s"),
-        Some("target"),
-        Some("source")
-      )
-    )
+            Assignment(UnresolvedAttribute("target.col2"), UnresolvedAttribute("source.col2")))))))
   }
 
   test("merge into table: no additional condition") {
@@ -1061,13 +1044,7 @@ class DDLParserSuite extends AnalysisTest {
           Seq(Assignment(UnresolvedAttribute("target.col2"), UnresolvedAttribute("source.col2"))))),
         Seq(InsertAction(None,
           Seq(Assignment(UnresolvedAttribute("target.col1"), UnresolvedAttribute("source.col1")),
-            Assignment(UnresolvedAttribute("target.col2"), UnresolvedAttribute("source.col2"))))),
-        Some("testcat2.ns1.ns2.tbl"),
-        None,
-        Some("target"),
-        Some("source")
-      )
-    )
+            Assignment(UnresolvedAttribute("target.col2"), UnresolvedAttribute("source.col2")))))))
   }
 
   test("merge into table: star") {
@@ -1089,13 +1066,7 @@ class DDLParserSuite extends AnalysisTest {
           UpdateAction(
             Some(EqualTo(UnresolvedAttribute("target.col2"), Literal("update"))), Seq())),
         Seq(InsertAction(
-          Some(EqualTo(UnresolvedAttribute("target.col2"), Literal("insert"))), Seq())),
-        Some("testcat2.ns1.ns2.tbl"),
-        None,
-        Some("target"),
-        Some("source")
-      )
-    )
+          Some(EqualTo(UnresolvedAttribute("target.col2"), Literal("insert"))), Seq()))))
   }
 
   test("merge into table: columns aliases are not allowed") {

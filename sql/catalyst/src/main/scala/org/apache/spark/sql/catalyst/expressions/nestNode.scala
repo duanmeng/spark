@@ -350,6 +350,4 @@ object NestNodeUtils {
       case _ => throw new RuntimeException("not found mark node")
     }
   }
-
-
 }

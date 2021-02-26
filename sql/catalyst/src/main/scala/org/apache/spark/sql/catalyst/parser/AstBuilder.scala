@@ -483,11 +483,7 @@ class AstBuilder(conf: SQLConf) extends SqlBaseBaseVisitor[AnyRef] with Logging 
       aliasedSource,
       mergeCondition,
       matchedActions,
-      notMatchedActions,
-      sourceTableText,
-      sourceQueryText,
-      targetTableAlias,
-      sourceTableAlias)
+      notMatchedActions)
   }
 
   /**
