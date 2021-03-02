@@ -27,7 +27,6 @@ import scala.collection.mutable
 import org.scalatest.Assertions._
 
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{Expression, Literal}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.connector.catalog._
 import org.apache.spark.sql.connector.expressions.{BucketTransform, DaysTransform, HoursTransform, IdentityTransform, MonthsTransform, Transform, YearsTransform}
@@ -48,7 +47,7 @@ class InMemoryTable(
     override val properties: util.Map[String, String])
   extends Table
     with SupportsRead with SupportsWrite
-    with SupportsDelete with SupportsUpdate with SupportsMerge {
+    with SupportsDelete {
 
   private val allowUnsupportedTransforms =
     properties.getOrDefault("allow-unsupported-transforms", "false").toBoolean
@@ -83,9 +82,9 @@ class InMemoryTable(
 
   private def getKey(row: InternalRow): Seq[Any] = {
     def extractor(
-        fieldNames: Array[String],
-        schema: StructType,
-        row: InternalRow): (Any, DataType) = {
+                   fieldNames: Array[String],
+                   schema: StructType,
+                   row: InternalRow): (Any, DataType) = {
       val index = schema.fieldIndex(fieldNames(0))
       val value = row.toSeq(schema).apply(index)
       if (fieldNames.length > 1) {
@@ -135,8 +134,6 @@ class InMemoryTable(
         (extractor(ref.fieldNames, schema, row).hashCode() & Integer.MAX_VALUE) % numBuckets
     }
   }
-
-  private def getFieldIndex(fieldName: String): Int = schema.names.indexOf(fieldName)
 
   def withData(data: Array[BufferedRows]): InMemoryTable = dataMap.synchronized {
     data.foreach(_.rows.foreach { row =>
@@ -221,7 +218,9 @@ class InMemoryTable(
   }
 
   private class Overwrite(filters: Array[Filter]) extends TestBatchWrite {
+
     import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.MultipartIdentifierHelper
+
     override def commit(messages: Array[WriterCommitMessage]): Unit = dataMap.synchronized {
       val deleteKeys = InMemoryTable.filtersToKeys(
         dataMap.keys, partCols.map(_.toSeq.quoted), filters)
@@ -246,126 +245,11 @@ class InMemoryTable(
     deleteWhere(this.dataMap, filters)
   }
 
-
   private def deleteWhere(
-    dataMap: mutable.Map[Seq[Any], BufferedRows], filters: Array[Filter]):
-    Unit = dataMap.synchronized {
+                           dataMap: mutable.Map[Seq[Any], BufferedRows], filters: Array[Filter]):
+  Unit = dataMap.synchronized {
     val deleteKeys = InMemoryTable.filtersToKeys(dataMap.keys, partitionNames(), filters)
     dataMap --= deleteKeys
-  }
-
-  override def update(
-    assignments: util.Map[String, Expression],
-    filters: Array[Filter]): Unit = dataMap.synchronized {
-    update(this.dataMap, assignments, filters)
-  }
-
-  private def update(
-    dataMap: mutable.Map[Seq[Any], BufferedRows],
-    assignments: util.Map[String, Expression],
-    filters: Array[Filter]): Unit = dataMap.synchronized {
-    // The implementation is only target on if update process can work
-    val matchedKeys = InMemoryTable.filtersToKeys(
-      dataMap.keys, partitionNames(), filters).toSet
-    dataMap.filter { case (key, _) => matchedKeys.contains(key) }
-      .values.foreach {
-        _.rows.foreach { row =>
-          assignments.asScala.foreach { assignment =>
-            row.setInt(
-              getFieldIndex(assignment._1),
-              assignment._2.asInstanceOf[Literal].value.asInstanceOf[Int])
-          }
-      }
-    }
-  }
-
-  def insert(
-    sourceTable: InMemoryTable,
-    matchedKeys: Set[Seq[Any]],
-    assignments: util.Map[String, Expression],
-    filters: Array[Filter]): Unit = dataMap.synchronized {
-    // The implementation is only target on if insert process can work
-    val filteredKeys = InMemoryTable
-      .filtersToKeys(sourceTable.dataMap.keys, sourceTable.partitionNames(), filters).toSet
-    sourceTable.dataMap.keys.foreach { key =>
-      if (!matchedKeys.contains(key) && filteredKeys.contains(key)) {
-        val data = sourceTable.dataMap.getOrElse(
-          key, throw new IllegalArgumentException(s"${key.toString} should exist"))
-        dataMap(key) = data
-      }
-    }
-  }
-
-  def getAttributeValues(attr: String): Set[Any] = {
-    import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.MultipartIdentifierHelper
-    val partitionNames = partCols.map(_.toSeq.quoted)
-    dataMap.keys.map { partValues =>
-      InMemoryTable.extractValue(attr, partitionNames, partValues)
-    }.toSet
-  }
-
-  def splitMatch(filters: Array[Filter]):
-  (mutable.Map[Seq[Any], BufferedRows],
-    mutable.Map[Seq[Any], BufferedRows]) = dataMap.synchronized {
-    val matchedKeys =
-      InMemoryTable.filtersToMergeKeys(dataMap.keys, partitionNames(), filters)
-    val unmatchedDataMap = dataMap -- matchedKeys
-    val matchedDataMap = dataMap -- unmatchedDataMap.keys
-    (matchedDataMap, unmatchedDataMap)
-  }
-
-  def mergeIntoWithTable(
-    targetAlias: String,
-    sourceTable: String,
-    sourceAlias: String,
-    mergeFilters: Array[Filter],
-    deleteFilters: Array[Filter],
-    updateFilters: Array[Filter],
-    updateAssignments: util.Map[String, Expression],
-    insertFilters: Array[Filter],
-    insertAssignments: util.Map[String, Expression],
-    sTable: SupportsMerge): Unit = {
-    val (matchedDataMap, unmatchedDataMap) = mergeFilters.headOption.map {
-      case EqualTo(attribute, None) =>
-        val filters = sTable.asInstanceOf[InMemoryTable]
-          .getAttributeValues(attribute)
-          .map { EqualTo(attribute, _).asInstanceOf[Filter] }
-          .toArray
-        splitMatch(filters)
-      case EqualTo(_, _) | IsNotNull(_) =>
-        splitMatch(Array(mergeFilters.head))
-      case _ => throw new IllegalArgumentException(s"Only one merge filter is supported")
-    }.getOrElse { throw  new IllegalArgumentException(s"Merge filter must be specified")}
-    dataMap.clear()
-    val matchedKeys = matchedDataMap.keys.toSet
-    deleteWhere(matchedDataMap, deleteFilters)
-    update(matchedDataMap, updateAssignments, updateFilters)
-    insert(
-      sTable.asInstanceOf[InMemoryTable],
-      matchedKeys,
-      insertAssignments,
-      insertFilters)
-    dataMap.synchronized {
-      matchedDataMap.foreach { case (key, value) =>
-        dataMap(key) = value
-      }
-      unmatchedDataMap.foreach { case (key, value) =>
-        dataMap(key) = value
-      }
-    }
-  }
-
-  def mergeIntoWithQuery(
-    targetAlias: String,
-    sourceQuery: String,
-    sourceAlias: String,
-    mergeFilters: Array[Filter],
-    deleteFilters: Array[Filter],
-    updateFilters: Array[Filter],
-    updateAssignments: util.Map[String, Expression],
-    insertFilters: Array[Filter],
-    insertAssignments: util.Map[String, Expression]): Unit = {
-    throw new UnsupportedOperationException(s"Subquery is unsupported in InMemoryTable")
   }
 }
 

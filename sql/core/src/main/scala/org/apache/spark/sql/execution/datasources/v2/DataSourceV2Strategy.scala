@@ -29,7 +29,7 @@ import org.apache.spark.sql.connector.read.streaming.{ContinuousStream, MicroBat
 import org.apache.spark.sql.execution.{FilterExec, LeafExecNode, ProjectExec, RowDataSourceScanExec, SparkPlan}
 import org.apache.spark.sql.execution.datasources.DataSourceStrategy
 import org.apache.spark.sql.execution.streaming.continuous.{ContinuousCoalesceExec, WriteToContinuousDataSource, WriteToContinuousDataSourceExec}
-import org.apache.spark.sql.sources.{BaseRelation, Filter, TableScan}
+import org.apache.spark.sql.sources.{BaseRelation, TableScan}
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
 class DataSourceV2Strategy(session: SparkSession) extends Strategy with PredicateHelper {
@@ -198,23 +198,21 @@ class DataSourceV2Strategy(session: SparkSession) extends Strategy with Predicat
     case DeleteFromTable(relation, condition) =>
       relation match {
         case DataSourceV2ScanRelation(table, _, output) =>
-          val filters = conditionToFilter("Delete", condition, output)
+          if (condition.exists(SubqueryExpression.hasSubquery)) {
+            throw new AnalysisException(
+              s"Delete by condition with subquery is not supported: $condition")
+          }
+          // fail if any filter cannot be converted.
+          // correctness depends on removing all matching data.
+          val filters = DataSourceStrategy.normalizeExprs(condition.toSeq, output)
+              .flatMap(splitConjunctivePredicates(_).map {
+                f => DataSourceStrategy.translateFilter(f, true).getOrElse(
+                  throw new AnalysisException(s"Exec update failed:" +
+                      s" cannot translate expression to source filter: $f"))
+              }).toArray
           DeleteFromTableExec(table.asDeletable, filters) :: Nil
         case _ =>
           throw new AnalysisException("DELETE is only supported with v2 tables.")
-      }
-
-    case UpdateTable(relation, assignments, condition) =>
-      relation match {
-        case DataSourceV2ScanRelation(table, _, output) =>
-          val filters = conditionToFilter("Update", condition, output)
-          val assignmentMap = Map(assignments map {
-            assignment =>
-              assignment.key.asInstanceOf[AttributeReference].name -> assignment.value }: _*)
-
-          UpdateTableExec(table.asUpdatable, assignmentMap, filters) :: Nil
-        case _ =>
-          throw new AnalysisException("UPDATE is only supported with v2 tables.")
       }
 
     case WriteToContinuousDataSource(writer, query) =>
@@ -291,24 +289,6 @@ class DataSourceV2Strategy(session: SparkSession) extends Strategy with Predicat
       ShowTablePropertiesExec(r.output, rt.table, propertyKey) :: Nil
 
     case _ => Nil
-  }
-
-  private def conditionToFilter(
-       action: String,
-       condition: Option[Expression],
-       output: Seq[AttributeReference]): Array[Filter] = {
-    if (condition.exists(SubqueryExpression.hasSubquery)) {
-      throw new AnalysisException(
-        s"$action by condition with subquery is not supported: $condition")
-    }
-    // fail if any filter cannot be converted.
-    // correctness depends on removing all matching data.
-    DataSourceStrategy.normalizeExprs(condition.toSeq, output)
-      .flatMap(splitConjunctivePredicates(_).map {
-        f => DataSourceStrategy.translateFilter(f, true).getOrElse(
-          throw new AnalysisException(s"Exec update failed:" +
-            s" cannot translate expression to source filter: $f"))
-      }).toArray
   }
 
 }
