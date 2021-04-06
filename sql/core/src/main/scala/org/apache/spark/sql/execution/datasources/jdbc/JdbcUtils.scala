@@ -423,6 +423,10 @@ object JdbcUtils extends Logging {
     isA(url, "jdbc:presto:")
   }
 
+  def isMySql(url: String): Boolean = {
+    isA(url, "jdbc:mysql:")
+  }
+
   def isSuperSql(url: String): Boolean = {
     isA(url, "jdbc:supersql:")
   }
@@ -494,7 +498,8 @@ object JdbcUtils extends Logging {
     val bypassConfs = getBypassConfs(options)
     if (!bypassConfs.isEmpty) {
       for ((key, value) <- bypassConfs.asScala) {
-        val setCmd = "set " + (if (isPresto(options.url)) "session " else "") + key + " = " + value
+        val label = if (isPresto(options.url) || isMySql(options.url)) "session " else ""
+        val setCmd = "set " + label + key + " = " + value
         try {
           st.execute(setCmd)
         } catch {
@@ -910,15 +915,17 @@ object JdbcUtils extends Logging {
         conn.setAutoCommit(false) // Everything in the same db transaction.
         conn.setTransactionIsolation(finalIsolationLevel)
       }
+
       val stmt = conn.prepareStatement(insertStmt)
+      JdbcUtils.setBypassConfs(options, stmt)
+      setStatementQueryTimeout(stmt, options.queryTimeout)
+
       val setters = rddSchema.fields.map(f => makeSetter(conn, dialect, f.dataType))
       val nullTypes = rddSchema.fields.map(f => getJdbcType(f.dataType, dialect).jdbcNullType)
       val numFields = rddSchema.fields.length
 
       try {
         var rowCount = 0
-
-        setStatementQueryTimeout(stmt, options.queryTimeout)
 
         while (iterator.hasNext) {
           val row = iterator.next()
@@ -1004,7 +1011,8 @@ object JdbcUtils extends Logging {
       iterator: Iterator[Row],
       rddSchema: StructType,
       insertStmt: String,
-      batchSize: Int): Iterator[Byte] = {
+      batchSize: Int,
+      options: JDBCOptions = null): Iterator[Byte] = {
     val conn = getConnection()
     try {
       val stmt = conn.createStatement()
@@ -1012,6 +1020,10 @@ object JdbcUtils extends Logging {
         stmt.execute("set hive.exec.dynamic.partition = true")
         stmt.execute("set hive.exec.dynamic.partition.mode = nonstrict")
         stmt.execute("set hive.strict.checks.cartesian.product = false")
+      }
+      if (options != null) {
+        JdbcUtils.setBypassConfs(options, stmt)
+        setStatementQueryTimeout(stmt, options.queryTimeout)
       }
 
       val index = insertStmt.indexOf(" VALUES ")
@@ -1224,11 +1236,12 @@ object JdbcUtils extends Logging {
     val isHive = JdbcUtils.isHive(url)
     if (isTdw || isHive) {
       repartitionedDF.rdd.foreachPartition(iterator => savePartitionForHive(
-        getConnection, iterator, rddSchema, insertStmt, batchSize)
+        getConnection, iterator, rddSchema, insertStmt, batchSize, options)
       )
     } else {
       repartitionedDF.rdd.foreachPartition(iterator => savePartition(
-        getConnection, iterator, rddSchema, insertStmt, batchSize, dialect, isolationLevel, options)
+        getConnection, iterator, rddSchema, insertStmt,
+        batchSize, dialect, isolationLevel, options)
       )
     }
   }
