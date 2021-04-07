@@ -912,8 +912,12 @@ object JdbcUtils extends Logging {
     var totalRowCount = 0L
     try {
       if (supportsTransactions) {
-        conn.setAutoCommit(false) // Everything in the same db transaction.
-        conn.setTransactionIsolation(finalIsolationLevel)
+        try {
+          conn.setAutoCommit(false) // Everything in the same db transaction.
+          conn.setTransactionIsolation(finalIsolationLevel)
+        } catch {
+          case NonFatal(e) => logError("Exception while setting transaction params", e)
+        }
       }
 
       val stmt = conn.prepareStatement(insertStmt)
