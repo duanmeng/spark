@@ -57,6 +57,12 @@ abstract class EventLogFileWriter(
   protected val shouldCompress = sparkConf.get(EVENT_LOG_COMPRESS)
   protected val shouldOverwrite = sparkConf.get(EVENT_LOG_OVERWRITE)
   protected val outputBufferSize = sparkConf.get(EVENT_LOG_OUTPUT_BUFFER_SIZE).toInt
+  protected val eventFilePermission = sparkConf.get(EVENT_LOG_FILE_PERMISSION)
+  protected val eventLogFsPermission =
+    new FsPermission(Integer.parseInt(eventFilePermission, 8).toShort)
+  protected val eventFolderPermission = sparkConf.get(EVENT_LOG_FOLDER_PERMISSION)
+  protected val eventLogFolderFsPermission =
+    new FsPermission(Integer.parseInt(eventFolderPermission, 8).toShort)
   protected val fileSystem = Utils.getHadoopFileSystem(logBaseDir, hadoopConf)
   protected val compressionCodec =
     if (shouldCompress) {
@@ -103,7 +109,7 @@ abstract class EventLogFileWriter(
       val cstream = compressionCodec.map(_.compressedContinuousOutputStream(dstream))
         .getOrElse(dstream)
       val bstream = new BufferedOutputStream(cstream, outputBufferSize)
-      fileSystem.setPermission(path, EventLogFileWriter.LOG_FILE_PERMISSIONS)
+      fileSystem.setPermission(path, eventLogFsPermission)
       logInfo(s"Logging events to $path")
       writer = Some(fnSetupWriter(bstream))
     } catch {
@@ -319,7 +325,7 @@ class RollingEventLogFilesWriter(
     }
 
     // SPARK-30860: use the class method to avoid the umask causing permission issues
-    FileSystem.mkdirs(fileSystem, logDirForAppPath, EventLogFileWriter.LOG_FOLDER_PERMISSIONS)
+    FileSystem.mkdirs(fileSystem, logDirForAppPath, eventLogFolderFsPermission)
     createAppStatusFile(inProgress = true)
     rollEventLogFile()
   }
@@ -364,8 +370,7 @@ class RollingEventLogFilesWriter(
   private def createAppStatusFile(inProgress: Boolean): Unit = {
     val appStatusPath = getAppStatusFilePath(logDirForAppPath, appId, appAttemptId, inProgress)
     // SPARK-30860: use the class method to avoid the umask causing permission issues
-    val outputStream = FileSystem.create(fileSystem, appStatusPath,
-      EventLogFileWriter.LOG_FILE_PERMISSIONS)
+    val outputStream = FileSystem.create(fileSystem, appStatusPath, eventLogFsPermission)
     // we intentionally create zero-byte file to minimize the cost
     outputStream.close()
   }

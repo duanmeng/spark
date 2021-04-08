@@ -224,6 +224,20 @@ package object config {
         "configured to be at least 10 MiB.")
       .createWithDefaultString("128m")
 
+  private[spark] val EVENT_LOG_FILE_PERMISSION =
+    ConfigBuilder("spark.eventLog.file.permission")
+      .doc("File permission for event log file.")
+      .version("3.0.0")
+      .stringConf
+      .createWithDefault("660")
+
+  private[spark] val EVENT_LOG_FOLDER_PERMISSION =
+    ConfigBuilder("spark.eventLog.folder.permission")
+      .doc("File permission for event log folder.")
+      .version("3.0.0")
+      .stringConf
+      .createWithDefault("770")
+
   private[spark] val EXECUTOR_ID =
     ConfigBuilder("spark.executor.id").version("1.2.0").stringConf.createOptional
 
